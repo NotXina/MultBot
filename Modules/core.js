@@ -161,28 +161,28 @@ class ModernUtil {
 
     /**
      * const button = elements.createButton('id', 'text', fn);
-     * $('body').append(button);
+     * uw.$('body').append(button);
      * To disable/enable the button:
      * button.addClass('disabled'); button.removeClass('disabled');
-     * $('#id').addClass('disabled'); $('#id').removeClass('disabled');
+     * uw.$('#id').addClass('disabled'); uw.$('#id').removeClass('disabled');
      * NOTE: Even when the button is disabled, the click event will still be triggered.
      */
     createButton = (id, text, fn) => {
-        const $button = $('<div>', {
+        const $button = uw.$('<div>', {
             'id': id,
             'class': 'button_new',
         });
 
         // Add the left and right divs to the button
-        $button.append($('<div>', { 'class': 'left' }));
-        $button.append($('<div>', { 'class': 'right' }));
-        $button.append($('<div>', {
+        $button.append(uw.$('<div>', { 'class': 'left' }));
+        $button.append(uw.$('<div>', { 'class': 'right' }));
+        $button.append(uw.$('<div>', {
             'class': 'caption js-caption',
             'html': `${text} <div class="effect js-effect"></div>`
         }));
 
         // Add the click event to the button if a function is provided
-        if (fn) $(document).on('click', `#${id}`, fn);
+        if (fn) uw.$(document).on('click', `#${id}`, fn);
 
         return $button;
     }
@@ -190,20 +190,20 @@ class ModernUtil {
 
     /**
      * const title = elements.createTitle('id', 'text', fn, description);
-     * $('body').append(title);
+     * uw.$('body').append(title);
      * To disable/enable the title:
      * title.addClass('disabled'); title.removeClass('disabled');
-     * $('#id').addClass('disabled'); $('#id').removeClass('disabled');
+     * uw.$('#id').addClass('disabled'); uw.$('#id').removeClass('disabled');
      * NOTE: Even when the title is disabled, the click event will still be triggered.
      */
     createTitle = (id, text, fn, desc = '(click to toggle)') => {
-        const $div = $('<div>').addClass('game_header bold').attr('id', id).css({
+        const $div = uw.$('<div>').addClass('game_header bold').attr('id', id).css({
             cursor: 'pointer',
             position: 'relative',
         }).html(text);
 
-        const $span = $('<span>').addClass('command_count');
-        const $descDiv = $('<div>').css({
+        const $span = uw.$('<span>').addClass('command_count');
+        const $descDiv = uw.$('<div>').css({
             position: 'absolute',
             right: '10px',
             top: '4px',
@@ -211,9 +211,9 @@ class ModernUtil {
         }).text(desc);
 
         $div.append($span).append($descDiv);
-        if (fn) $(document).on('click', `#${id}`, fn);
+        if (fn) uw.$(document).on('click', `#${id}`, fn);
 
-        return $('<div>')
+        return uw.$('<div>')
             .append('<div class="game_border_top"></div>')
             .append('<div class="game_border_bottom"></div>')
             .append('<div class="game_border_left"></div>')
@@ -227,15 +227,15 @@ class ModernUtil {
 
 
     createActivity = (background) => {
-        const $activity_wrap = $('<div class="activity_wrap"></div>');
-        const $activity = $('<div class="activity"></div>');
-        const $icon = $('<div class="icon"></div>').css({
+        const $activity_wrap = uw.$('<div class="activity_wrap"></div>');
+        const $activity = uw.$('<div class="activity"></div>');
+        const $icon = uw.$('<div class="icon"></div>').css({
             "background": background,
             "position": "absolute",
             "top": "-1px",
             "left": "-1px",
         });
-        const $count = $('<div class="count js-caption"></div>').text(0);
+        const $count = uw.$('<div class="count js-caption"></div>').text(0);
         $icon.append($count);
         $activity.append($icon);
         $activity_wrap.append($activity);
@@ -244,7 +244,7 @@ class ModernUtil {
 
 
     createPopup = (left, width, height, $content) => {
-        const $box = $('<div class="sandy-box js-dropdown-list" id="toolbar_activity_recruits_list"></div>').css({
+        const $box = uw.$('<div class="sandy-box js-dropdown-list" id="toolbar_activity_recruits_list"></div>').css({
             "left": `${left}px`,
             "position": "absolute",
             "width": `${width}px`,
@@ -255,24 +255,24 @@ class ModernUtil {
         });
 
         // Make all the corners
-        const $corner_tl = $('<div class="corner_tl"></div>');
-        const $corner_tr = $('<div class="corner_tr"></div>');
-        const $corner_bl = $('<div class="corner_bl"></div>');
-        const $corner_br = $('<div class="corner_br"></div>');
+        const $corner_tl = uw.$('<div class="corner_tl"></div>');
+        const $corner_tr = uw.$('<div class="corner_tr"></div>');
+        const $corner_bl = uw.$('<div class="corner_bl"></div>');
+        const $corner_br = uw.$('<div class="corner_br"></div>');
         // Make all the borders
-        const $border_t = $('<div class="border_t"></div>');
-        const $border_b = $('<div class="border_b"></div>');
-        const $border_l = $('<div class="border_l"></div>');
-        const $border_r = $('<div class="border_r"></div>');
+        const $border_t = uw.$('<div class="border_t"></div>');
+        const $border_b = uw.$('<div class="border_b"></div>');
+        const $border_l = uw.$('<div class="border_l"></div>');
+        const $border_r = uw.$('<div class="border_r"></div>');
         // Make the middle
-        const $middle = $('<div class="middle"></div>').css({
+        const $middle = uw.$('<div class="middle"></div>').css({
             "left": "10px",
             "right": "20px",
             "top": "14px",
             "bottom": "20px",
         });
 
-        const $middle_content = $('<div class="content js-dropdown-item-list"></div>').append($content);
+        const $middle_content = uw.$('<div class="content js-dropdown-item-list"></div>').append($content);
         $middle.append($middle_content);
 
         $box.append($corner_tl, $corner_tr, $corner_bl, $corner_br, $border_t, $border_b, $border_l, $border_r, $middle);
@@ -682,9 +682,9 @@ class ModernStorage extends Compressor {
 	/* Call to add the buttons */
 	addButton = () => {
 		this.check_done += 1;
-		if ($('#modern_storage_load').length) return;
+		if (uw.$('#modern_storage_load').length) return;
 
-		const modern_settings_load = $('<div/>', {
+		const modern_settings_load = uw.$('<div/>', {
 			class: 'button_new',
 			id: 'modern_storage_load',
 			style: 'position: absolute; bottom: 5px; left: 6px; ',
@@ -692,7 +692,7 @@ class ModernStorage extends Compressor {
 			html: '<div class="left"></div><div class="right"></div><div class="caption js-caption"> Load <div class="effect js-effect"></div></div>',
 		});
 
-		const modern_settings_save = $('<div/>', {
+		const modern_settings_save = uw.$('<div/>', {
 			class: 'button_new',
 			id: 'modern_storage_save',
 			style: 'position: absolute; bottom: 5px; left: 75px; ',
@@ -700,9 +700,9 @@ class ModernStorage extends Compressor {
 			html: '<div class="left"></div><div class="right"></div><div class="caption js-caption"> Save <div class="effect js-effect"></div></div>',
 		});
 
-		const box = $('.notes_container');
+		const box = uw.$('.notes_container');
 		if (box.length) {
-			$('.notes_container').append(modern_settings_load, modern_settings_save);
+			uw.$('.notes_container').append(modern_settings_load, modern_settings_save);
 		} else {
 			if (this.check_done > 10) {
 				this.check_done = 0;
@@ -721,7 +721,7 @@ class ModernStorage extends Compressor {
 				const note = this.getActiveNote();
 				if (!note) return; // TODO: display an error
 				const content = this.saveSettingsNote(note.id);
-				$('.preview_box').text(content);
+				uw.$('.preview_box').text(content);
 			},
 			() => {}
 		);
@@ -753,7 +753,7 @@ class ModernStorage extends Compressor {
 
 	/* Return the current active note */
 	getActiveNote() {
-		const noteClass = $('.tab.selected').attr('class');
+		const noteClass = uw.$('.tab.selected').attr('class');
 		if (!noteClass) return null;
 		const noteX = noteClass.match(/note(\d+)/)[1];
 		const note_index = parseInt(noteX) - 1;
