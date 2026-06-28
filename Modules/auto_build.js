@@ -9,7 +9,7 @@ class AutoBuild extends ModernUtil {
         this.shiftHeld = false;
 
         /* Active always, check if the towns are in the active list */
-        this.interval = setInterval(this.main.bind(this), 20000);
+        this.interval = setInterval(this.main.bind(this), 5000);
 
         /* Add listener that change the Senate look */
         try {
@@ -40,7 +40,7 @@ class AutoBuild extends ModernUtil {
     }
 
     startInterval() {
-        this.interval = setInterval(this.main.bind(this), 20000);
+        this.interval = setInterval(this.main.bind(this), 5000);
     }
 
     settings = () => {
