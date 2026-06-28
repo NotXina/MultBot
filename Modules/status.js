@@ -40,9 +40,6 @@ class StatusPanel extends ModernUtil {
             rows.push(this._row('⚔ Recrutamento',      trainCount > 0, trainCount > 0 ? `${trainCount} cidade(s)` : 'Nenhuma cidade', null, null));
             rows.push(this._row('🎉 Festividades',      partyActive, partyActive ? celStr : 'Parado',     'autoParty',          'toggle'));
             rows.push(this._row('⚡ Construção Grátis', gratisActive, gratisActive ? 'Ativo' : 'Parado', 'autoGratis',          'toggle'));
-            const resActive    = !!bot.autoResearch?._active;
-            rows.push(this._row('🔬 Auto Pesquisa', resActive, resActive ? 'Ativo' : 'Parado', 'autoResearch', 'toggle'));
-
             const asrActive    = !!bot.autoSendResources?._active;
             rows.push(this._row('💰 Envio de Recursos', asrActive, asrActive ? 'Ativo' : 'Parado', 'autoSendResources', 'toggle'));
 
