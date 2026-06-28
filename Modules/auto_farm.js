@@ -19,7 +19,7 @@ class AutoFarm extends ModernUtil {
 
         this.timer = 0;
         this.lastTime = Date.now();
-        if (this.active) this.active = setInterval(this.main, 1000);
+        if (this.active) this.active = setInterval(this.main, 5000);
     }
 
     /* Create the dropdown menu */
@@ -181,7 +181,7 @@ class AutoFarm extends ModernUtil {
         }
         else {
             this.updateTimer();
-            this.active = setInterval(this.main, 1000);
+            this.active = setInterval(this.main, 5000);
         }
 
         // Save the settings
@@ -316,7 +316,7 @@ class AutoFarm extends ModernUtil {
             this.active = null;
 
             await this.claim();
-            this.active = setInterval(this.main, 1000);
+            this.active = setInterval(this.main, 5000);
 
             // Set the new timer 
             const rand = Math.floor(Math.random() * 20_000) + 10_000;
