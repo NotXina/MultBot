@@ -414,18 +414,17 @@ class AutoTrain extends ModernUtil {
         return this.getPowerActive();
     };
 
-    /* Main function, call in the loop — treina ground + naval no mesmo tick */
+    /* Main function — treina ground + naval em todas as cidades em paralelo */
     main = () => {
-        let town_list = this.getActiveList();
-
-        for (let town_id of town_list) {
+        const town_list = this.getActiveList();
+        town_list.forEach(town_id => {
             if (town_id in uw.ITowns.towns) {
                 this.checkPolis('naval', town_id);
                 this.checkPolis('ground', town_id);
             } else {
                 delete this.city_troops[town_id];
             }
-        }
+        });
     };
 }
 
