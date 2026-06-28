@@ -5,11 +5,18 @@
 //  Endpoint: frontend_bridge/execute (ResearchOrder/research)
 // ══════════════════════════════════════════════════════
 class AutoResearch extends ModernUtil {
-    // Ordem de prioridade padrão (naval first para cidade colonizadora)
+    // Ordem de prioridade de pesquisa
     DEFAULT_ORDER = [
-        'colonize_ship', 'trireme', 'attack_ship', 'bireme',
-        'small_transporter', 'demolition_ship',
-        'archer', 'hoplite', 'slinger', 'rider', 'chariot', 'catapult',
+        'militia',          // Milícia
+        'meteorology',      // Meteorologia
+        'espionage',        // Espionagem
+        'farmers_loyalty',  // Lealdade dos Aldeões (opcional — só se disponível)
+        'pottery',          // Cerâmica
+        'architecture',     // Arquitetura
+        'crane',            // Guindaste
+        'shipwright',       // Construtor Naval
+        'colonize_ship',    // Navios Colonizadores
+        'plow',             // Arado
     ];
 
     constructor(c, s) {
@@ -35,7 +42,7 @@ class AutoResearch extends ModernUtil {
                 Pesquisa automaticamente as próximas tecnologias disponíveis em todas as cidades. Verifica a cada 30s.
             </div>
             <div style="padding:2px 10px;font-size:11px;color:#5a3a0a;">
-                Ordem: Navio Colonizador → Trirreme → Navio Ataque → Bireme → Transporter → … → Terrestres
+                Ordem: Milícia → Meteorologia → Espionagem → Lealdade → Cerâmica → Arquitetura → Guindaste → Const. Naval → Nav. Colonizador → Arado
             </div>
             <div id="ares_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
