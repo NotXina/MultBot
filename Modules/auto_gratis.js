@@ -46,7 +46,7 @@ class AutoGratis extends ModernUtil {
                 'filter',
                 'brightness(100%) saturate(186%) hue-rotate(241deg)',
             );
-            this.autogratis = setInterval(this.main, 2500);
+            this.autogratis = setInterval(this.main, 1000);
         } else {
             uw.$('#auto_gratis_title').css('filter', '');
             clearInterval(this.autogratis);
@@ -84,7 +84,7 @@ class AutoGratis extends ModernUtil {
        town currently focused via getCurrentTown — same scope as the
        pre-PR-#75 behaviour, opt-in for users who prefer that cadence. */
     main = () => {
-        const now = Math.floor(Date.now() / 1000);
+        const now         = Math.floor(Date.now() / 1000);
 
         if (this.onlyActiveTown) {
             this.tryTown(uw.ITowns.getCurrentTown(), now);
