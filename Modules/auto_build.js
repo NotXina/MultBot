@@ -12,7 +12,7 @@ class AutoBuild extends ModernUtil {
         this.interval = setInterval(this.main.bind(this), 20000);
 
         /* Add listener that change the Senate look */
-        uw.$.Observer(GameEvents.window.open).subscribe("modernSenate", this.updateSenate);
+        uw.$.Observer(uw.GameEvents.window.open).subscribe("modernSenate", this.updateSenate);
 
         this.simulateCaptcha = false;
         this.captchaActive = false;
@@ -336,7 +336,7 @@ class AutoBuild extends ModernUtil {
 
     /* */
     getNextBuild = async town_id => {
-        let town = ITowns.towns[town_id];
+        let town = uw.ITowns.towns[town_id];
 
         /* livello attuale */
         let buildings = { ...town.getBuildings().attributes };
