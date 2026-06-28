@@ -16,15 +16,34 @@
 (function () {
     'use strict';
 
-    const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main';
+    const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main/modules';
 
     // Lock global para evitar conflito de Game.townId entre módulos
     window.__gp_townId_lock = false;
 
     const MODULES = [
-        'multbot_base.js',           // ModernBot base completo
-        'colonize_ship_sender.js',   // Envia colonize_ships automaticamente
-        'mult_tools.js',             // Preset de construções em massa
+        // ── Core (deve ser o primeiro) ──
+        'core.js',
+
+        // ── Módulos originais do ModernBot ──
+        'anti_rage.js',
+        'auto_bootcamp.js',
+        'auto_build.js',
+        'auto_farm.js',
+        'auto_gratis.js',
+        'auto_hide.js',
+        'auto_party.js',
+        'auto_rural_level.js',
+        'auto_rural_trade.js',
+        'auto_trade.js',
+        'auto_train.js',
+
+        // ── Módulos novos (NotXina) ──
+        'colonize_ship_sender.js',
+        'mult_tools.js',
+
+        // ── Entry point (deve ser o último) ──
+        'multbot.js',
     ];
 
     function loadModule(index) {
@@ -46,7 +65,7 @@
                         console.error(`[MultBot] ✗ Erro em ${mod}:`, e.message);
                     }
                 } else {
-                    console.error(`[MultBot] ✗ HTTP ${r.status} ao carregar ${mod}`);
+                    console.error(`[MultBot] ✗ HTTP ${r.status}: ${mod}`);
                 }
                 loadModule(index + 1);
             },
