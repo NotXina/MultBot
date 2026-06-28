@@ -128,46 +128,52 @@ class AutoResearch extends ModernUtil {
 
     async _researchNext(townId) {
         try {
-            const town      = uw.ITowns.towns[townId];
-            const buildings = town.buildings().attributes;
+            const town       = uw.ITowns.towns[townId];
+            const buildings  = town.buildings().attributes;
             const researches = town.researches().attributes;
+            const townName   = town.getName();
 
             // Precisa de academia nível >= 1
-            if (!buildings.academy || buildings.academy < 1) return false;
+            if (!buildings.academy || buildings.academy < 1) {
+                this.console.log(`[AutoPesquisa] ${townName}: sem academia`);
+                return false;
+            }
 
             // Verifica se já há pesquisa em andamento
             const orders = uw.MM.getModels().ResearchOrder;
             if (orders) {
                 for (const key in orders) {
-                    if (String(orders[key].attributes.town_id) === String(townId)) return false;
+                    if (String(orders[key].attributes.town_id) === String(townId)) {
+                        this.console.log(`[AutoPesquisa] ${townName}: pesquisa em andamento`);
+                        return false;
+                    }
                 }
             }
 
             // Encontra a próxima pesquisa na ordem de prioridade
             for (const tech of this.DEFAULT_ORDER) {
-                // Verifica se existe neste mundo
                 const req = uw.GameData.researches?.[tech];
-                if (!req) continue; // não disponível neste mundo
-
+                if (!req) { this.console.log(`[AutoPesquisa] ${townName}: ${tech} não existe neste mundo`); continue; }
                 if (researches[tech]) continue; // já pesquisado
+                if (tech === 'booty' && !this._islandHasFarmTowns(town)) { this.console.log(`[AutoPesquisa] ${townName}: booty pulado (sem aldeias bárbaras)`); continue; }
+                if (buildings.academy < (req.academy_level ?? 1)) { this.console.log(`[AutoPesquisa] ${townName}: ${tech} requer academia ${req.academy_level}, tem ${buildings.academy}`); continue; }
 
-                // booty (Lealdade dos Aldeões) — só se a ilha tem aldeias bárbaras
-                if (tech === 'booty' && !this._islandHasFarmTowns(town)) continue;
-
-                // Verifica requisitos de academia
-                if (buildings.academy < (req.academy_level ?? 1)) continue;
-
-                // Verifica se tem recursos
                 const { wood, stone, iron } = town.resources();
                 const cost = req?.resources ?? { wood: 0, stone: 0, iron: 0 };
-                if (wood < cost.wood || stone < cost.stone || iron < cost.iron) continue;
+                if (wood < cost.wood || stone < cost.stone || iron < cost.iron) {
+                    this.console.log(`[AutoPesquisa] ${townName}: ${tech} sem recursos (precisa ${cost.wood}m ${cost.stone}p ${cost.iron}f)`);
+                    continue;
+                }
 
-                // Pesquisa!
-                await this._doResearch(townId, tech, town.getName());
+                await this._doResearch(townId, tech, townName);
                 return true;
             }
+            this.console.log(`[AutoPesquisa] ${townName}: nada a pesquisar`);
             return false;
-        } catch(e) { return false; }
+        } catch(e) {
+            this.console.log(`[AutoPesquisa] Erro: ${e?.message}`);
+            return false;
+        }
     }
 
     // Verifica se a ilha da cidade tem aldeias bárbaras (FarmTown)
