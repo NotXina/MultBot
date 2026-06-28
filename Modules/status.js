@@ -73,16 +73,22 @@ class StatusPanel extends ModernUtil {
     }
 
     _getTownName(townId) {
-        if (!townId) return '';
+        if (!townId) return String(townId);
+        const id  = parseInt(townId);
+        const ids = String(townId);
         try {
-            const allTowns = uw.MM.getOnlyCollectionByName('Town').models;
+            const t1 = uw.ITowns?.towns?.[id] ?? uw.ITowns?.towns?.[ids];
+            if (t1) return t1.getName() + ' (#' + ids + ')';
+            const allTowns = uw.MM.getOnlyCollectionByName('Town')?.models ?? [];
             for (const t of allTowns) {
-                if (String(t.attributes.id ?? t.id) === String(townId)) {
-                    return (t.attributes.name ?? '') + ' (#' + townId + ')';
+                if (parseInt(t.attributes?.id ?? t.id) === id) {
+                    return (t.attributes?.name ?? '?') + ' (#' + ids + ')';
                 }
             }
+            const wt = uw.WMap?.towns?.[id] ?? uw.WMap?.towns?.[ids];
+            if (wt?.name) return wt.name + ' (#' + ids + ')';
         } catch(e) {}
-        return '#' + townId;
+        return '#' + ids;
     }
 
     _countCelebrations() {
