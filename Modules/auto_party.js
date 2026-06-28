@@ -65,7 +65,7 @@ class AutoParty extends ModernUtil {
                     </div>
                 </div>
 
-                <div id="autoparty_active" style="padding:5px;font-size:11px;color:#aaa;max-height:120px;overflow-y:auto;">
+                <div id="autoparty_active" style="padding:5px;font-size:12px;">
                 </div>
             </div>
         `;
@@ -74,24 +74,27 @@ class AutoParty extends ModernUtil {
     _renderActiveCelebrations = () => {
         try {
             const models = uw.MM.getModels().Celebration;
-            if (!models) return;
-            const now    = Math.floor(Date.now() / 1000);
-            const lines  = [];
-            for (const key in models) {
-                const cel  = models[key].attributes;
-                const town = uw.ITowns.towns[cel.town_id];
-                if (!town) continue;
-                const remaining = cel.finished_at - now;
-                const mins = Math.floor(remaining / 60);
-                const secs = remaining % 60;
-                const icon = cel.celebration_type === 'party' ? '🎉'
-                           : cel.celebration_type === 'theater' ? '🎭' : '🏆';
-                lines.push(`${icon} <b>${town.getName()}</b> — ${cel.celebration_type} (${mins}m ${secs}s)`);
+            if (!models) {
+                uw.$('#autoparty_active').html('<span style="color:#7a5c2a;">Nenhuma celebração ativa</span>');
+                return;
             }
-            const html = lines.length
-                ? lines.join('<br>')
-                : '<span style="color:#555;">Nenhuma celebração ativa</span>';
-            uw.$('#autoparty_active').html(html);
+            const counts = { party: 0, theater: 0, triumph: 0 };
+            for (const key in models) {
+                const type = models[key].attributes.celebration_type;
+                if (type in counts) counts[type]++;
+            }
+            const total = counts.party + counts.theater + counts.triumph;
+            if (total === 0) {
+                uw.$('#autoparty_active').html('<span style="color:#7a5c2a;">Nenhuma celebração ativa</span>');
+                return;
+            }
+            const parts = [];
+            if (counts.party)   parts.push(`🎉 <b>${counts.party}</b> festa(s)`);
+            if (counts.theater) parts.push(`🎭 <b>${counts.theater}</b> teatro(s)`);
+            if (counts.triumph) parts.push(`🏆 <b>${counts.triumph}</b> triunfo(s)`);
+            uw.$('#autoparty_active').html(
+                `<span style="color:#1a4a1a;font-weight:bold;">${parts.join(' &nbsp;|&nbsp; ')}</span>`
+            );
         } catch(e) {}
     };
 
