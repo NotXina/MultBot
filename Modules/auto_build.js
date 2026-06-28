@@ -8,8 +8,8 @@ class AutoBuild extends ModernUtil {
         /* Check if shift is pressed */
         this.shiftHeld = false;
 
-        /* Intervalo controlado pelo orquestrador do MultBot */
-        this.interval = null; // iniciado pelo orquestrador
+        /* Active always, check if the towns are in the active list */
+        this.interval = setInterval(this.main.bind(this), 5000);
 
         /* Add listener that change the Senate look */
         try {
