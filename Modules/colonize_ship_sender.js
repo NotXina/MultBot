@@ -148,25 +148,35 @@ class ColonizeShipSender extends ModernUtil {
         try {
             const townIds = Object.keys(uw.ITowns.towns);
             if (townIds.length === 0) { this._log('Nenhuma cidade encontrada.', 'warning'); return; }
+
+            // Filtra cidades com colonize_ship disponível
+            const eligible = townIds.filter(townId =>
+                String(townId) !== String(this.config.targetTownId) &&
+                this._getColonizeShipCount(townId) > 0
+            );
+
+            if (eligible.length === 0) { this._log('Nenhum colonize_ship disponível.', 'info'); return; }
+
+            // Envia em paralelo com pequeno delay entre cada um para não sobrecarregar
             let totalSent = 0;
-            for (const townId of townIds) {
-                if (this._stop) break;
-                if (String(townId) === String(this.config.targetTownId)) continue;
-                const count = this._getColonizeShipCount(townId);
-                if (count <= 0) continue;
-                const townName = uw.ITowns.towns[townId]?.getName?.() || townId;
-                this._log(townName + ': ' + count + ' colonize_ship(s) → #' + this.config.targetTownId, 'info');
-                try {
+            const results = await Promise.allSettled(
+                eligible.map(async (townId, i) => {
+                    await this.sleep(i * 400); // escalonado: 0ms, 400ms, 800ms...
+                    if (this._stop) return 0;
+                    const count    = this._getColonizeShipCount(townId);
+                    const townName = uw.ITowns.towns[townId]?.getName?.() || townId;
                     await this._sendSupport(townId, this.config.targetTownId, count);
-                    totalSent += count;
-                    this._log('✓ Enviado de ' + townName + ': ' + count + ' navio(s).', 'success');
-                } catch (e) {
-                    this._log('✗ Erro (' + townName + '): ' + (e?.message ?? e), 'error');
-                }
-                await this.sleep(800 + Math.random() * 1200);
+                    this._log('✓ ' + townName + ': ' + count + ' navio(s) enviado(s).', 'success');
+                    return count;
+                })
+            );
+
+            for (const r of results) {
+                if (r.status === 'fulfilled') totalSent += r.value || 0;
+                else this._log('✗ Erro: ' + r.reason?.message, 'error');
             }
-            if (totalSent === 0) this._log('Nenhum colonize_ship disponível no momento.', 'info');
-            else this._log('Ciclo completo. Total: ' + totalSent + ' navio(s) enviado(s).', 'success');
+
+            if (totalSent > 0) this._log('Ciclo completo. Total: ' + totalSent + ' navio(s).', 'success');
         } catch (e) {
             this._log('Erro no ciclo: ' + (e?.message ?? e), 'error');
         }
