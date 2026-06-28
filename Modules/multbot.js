@@ -202,9 +202,12 @@ const loader = setInterval(() => {
     clearInterval(loader);
 }, 100);
 
-// Load the bot when the loader is ready
-const loader = setInterval(() => {
-    if ($("#loader").length > 0) return;
-    uw.modernBot = new ModernBot();
-    clearInterval(loader);
-}, 100);
+// Load the bot when the loader is ready (guard against double injection)
+if (!window.__multbot_loaded__) {
+    window.__multbot_loaded__ = true;
+    var _multbot_loader = setInterval(() => {
+        if ($("#loader").length > 0) return;
+        uw.modernBot = new ModernBot();
+        clearInterval(_multbot_loader);
+    }, 100);
+}
