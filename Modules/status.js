@@ -86,10 +86,10 @@ class StatusPanel extends ModernUtil {
 
     _row(label, value, active) {
         const dot   = active ? '●' : '○';
-        const color = active ? '#4ade80' : '#94a3b8';
-        return `<div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding:2px 4px;">
-            <span style="color:${color};">${dot} ${label}</span>
-            <span style="color:#e2e8f0;">${value}</span>
+        const color = active ? '#1a6b2a' : '#7a6a4a';
+        return `<div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(0,0,0,0.08);padding:3px 4px;">
+            <span style="color:${color};font-weight:bold;">${dot} ${label}</span>
+            <span style="color:#3a2a0a;">${value}</span>
         </div>`;
     }
 
