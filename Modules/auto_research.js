@@ -7,13 +7,13 @@
 class AutoResearch extends ModernUtil {
     // Ordem de prioridade de pesquisa
     DEFAULT_ORDER = [
-        'city_guard',       // Guarda da Cidade
+        'town_guard',       // Guarda da Cidade
         'meteorology',      // Meteorologia
         'espionage',        // Espionagem
-        'farmers_loyalty',  // Lealdade dos Aldeões (opcional — só se disponível)
+        'booty',            // Lealdade dos Aldeões
         'pottery',          // Cerâmica
         'architecture',     // Arquitetura
-        'crane',            // Guindaste
+        'building_crane',   // Guindaste
         'shipwright',       // Construtor Naval
         'colonize_ship',    // Navios Colonizadores
         'plow',             // Arado
@@ -31,13 +31,13 @@ class AutoResearch extends ModernUtil {
 
     // Nomes para exibição
     RESEARCH_NAMES = {
-        city_guard:      'Guarda da Cidade',
+        town_guard:      'Guarda da Cidade',
         meteorology:     'Meteorologia',
         espionage:       'Espionagem',
-        farmers_loyalty: 'Lealdade',
+        booty:           'Lealdade dos Aldeões',
         pottery:         'Cerâmica',
         architecture:    'Arquitetura',
-        crane:           'Guindaste',
+        building_crane:  'Guindaste',
         shipwright:      'Const. Naval',
         colonize_ship:   'Nav. Colonizador',
         plow:            'Arado',
@@ -46,7 +46,7 @@ class AutoResearch extends ModernUtil {
     settings = () => {
         requestAnimationFrame(() => {
             this._updateTitle();
-            this._renderIcons();
+            this._renderStatus();
         });
         return `
         <div class="game_border" style="margin-bottom:20px;">
@@ -55,34 +55,29 @@ class AutoResearch extends ModernUtil {
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             ${this.getTitleHtml('ares_title', 'Auto Pesquisa', this.toggle, '', this._active)}
-            <div id="ares_icons" style="padding:5px;"></div>
+            <div style="padding:5px 10px;font-weight:bold;">
+                Pesquisa automaticamente as próximas tecnologias disponíveis em todas as cidades. Verifica a cada 30s.
+            </div>
+            <div id="ares_status" style="padding:2px 10px;font-size:11px;color:#5a3a0a;"></div>
             <div id="ares_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
     };
 
-    _renderIcons() {
+    _renderStatus() {
         try {
             const town       = uw.ITowns.getCurrentTown();
             const researches = town?.researches()?.attributes ?? {};
-            const BASE       = 'https://gpit.innogamescdn.com/images/game/academy/';
 
-            const icons = this.DEFAULT_ORDER.map(tech => {
-                const done    = !!researches[tech];
-                const name    = this.RESEARCH_NAMES[tech] ?? tech;
-                const opacity = done ? '0.35' : '1';
-                const border  = done ? '2px solid #4ade80' : '2px solid transparent';
-                return `
-                <div style="display:inline-block;text-align:center;margin:3px;vertical-align:top;width:58px;">
-                    <div class="auto_build_box" style="border:${border};box-sizing:border-box;opacity:${opacity};">
-                        <img src="${BASE}${tech}.png"
-                            style="position:absolute;top:4px;left:4px;width:50px;height:50px;"
-                            onerror="this.style.display='none'">
-                    </div>
-                    <div style="font-size:9px;color:#3a2a0a;line-height:1.2;margin-top:2px;">${name}</div>
-                </div>`;
-            }).join('');
+            const done    = this.DEFAULT_ORDER.filter(t => researches[t] && uw.GameData.researches?.[t]);
+            const pending = this.DEFAULT_ORDER.filter(t => !researches[t] && uw.GameData.researches?.[t]);
 
-            uw.$('#ares_icons').html(icons);
+            const doneNames    = done.map(t => this.RESEARCH_NAMES[t]).join(', ') || '—';
+            const pendingNames = pending.map(t => this.RESEARCH_NAMES[t]).join(' → ') || '—';
+
+            uw.$('#ares_status').html(
+                `<span style="color:#1a6b2a;">✓ ${doneNames}</span><br>` +
+                `<span style="color:#5a3a0a;">⏳ ${pendingNames}</span>`
+            );
         } catch(e) {}
     }
 
@@ -127,7 +122,7 @@ class AutoResearch extends ModernUtil {
             const msg = `✓ ${count} pesquisa(s) iniciada(s)`;
             this.console.log('[AutoPesquisa] ' + msg);
             uw.$('#ares_log').text(msg);
-            this._renderIcons(); // Atualiza ícones
+            this._renderStatus(); // Atualiza status
         }
     }
 
