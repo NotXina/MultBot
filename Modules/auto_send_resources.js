@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: AutoSendResources
 //  Condições para enviar da cidade X para cidade Y:
-//  - Cidade X: sem upgrades pendentes, pop < 160,
+//  - Cidade X: pop < 200, festa + teatro em curso, mercado ativo,
 //    não pode fazer festa/teatro
 //  - Cidade Y: cidade do jogador com menor % storage
 //  Envia o máximo balanceado via town_info/trade
@@ -31,7 +31,7 @@ class AutoSendResources extends ModernUtil {
                 Envia recursos de cidades ociosas para a cidade com menor % de storage. Verifica a cada 30 min.
             </div>
             <div style="padding:2px 10px 4px;font-size:11px;color:#5a3a0a;">
-                Condição para enviar: sem construções pendentes + pop &lt; 160 + sem festa/teatro possível.
+                Condição para enviar: pop &lt; 200 + festa e teatro em curso + recurso &gt; 50% storage.
             </div>
             <div id="asr_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
@@ -120,48 +120,59 @@ class AutoSendResources extends ModernUtil {
             const town      = uw.ITowns.towns[townId];
             const buildings = town.buildings().attributes;
             const res       = town.resources();
+            const models    = uw.MM.getModels().Celebration;
 
-            // 1. Sem construções pendentes (fila vazia)
-            if (town.buildingOrders().length > 0) return false;
+            // 1. Pop disponível < 200
+            if (town.getAvailablePopulation() >= 200) return false;
 
-            // 2. População disponível < 160
-            if (town.getAvailablePopulation() >= 160) return false;
+            // 2. Deve estar com festa E teatro em curso
+            const townId_int = parseInt(townId);
+            let hasFestival = false, hasTheater = false;
+            if (models) {
+                for (const key in models) {
+                    const cel = models[key].attributes;
+                    if (cel.town_id !== townId_int) continue;
+                    if (cel.celebration_type === 'party')   hasFestival = true;
+                    if (cel.celebration_type === 'theater') hasTheater  = true;
+                }
+            }
+            if (!hasFestival || !hasTheater) return false;
 
-            // 3. Não pode fazer festa (academia >= 30 e recursos suficientes)
-            const canParty = buildings.academy >= 30
-                && res.wood >= 15000 && res.stone >= 18000 && res.iron >= 15000;
-            if (canParty) return false;
-
-            // 4. Não pode fazer teatro (teatro construído)
-            if (buildings.theater >= 1) return false;
-
-            // 5. Precisa ter mercado e capacidade de troca
+            // 3. Mercado ativo com capacidade > 500
             if (!buildings.market || buildings.market < 1) return false;
             if (town.getAvailableTradeCapacity() < 500) return false;
+
+            // 4. Pelo menos um recurso acima de 50% do storage
+            const threshold = res.storage * 0.5;
+            const hasExcess = res.wood > threshold || res.stone > threshold || res.iron > threshold;
+            if (!hasExcess) return false;
 
             return true;
         } catch(e) { return false; }
     }
 
-    // Envia o máximo balanceado de recursos para a cidade destino
+    // Envia o excedente acima de 50% do storage para a cidade destino
     _sendResources(fromId, toId) {
         return new Promise(resolve => {
             try {
                 const from     = uw.ITowns.towns[fromId];
-                const to       = uw.ITowns.towns[toId];
                 const fromRes  = from.resources();
-                const toRes    = to.resources();
                 const capacity = from.getAvailableTradeCapacity();
 
                 if (capacity < 100) { resolve(false); return; }
 
-                // Calcula quanto enviar de cada recurso balanceado
-                // Envia igualmente dos 3 recursos, limitado pela capacidade e pelo que tem
-                const perRes  = Math.floor(capacity / 3);
-                const wood    = Math.min(perRes, fromRes.wood);
-                const stone   = Math.min(perRes, fromRes.stone);
-                const iron    = Math.min(perRes, fromRes.iron);
-                const total   = wood + stone + iron;
+                // Excedente = o que passa de 50% do storage
+                const threshold = fromRes.storage * 0.5;
+                const excessW = Math.max(0, Math.floor(fromRes.wood  - threshold));
+                const excessS = Math.max(0, Math.floor(fromRes.stone - threshold));
+                const excessI = Math.max(0, Math.floor(fromRes.iron  - threshold));
+
+                // Limita pela capacidade de troca (balanceado)
+                const perRes = Math.floor(capacity / 3);
+                const wood   = Math.min(perRes, excessW);
+                const stone  = Math.min(perRes, excessS);
+                const iron   = Math.min(perRes, excessI);
+                const total  = wood + stone + iron;
 
                 if (total < 100) { resolve(false); return; }
 
