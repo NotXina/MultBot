@@ -10,7 +10,7 @@ class StatusPanel extends ModernUtil {
 
     settings = () => {
         requestAnimationFrame(() => this._startRefresh());
-        return `<div id="status_rows" style="padding:4px;max-height:280px;overflow-y:auto;"></div>`;
+        return `<div id="status_rows" style="padding:4px;"></div>`;
     };
 
     _startRefresh() {
@@ -24,43 +24,23 @@ class StatusPanel extends ModernUtil {
             const bot  = uw.modernBot;
             const rows = [];
 
-            // Fazenda
-            const farmActive = !!bot.autoFarm?.active;
-            rows.push(this._row('🌾 Fazenda', farmActive, farmActive ? 'Ativo' : 'Parado', 'autoFarm', 'toggle'));
-
-            // Aldeias Rurais
+            const farmActive  = !!bot.autoFarm?.active;
             const ruralActive = !!bot.autoRuralLevel?.enable;
-            rows.push(this._row('🏡 Aldeias Rurais', ruralActive, ruralActive ? `Nível ${bot.autoRuralLevel.rural_level}` : 'Parado', 'autoRuralLevel', 'toggle'));
-
-            // Construção
-            const buildTowns = Object.keys(bot.autoBuild?.towns_buildings ?? {}).length;
-            rows.push(this._row('🏗 Construção', buildTowns > 0, buildTowns > 0 ? `${buildTowns} cidade(s)` : 'Nenhuma cidade', null, null));
-
-            // Recrutamento
-            const trainTowns = Object.keys(bot.autoTrain?.city_troops ?? {}).length;
-            rows.push(this._row('⚔ Recrutamento', trainTowns > 0, trainTowns > 0 ? `${trainTowns} cidade(s)` : 'Nenhuma cidade', null, null));
-
-            // Festividades
+            const buildCount  = Object.keys(bot.autoBuild?.towns_buildings ?? {}).length;
+            const trainCount  = Object.keys(bot.autoTrain?.city_troops ?? {}).length;
             const partyActive = !!bot.autoParty?.enable;
-            const cel = this._countCelebrations();
-            const celStr = partyActive
-                ? [cel.party && `${cel.party} festa`, cel.theater && `${cel.theater} teatro`, cel.triumph && `${cel.triumph} triunfo`].filter(Boolean).join(' · ') || 'Ativo'
-                : 'Parado';
-            rows.push(this._row('🎉 Festividades', partyActive, celStr, 'autoParty', 'toggle'));
-
-            // Construção Grátis
+            const cel         = this._countCelebrations();
+            const celStr      = [cel.party && `${cel.party} festa`, cel.theater && `${cel.theater} teatro`, cel.triumph && `${cel.triumph} triunfo`].filter(Boolean).join(' · ') || '—';
             const gratisActive = !!bot.autoGratis?.autogratis;
-            rows.push(this._row('⚡ Construção Grátis', gratisActive, gratisActive ? 'Ativo' : 'Parado', 'autoGratis', 'toggle'));
+            const cssActive   = !!bot.colonizeShipSender?._running;
 
-            // Campo de Treinamento
-            const bootActive = !!bot.autoBootcamp?.enable_auto_bootcamp;
-            rows.push(this._row('🥊 Campo de Treinamento', bootActive, bootActive ? 'Ativo' : 'Parado', 'autoBootcamp', 'toggle'));
-
-            // Navio Colonizador
-            const cssActive = !!bot.colonizeShipSender?._running;
-            rows.push(this._row('⚓ Navio Colonizador', cssActive,
-                cssActive ? `Rodando → #${bot.colonizeShipSender.config.targetTownId}` : 'Parado',
-                'colonizeShipSender', cssActive ? 'stop' : 'start'));
+            rows.push(this._row('🌾 Fazenda',           farmActive,  farmActive  ? 'Ativo'               : 'Parado',             'autoFarm',           'toggle'));
+            rows.push(this._row('🏡 Aldeias Rurais',    ruralActive, ruralActive ? `Nível ${bot.autoRuralLevel.rural_level}` : 'Parado', 'autoRuralLevel', 'toggle'));
+            rows.push(this._row('🏗 Construção',        buildCount > 0, buildCount > 0 ? `${buildCount} cidade(s)` : 'Nenhuma cidade', null, null));
+            rows.push(this._row('⚔ Recrutamento',      trainCount > 0, trainCount > 0 ? `${trainCount} cidade(s)` : 'Nenhuma cidade', null, null));
+            rows.push(this._row('🎉 Festividades',      partyActive, partyActive ? celStr : 'Parado',     'autoParty',          'toggle'));
+            rows.push(this._row('⚡ Construção Grátis', gratisActive, gratisActive ? 'Ativo' : 'Parado', 'autoGratis',          'toggle'));
+            rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ #${bot.colonizeShipSender.config.targetTownId}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
 
             uw.$('#status_rows').html(rows.join(''));
         } catch(e) {
@@ -69,21 +49,26 @@ class StatusPanel extends ModernUtil {
     }
 
     _row(label, active, value, module, method) {
-        const filter  = 'brightness(100%) saturate(186%) hue-rotate(241deg)';
-        const onclick = module && method ? `onclick="window.modernBot.${module}.${method}()"` : '';
-        const cursor  = onclick ? 'cursor:pointer;' : '';
-        const dot     = active ? '●' : '○';
-        const dotCol  = active ? 'color:#2d6a2d;' : 'color:#8a7a5a;';
+        const onclick = module && method
+            ? `window.modernBot.${module}.${method}()`
+            : null;
+
+        const btn = onclick
+            ? `<div class="button_new ${active ? '' : 'disabled'}" onclick="${onclick}" style="cursor:pointer;margin:0;">
+                <div class="left"></div><div class="right"></div>
+                <div class="caption js-caption">${active ? 'Ativo' : 'Parado'}<div class="effect js-effect"></div></div>
+               </div>`
+            : `<span style="font-size:11px;color:#3a2a0a;font-style:italic;">${active ? '● Ativo' : '○ —'}</span>`;
 
         return `
-        <div ${onclick} style="${cursor}display:flex;justify-content:space-between;
-            align-items:center;padding:3px 8px;
-            border-bottom:1px solid rgba(0,0,0,0.1);
-            ${active ? 'background:rgba(0,80,0,0.06);' : ''}">
-            <span style="font-weight:bold;font-size:12px;">
-                <span style="${dotCol}">${dot}</span> ${label}
-            </span>
-            <span style="font-size:11px;color:#3a2a0a;">${value}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;
+            padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08);
+            ${active ? 'background:rgba(0,80,0,0.05);' : ''}">
+            <span style="font-weight:bold;font-size:12px;">${label}</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:11px;color:#5a3a0a;">${value}</span>
+                ${btn}
+            </div>
         </div>`;
     }
 
