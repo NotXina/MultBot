@@ -3,10 +3,10 @@ class ModernBot {
         this.console = new BotConsole();
         this.storage = new ModernStorage();
 
-        this.$ui = $("#ui_box");
+        this.$ui = uw.$("#ui_box");
         // Create the quick menu and the divider element
         this.$menu = this.createModernMenu();
-        const $divider = $('<div class="divider"></div>');
+        const $divider = uw.$('<div class="divider"></div>');
 
         // Add AutoFarm to the new menu
         this.autoFarm = new AutoFarm(this.console, this.storage);
@@ -175,7 +175,7 @@ class ModernBot {
     /* New quick menu */
     // Create the html of an activity in the new quick menu
     createModernMenu = () => {
-        const $menu = $('<div id="modern_menu" class="toolbar_activities"></div>');
+        const $menu = uw.$('<div id="modern_menu" class="toolbar_activities"></div>');
         $menu.css({
             'position': 'absolute',
             'top': '3px',
@@ -184,12 +184,12 @@ class ModernBot {
         });
 
         // Add left, middle, right
-        const $left = $('<div class="left"></div>');
-        const $middle = $('<div class="middle"></div>');
-        const $right = $('<div class="right"></div>');
+        const $left = uw.$('<div class="left"></div>');
+        const $middle = uw.$('<div class="middle"></div>');
+        const $right = uw.$('<div class="right"></div>');
 
         $menu.append($left, $middle, $right);
-        $("#ui_box").prepend($menu);
+        uw.$("#ui_box").prepend($menu);
 
         return $middle
     }
@@ -200,7 +200,7 @@ class ModernBot {
 if (!window.__multbot_loaded__) {
     window.__multbot_loaded__ = true;
     var _multbot_loader = setInterval(() => {
-        if ($("#loader").length > 0) return;
+        if (uw.$("#loader").length > 0) return;
         uw.modernBot = new ModernBot();
         clearInterval(_multbot_loader);
     }, 100);
