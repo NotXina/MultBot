@@ -31,7 +31,7 @@ class AutoSendResources extends ModernUtil {
                 Envia recursos de cidades ociosas para a cidade com menor % de storage. Verifica a cada 30 min.
             </div>
             <div style="padding:2px 10px 4px;font-size:11px;color:#5a3a0a;">
-                Condição para enviar: pop &lt; 200 + festa e teatro em curso + recurso &gt; 50% storage.
+                Condição para enviar: pop &lt; 200 + AutoBuild concluído + recurso &gt; 50% storage.
             </div>
             <div id="asr_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
@@ -120,23 +120,14 @@ class AutoSendResources extends ModernUtil {
             const town      = uw.ITowns.towns[townId];
             const buildings = town.buildings().attributes;
             const res       = town.resources();
-            const models    = uw.MM.getModels().Celebration;
 
             // 1. Pop disponível < 200
             if (town.getAvailablePopulation() >= 200) return false;
 
-            // 2. Deve estar com festa E teatro em curso
-            const townId_int = parseInt(townId);
-            let hasFestival = false, hasTheater = false;
-            if (models) {
-                for (const key in models) {
-                    const cel = models[key].attributes;
-                    if (cel.town_id !== townId_int) continue;
-                    if (cel.celebration_type === 'party')   hasFestival = true;
-                    if (cel.celebration_type === 'theater') hasTheater  = true;
-                }
-            }
-            if (!hasFestival || !hasTheater) return false;
+            // 2. AutoBuild done — cidade não está na lista do AutoBuild
+            //    (foi removida porque atingiu todos os níveis alvo)
+            const autoBuildTowns = uw.modernBot?.autoBuild?.towns_buildings ?? {};
+            if (townId in autoBuildTowns) return false;
 
             // 3. Mercado ativo com capacidade > 500
             if (!buildings.market || buildings.market < 1) return false;
