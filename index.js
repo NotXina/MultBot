@@ -16,10 +16,7 @@
 (function () {
     'use strict';
 
-    const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main/modules';
-
-    // Lock global para evitar conflito de Game.townId entre módulos
-    window.__gp_townId_lock = false;
+    const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main/Modules';
 
     const MODULES = [
         'core.js',
@@ -39,20 +36,20 @@
         'multbot.js',
     ];
 
-    // Injeta o código como <script> tag no DOM para garantir
-    // que as classes ficam no escopo global da página
-    function injectScript(code) {
+    const codes = new Array(MODULES.length).fill(null);
+    let completed = 0;
+
+    function injectAll() {
+        // Concatena tudo num único script tag — garante escopo compartilhado
+        const fullCode = codes.join('\n\n');
         const script = document.createElement('script');
-        script.textContent = code;
+        script.textContent = fullCode;
         document.head.appendChild(script);
         script.remove();
+        console.log('[MultBot] ✓ Todos os módulos injetados!');
     }
 
-    function loadModule(index) {
-        if (index >= MODULES.length) {
-            console.log('[MultBot] ✓ Todos os módulos carregados!');
-            return;
-        }
+    function fetchModule(index) {
         const mod = MODULES[index];
         GM_xmlhttpRequest({
             method:  'GET',
@@ -60,28 +57,29 @@
             headers: { 'Cache-Control': 'no-cache' },
             onload(r) {
                 if (r.status === 200) {
-                    try {
-                        injectScript(r.responseText);
-                        console.log(`[MultBot] ✓ ${mod}`);
-                    } catch(e) {
-                        console.error(`[MultBot] ✗ Erro em ${mod}:`, e.message);
-                    }
+                    codes[index] = r.responseText;
+                    console.log(`[MultBot] ✓ baixado: ${mod}`);
                 } else {
+                    codes[index] = `console.error('[MultBot] HTTP ${r.status}: ${mod}');`;
                     console.error(`[MultBot] ✗ HTTP ${r.status}: ${mod}`);
                 }
-                loadModule(index + 1);
+                completed++;
+                if (completed === MODULES.length) injectAll();
             },
             onerror() {
+                codes[index] = `console.error('[MultBot] Falha de rede: ${mod}');`;
                 console.error(`[MultBot] ✗ Falha de rede: ${mod}`);
-                loadModule(index + 1);
+                completed++;
+                if (completed === MODULES.length) injectAll();
             }
         });
     }
 
     function waitForGame() {
         if (typeof Game !== 'undefined' && Game.player_id) {
-            console.log('[MultBot] Game detectado, carregando módulos...');
-            loadModule(0);
+            console.log('[MultBot] Game detectado, baixando módulos...');
+            window.__gp_townId_lock = false;
+            MODULES.forEach((_, i) => fetchModule(i));
         } else {
             setTimeout(waitForGame, 500);
         }
