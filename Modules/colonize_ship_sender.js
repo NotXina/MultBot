@@ -48,7 +48,7 @@ class ColonizeShipSender extends ModernUtil {
                         ${this.getButtonHtml('css_save_target', 'Salvar', this._saveTarget)}
                     </div>
                     <div id="css_target_status" style="font-size:11px;color:#4ade80;min-height:14px;">
-                        ${cfg.targetTownId ? '✓ Destino: #' + cfg.targetTownId : ''}
+                        ${cfg.targetTownId ? '✓ Destino: ' + this._getTownName(cfg.targetTownId) : ''}
                     </div>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:4px;">
@@ -220,6 +220,20 @@ class ColonizeShipSender extends ModernUtil {
             uw.Game.town_id = origStr;
             window.__gp_townId_lock = false;
         }
+    }
+
+    _getTownName(townId) {
+        if (!townId) return '';
+        try {
+            // Tenta achar nas cidades do mapa (todas, não só as do jogador)
+            const allTowns = uw.MM.getOnlyCollectionByName('Town').models;
+            for (const t of allTowns) {
+                if (String(t.attributes.id ?? t.id) === String(townId)) {
+                    return (t.attributes.name ?? '') + ' (#' + townId + ')';
+                }
+            }
+        } catch(e) {}
+        return '#' + townId;
     }
 
     _parseTownId(input) {
