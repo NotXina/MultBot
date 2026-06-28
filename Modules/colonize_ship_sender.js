@@ -223,52 +223,30 @@ class ColonizeShipSender extends ModernUtil {
         }
     }
 
-    // Verifica se uma cidade está em processo de conquista (colonization em curso)
-    _isTownUnderConquest(townId) {
-        try {
-            const models = uw.MM.getModels().MovementsUnits;
-            if (!models) return false;
-            for (const key in models) {
-                const mv = models[key].attributes;
-                // Apoio com colonize_ship chegando nessa cidade = conquista em curso
-                if (String(mv.target_town_id) === String(townId) &&
-                    mv.type === 'support' &&
-                    mv.units?.colonize_ship > 0) {
-                    return true;
-                }
-                // Ataque com colonize_ship = conquista
-                if (String(mv.target_town_id) === String(townId) &&
-                    mv.type === 'attack' &&
-                    mv.units?.colonize_ship > 0) {
-                    return true;
-                }
-            }
-            // Verifica também via Town model — conquest_votes indica conquista ativa
-            const allTowns = uw.MM.getOnlyCollectionByName('Town').models;
-            for (const t of allTowns) {
-                if (String(t.attributes.id ?? t.id) === String(townId)) {
-                    if (t.attributes.conquest_votes > 0) return true;
-                    break;
-                }
-            }
-            return false;
-        } catch(e) {
-            return false;
-        }
-    }
-
     _getTownName(townId) {
-        if (!townId) return '';
+        if (!townId) return String(townId);
+        const id  = parseInt(townId);
+        const ids = String(townId);
         try {
-            // Tenta achar nas cidades do mapa (todas, não só as do jogador)
-            const allTowns = uw.MM.getOnlyCollectionByName('Town').models;
+            // 1. ITowns — cidades do jogador (chave pode ser number ou string)
+            const t1 = uw.ITowns?.towns?.[id] ?? uw.ITowns?.towns?.[ids];
+            if (t1) return t1.getName() + ' (#' + ids + ')';
+
+            // 2. Backbone Town collection
+            const allTowns = uw.MM.getOnlyCollectionByName('Town')?.models ?? [];
             for (const t of allTowns) {
-                if (String(t.attributes.id ?? t.id) === String(townId)) {
-                    return (t.attributes.name ?? '') + ' (#' + townId + ')';
+                const tid = t.attributes?.id ?? t.id;
+                if (parseInt(tid) === id) {
+                    return (t.attributes?.name ?? '?') + ' (#' + ids + ')';
                 }
             }
+
+            // 3. WMap
+            const wt = uw.WMap?.towns?.[id] ?? uw.WMap?.towns?.[ids];
+            if (wt?.name) return wt.name + ' (#' + ids + ')';
+
         } catch(e) {}
-        return '#' + townId;
+        return '#' + ids;
     }
 
     _parseTownId(input) {
