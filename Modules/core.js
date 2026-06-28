@@ -767,3 +767,22 @@ class ModernStorage extends Compressor {
 }
 
 /* Setup autofarm in the window object */
+
+// ── Guard global: detecta conquista em curso e pausa módulos ──
+window.__multbot_conquest_check = function() {
+    try {
+        const models = uw.MM.getOnlyCollectionByName('Town').models;
+        for (const t of models) {
+            if ((t.attributes.conquest_votes ?? 0) > 0) return true;
+        }
+        // Verifica também MovementsUnits com colonize_ship
+        const mv = uw.MM.getModels().MovementsUnits;
+        if (mv) {
+            for (const key in mv) {
+                const m = mv[key].attributes;
+                if (m.units?.colonize_ship > 0) return true;
+            }
+        }
+        return false;
+    } catch(e) { return false; }
+};
