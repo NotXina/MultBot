@@ -31,6 +31,7 @@
         'auto_rural_trade.js',
         'auto_trade.js',
         'auto_train.js',
+        'status.js',
         'colonize_ship_sender.js',
         'mult_tools.js',
         'multbot.js',
