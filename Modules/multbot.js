@@ -32,6 +32,7 @@ class ModernBot {
         this.autoSendResources = new AutoSendResources(this.console, this.storage);
         this.autoResearch      = new AutoResearch(this.console, this.storage);
         this.statusPanel  = new StatusPanel(this.console, this.storage);
+        this._startOrchestrator();
 
         this.settingsFactory = new createGrepoWindow({
             id: 'MODERN_BOT',
@@ -208,6 +209,58 @@ class ModernBot {
         uw.$("#ui_box").prepend($menu);
 
         return $middle
+    }
+
+    // ── Orquestrador: pipeline por cidade ──
+    _startOrchestrator() {
+        const runPipeline = async () => {
+            const townIds = Object.keys(uw.ITowns.towns);
+
+            for (const townId of townIds) {
+                // 1. Build
+                if (this.autoBuild?.towns_buildings?.[townId]) {
+                    if (!this.autoBuild.isFullQueue(townId) && !this.autoBuild.isDone(townId)) {
+                        await this.autoBuild.getNextBuild(townId);
+                    }
+                }
+
+                // 2. Train
+                if (this.autoTrain?.city_troops?.[townId]) {
+                    this.autoTrain.checkPolis('naval', townId);
+                    this.autoTrain.checkPolis('ground', townId);
+                }
+
+                // 3. Research
+                if (this.autoResearch?._active) {
+                    await this.autoResearch._researchNext(townId);
+                }
+
+                // 4. Party (uma vez por ciclo, na última cidade)
+                if (townId === townIds[townIds.length - 1]) {
+                    if (this.autoParty?.enable) {
+                        if (this.autoParty.active_types?.festival) await this.autoParty.checkParty();
+                        if (this.autoParty.active_types?.procession) await this.autoParty.checkTriumph();
+                        if (this.autoParty.active_types?.theater) await this.autoParty.checkTheater();
+                    }
+
+                    // 5. Send Resources (uma vez por ciclo)
+                    if (this.autoSendResources?._active) {
+                        this.autoSendResources._tick();
+                    }
+
+                    // 6. Colonize Ships (uma vez por ciclo)
+                    if (this.colonizeShipSender?._running) {
+                        this.colonizeShipSender._tick();
+                    }
+                }
+
+                await new Promise(r => setTimeout(r, 300));
+            }
+        };
+
+        setInterval(() => {
+            runPipeline().catch(e => console.error('[Orquestrador]', e));
+        }, 5000);
     }
 }
 
