@@ -15,7 +15,7 @@ class AutoParty extends ModernUtil {
 
         // Check for captcha every 300ms
         this.checkCaptchaInterval = setInterval(() => {
-            if (this.simulateCaptcha || $('.botcheck').length || $('#recaptcha_window').length) {
+            if (this.simulateCaptcha || uw.$('.botcheck').length || uw.$('#recaptcha_window').length) {
                 if (!this.captchaActive) {
                     this.console.log('Captcha active, autoparty stopped working');
                     clearInterval(this.enable); // Stop autoparty
@@ -43,8 +43,9 @@ class AutoParty extends ModernUtil {
         requestAnimationFrame(() => {
             this.triggerType('festival', false);
             this.triggerType('procession', false);
-            this.triggerType('theater', false); // Initialize theater toggle
+            this.triggerType('theater', false);
             this.triggerSingle(this.single);
+            this._renderActiveCelebrations();
         });
 
         return `
@@ -53,9 +54,9 @@ class AutoParty extends ModernUtil {
 
                 <div id="autoparty_types" class="split_content">
                     <div style="padding: 5px;">
-                    ${this.getButtonHtml('autoparty_festival', 'Party', this.triggerType, 'festival')}
-                    ${this.getButtonHtml('autoparty_procession', 'Parade', this.triggerType, 'procession')}
-                    ${this.getButtonHtml('autoparty_theater', 'Theater', this.triggerType, 'theater')} <!-- Add theater button -->
+                    ${this.getButtonHtml('autoparty_festival', 'Festa', this.triggerType, 'festival')}
+                    ${this.getButtonHtml('autoparty_procession', 'Desfile', this.triggerType, 'procession')}
+                    ${this.getButtonHtml('autoparty_theater', 'Teatro', this.triggerType, 'theater')}
                     </div>
 
                     <div style="padding: 5px;">
@@ -63,8 +64,35 @@ class AutoParty extends ModernUtil {
                     ${this.getButtonHtml('autoparty_multiple', 'All', this.triggerSingle, 1)}
                     </div>
                 </div>
+
+                <div id="autoparty_active" style="padding:5px;font-size:11px;color:#aaa;max-height:120px;overflow-y:auto;">
+                </div>
             </div>
         `;
+    };
+
+    _renderActiveCelebrations = () => {
+        try {
+            const models = uw.MM.getModels().Celebration;
+            if (!models) return;
+            const now    = Math.floor(Date.now() / 1000);
+            const lines  = [];
+            for (const key in models) {
+                const cel  = models[key].attributes;
+                const town = uw.ITowns.towns[cel.town_id];
+                if (!town) continue;
+                const remaining = cel.finished_at - now;
+                const mins = Math.floor(remaining / 60);
+                const secs = remaining % 60;
+                const icon = cel.celebration_type === 'party' ? '🎉'
+                           : cel.celebration_type === 'theater' ? '🎭' : '🏆';
+                lines.push(`${icon} <b>${town.getName()}</b> — ${cel.celebration_type} (${mins}m ${secs}s)`);
+            }
+            const html = lines.length
+                ? lines.join('<br>')
+                : '<span style="color:#555;">Nenhuma celebração ativa</span>';
+            uw.$('#autoparty_active').html(html);
+        } catch(e) {}
     };
 
     triggerType = (type, swap = true) => {
@@ -193,7 +221,8 @@ class AutoParty extends ModernUtil {
     main = async () => {
         if (this.active_types['procession']) await this.checkTriumph();
         if (this.active_types['festival']) await this.checkParty();
-        if (this.active_types['theater']) await this.checkTheater(); // Check theater celebrations
+        if (this.active_types['theater']) await this.checkTheater();
+        this._renderActiveCelebrations();
     };
 
     makeCelebration = (type, town_id) => {
