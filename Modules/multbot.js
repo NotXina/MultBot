@@ -28,7 +28,8 @@ class ModernBot {
         this.autoTrade = new AutoTrade(this.console, this.storage);
         this.colonizeShipSender = new ColonizeShipSender(this.console, this.storage);
         this.multTools    = new MultTools(this.console, this.storage);
-        this.autoMilitia  = new AutoMilitia(this.console, this.storage);
+        this.autoMilitia      = new AutoMilitia(this.console, this.storage);
+        this.autoSendResources = new AutoSendResources(this.console, this.storage);
         this.statusPanel  = new StatusPanel(this.console, this.storage);
 
         this.settingsFactory = new createGrepoWindow({
@@ -97,6 +98,7 @@ class ModernBot {
         // html += this.autoFarm.settings();
         html += this.autoRuralLevel.settings();
         html += this.autoRuralTrade.settings();
+        html += this.autoSendResources.settings();
         return html;
     };
 
