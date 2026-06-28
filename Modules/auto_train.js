@@ -29,7 +29,7 @@ class AutoTrain extends ModernUtil {
         this.simulateCaptcha = false; // Switch to simulate captcha
         this.captchaActive = false;
 
-        this.interval = null; // controlado pelo orquestrador
+        this.interval = setInterval(this.main.bind(this), this.getRandomDelay(1000, 10000));
 
         // Check for captcha every 300ms
         this.checkCaptchaInterval = setInterval(() => {
