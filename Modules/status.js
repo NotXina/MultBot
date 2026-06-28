@@ -10,7 +10,7 @@ class StatusPanel extends ModernUtil {
 
     settings = () => {
         requestAnimationFrame(() => this._startRefresh());
-        return `<div id="status_rows" style="padding:4px;"></div>`;
+        return `<div id="status_rows" style="padding:4px;max-height:280px;overflow-y:auto;"></div>`;
     };
 
     _startRefresh() {
