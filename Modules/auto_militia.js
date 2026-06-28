@@ -2,7 +2,6 @@
 //  MODULE: AutoMilitia
 //  Ativa milícia automaticamente em cidades com ataque
 //  entrante. Endpoint: building_farm / request_militia
-//  Payload exato do Noct AutoMilitia.
 // ══════════════════════════════════════════════════════
 class AutoMilitia extends ModernUtil {
     constructor(c, s) {
