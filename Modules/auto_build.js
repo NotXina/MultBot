@@ -19,7 +19,7 @@ class AutoBuild extends ModernUtil {
 
         /* Check for captcha conditions every 300ms */
         this.checkCaptchaInterval = setInterval(() => {
-            if (this.simulateCaptcha || $('.botcheck').length || $('#recaptcha_window').length) {
+            if (this.simulateCaptcha || uw.$('.botcheck').length || uw.$('#recaptcha_window').length) {
                 if (!this.captchaActive) {
                     this.console.log('Captcha active, autobuild stopped working');
                     clearInterval(this.interval);
@@ -86,14 +86,14 @@ class AutoBuild extends ModernUtil {
         // Loop until the element is found
         const updateView = () => {
             const interval = setInterval(() => {
-                const $window = $('#' + id);
+                const $window = uw.$('#' + id);
 
                 const $mainTasks = $window.find('#main_tasks');
                 if (!$mainTasks.length) return;
 
                 $mainTasks.hide();
 
-                let $newElement = $('<div></div>').append(this.settings());
+                let $newElement = uw.$('<div></div>').append(this.settings());
 
                 $newElement.css({
                     position: $mainTasks.css('position'),
