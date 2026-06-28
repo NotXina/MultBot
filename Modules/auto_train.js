@@ -416,6 +416,7 @@ class AutoTrain extends ModernUtil {
 
     /* Main function, call in the loop — treina ground + naval no mesmo tick */
     main = () => {
+        if (window.__multbot_conquest_check?.()) return;
         let town_list = this.getActiveList();
 
         for (let town_id of town_list) {
