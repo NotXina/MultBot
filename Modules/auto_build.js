@@ -258,6 +258,7 @@ class AutoBuild extends ModernUtil {
 
     /* Main loop for building */
     main = async () => {
+        if (window.__multbot_conquest_check?.()) return;
         for (let town_id of Object.keys(this.towns_buildings)) {
             /* If the town don't exists in list, remove it to prevent errors */
             if (!uw.ITowns.towns[town_id]) {
