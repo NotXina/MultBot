@@ -7,7 +7,7 @@
 class AutoResearch extends ModernUtil {
     // Ordem de prioridade de pesquisa
     DEFAULT_ORDER = [
-        'militia',          // Milícia
+        'city_guard',       // Guarda da Cidade
         'meteorology',      // Meteorologia
         'espionage',        // Espionagem
         'farmers_loyalty',  // Lealdade dos Aldeões (opcional — só se disponível)
@@ -29,8 +29,25 @@ class AutoResearch extends ModernUtil {
         }
     }
 
+    // Nomes para exibição
+    RESEARCH_NAMES = {
+        city_guard:      'Guarda da Cidade',
+        meteorology:     'Meteorologia',
+        espionage:       'Espionagem',
+        farmers_loyalty: 'Lealdade',
+        pottery:         'Cerâmica',
+        architecture:    'Arquitetura',
+        crane:           'Guindaste',
+        shipwright:      'Const. Naval',
+        colonize_ship:   'Nav. Colonizador',
+        plow:            'Arado',
+    };
+
     settings = () => {
-        requestAnimationFrame(() => this._updateTitle());
+        requestAnimationFrame(() => {
+            this._updateTitle();
+            this._renderIcons();
+        });
         return `
         <div class="game_border" style="margin-bottom:20px;">
             <div class="game_border_top"></div><div class="game_border_bottom"></div>
@@ -38,15 +55,36 @@ class AutoResearch extends ModernUtil {
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             ${this.getTitleHtml('ares_title', 'Auto Pesquisa', this.toggle, '', this._active)}
-            <div style="padding:5px 10px;font-weight:bold;">
-                Pesquisa automaticamente as próximas tecnologias disponíveis em todas as cidades. Verifica a cada 30s.
-            </div>
-            <div style="padding:2px 10px;font-size:11px;color:#5a3a0a;">
-                Ordem: Milícia → Meteorologia → Espionagem → Lealdade → Cerâmica → Arquitetura → Guindaste → Const. Naval → Nav. Colonizador → Arado
-            </div>
+            <div id="ares_icons" style="padding:5px;"></div>
             <div id="ares_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
     };
+
+    _renderIcons() {
+        try {
+            const town       = uw.ITowns.getCurrentTown();
+            const researches = town?.researches()?.attributes ?? {};
+            const BASE       = 'https://gpit.innogamescdn.com/images/game/academy/';
+
+            const icons = this.DEFAULT_ORDER.map(tech => {
+                const done    = !!researches[tech];
+                const name    = this.RESEARCH_NAMES[tech] ?? tech;
+                const opacity = done ? '0.35' : '1';
+                const border  = done ? '2px solid #4ade80' : '2px solid transparent';
+                return `
+                <div style="display:inline-block;text-align:center;margin:3px;vertical-align:top;width:58px;">
+                    <div class="auto_build_box" style="border:${border};box-sizing:border-box;opacity:${opacity};">
+                        <img src="${BASE}${tech}.png"
+                            style="position:absolute;top:4px;left:4px;width:50px;height:50px;"
+                            onerror="this.style.display='none'">
+                    </div>
+                    <div style="font-size:9px;color:#3a2a0a;line-height:1.2;margin-top:2px;">${name}</div>
+                </div>`;
+            }).join('');
+
+            uw.$('#ares_icons').html(icons);
+        } catch(e) {}
+    }
 
     toggle = () => {
         if (this._active) this.stop();
@@ -89,6 +127,7 @@ class AutoResearch extends ModernUtil {
             const msg = `✓ ${count} pesquisa(s) iniciada(s)`;
             this.console.log('[AutoPesquisa] ' + msg);
             uw.$('#ares_log').text(msg);
+            this._renderIcons(); // Atualiza ícones
         }
     }
 
