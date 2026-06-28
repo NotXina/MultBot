@@ -414,14 +414,14 @@ class AutoTrain extends ModernUtil {
         return this.getPowerActive();
     };
 
-    /* Main function, call in the loop */
+    /* Main function, call in the loop — treina ground + naval no mesmo tick */
     main = () => {
         let town_list = this.getActiveList();
 
         for (let town_id of town_list) {
             if (town_id in uw.ITowns.towns) {
-                if (this.checkPolis('naval', town_id)) return;
-                if (this.checkPolis('ground', town_id)) return;
+                this.checkPolis('naval', town_id);
+                this.checkPolis('ground', town_id);
             } else {
                 delete this.city_troops[town_id];
             }
