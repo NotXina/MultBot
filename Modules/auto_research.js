@@ -151,6 +151,9 @@ class AutoResearch extends ModernUtil {
 
                 if (researches[tech]) continue; // já pesquisado
 
+                // booty (Lealdade dos Aldeões) — só se a ilha tem aldeias bárbaras
+                if (tech === 'booty' && !this._islandHasFarmTowns(town)) continue;
+
                 // Verifica requisitos de academia
                 if (buildings.academy < (req.academy_level ?? 1)) continue;
 
@@ -162,6 +165,19 @@ class AutoResearch extends ModernUtil {
                 // Pesquisa!
                 await this._doResearch(townId, tech, town.getName());
                 return true;
+            }
+            return false;
+        } catch(e) { return false; }
+    }
+
+    // Verifica se a ilha da cidade tem aldeias bárbaras (FarmTown)
+    _islandHasFarmTowns(town) {
+        try {
+            const ix = town.attributes.island_x;
+            const iy = town.attributes.island_y;
+            const farmTowns = uw.MM.getOnlyCollectionByName('FarmTown')?.models ?? [];
+            for (const ft of farmTowns) {
+                if (ft.attributes.island_x === ix && ft.attributes.island_y === iy) return true;
             }
             return false;
         } catch(e) { return false; }
