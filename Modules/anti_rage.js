@@ -12,9 +12,9 @@ class AntiRage extends ModernUtil {
 		this.active_god_el = null;
 
 		let commandId;
-		const oldCreate = GPWindowMgr.Create;
-		GPWindowMgr.Create = function (type, title, params, id) {
-			if (type === GPWindowMgr.TYPE_ATK_COMMAND && id) commandId = id;
+		const oldCreate = uw.GPWindowMgr.Create;
+		uw.GPWindowMgr.Create = function (type, title, params, id) {
+			if (type === uw.GPWindowMgr.TYPE_ATK_COMMAND && id) commandId = id;
 			return oldCreate.apply(this, arguments);
 		};
 
