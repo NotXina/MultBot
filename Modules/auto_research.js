@@ -150,11 +150,14 @@ class AutoResearch extends ModernUtil {
 
             // Encontra a próxima pesquisa na ordem de prioridade
             for (const tech of this.DEFAULT_ORDER) {
+                // Verifica se existe neste mundo
+                const req = uw.GameData.researches?.[tech];
+                if (!req) continue; // não disponível neste mundo
+
                 if (researches[tech]) continue; // já pesquisado
 
                 // Verifica requisitos de academia
-                const req = uw.GameData.researches?.[tech];
-                if (req && buildings.academy < (req.academy_level ?? 1)) continue;
+                if (buildings.academy < (req.academy_level ?? 1)) continue;
 
                 // Verifica se tem recursos
                 const { wood, stone, iron } = town.resources();
