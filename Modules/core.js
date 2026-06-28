@@ -1,4 +1,3 @@
-
 // ==UserScript==
 // @name         ModernBot
 // @author       Sau1707
@@ -147,7 +146,7 @@ class ModernUtil {
      * @returns {number} - The total population of all units in the collection.
      */
     countPopulation(obj) {
-        const data = GameData.units;
+        const data = uw.GameData.units;
         let total = 0;
         for (let key in obj) {
             total += data[key].population * obj[key];
@@ -741,7 +740,7 @@ class ModernStorage extends Compressor {
 				try {
 					decoded = this.decode(JSON.parse(text));
 				} catch {
-					HumanMessage.error("This note don't contains the settings");
+					uw.HumanMessage.error("This note don't contains the settings");
 					return;
 				}
 
@@ -759,7 +758,7 @@ class ModernStorage extends Compressor {
 		const noteX = noteClass.match(/note(\d+)/)[1];
 		const note_index = parseInt(noteX) - 1;
 
-		const collection = MM.getOnlyCollectionByName('PlayerNote');
+		const collection = uw.MM.getOnlyCollectionByName('PlayerNote');
 		if (!collection) return null;
 		let { models } = collection;
 
