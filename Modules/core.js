@@ -1,3 +1,17 @@
+
+// ==UserScript==
+// @name         ModernBot
+// @author       Sau1707
+// @description  A modern grepolis bot
+// @version      1.18.8
+// @match        http://*.grepolis.com/game/*
+// @match        https://*.grepolis.com/game/*
+// @updateURL    https://github.com/Sau1707/ModernBot/blob/main/dist/merged.user.js
+// @downloadURL  https://github.com/Sau1707/ModernBot/blob/main/dist/merged.user.js
+// @icon         https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/gear.png
+// @require		 http://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js
+// ==/UserScript==
+
 var uw;
 if (typeof unsafeWindow == 'undefined') {
 	uw = window;
@@ -269,6 +283,7 @@ class ModernUtil {
 }
 
 // TO BE FINISCHED
+
 class About {
 	constructor() {
 		this.checkVersion();
@@ -290,3 +305,466 @@ class About {
 		console.log(lastVersion, installedVersion);
 	};
 }
+
+class BotConsole {
+	constructor() {
+		this.string = [];
+		this.updateSettings();
+	}
+
+	renderSettings = () => {
+		setTimeout(() => {
+			this.updateSettings();
+			let interval = setInterval(() => {
+				this.updateSettings();
+				if (!uw.$('#modern_console').length) clearInterval(interval);
+			}, 1000);
+		}, 100);
+		return `<div class="console_modernbot" id="modern_console"><div>`;
+	};
+
+	log = (string) => {
+		const date = new Date();
+		const time = date.toLocaleTimeString();
+		this.string.push(`[${time}] ${string}`);
+	};
+
+	updateSettings = () => {
+		let console = uw.$('#modern_console');
+		this.string.forEach((e, i) => {
+			if (uw.$(`#log_id_${i}`).length) return;
+			console.prepend(`<p id="log_id_${i}">${e}</p>`);
+		});
+	};
+}
+
+class Compressor {
+	NUMBERS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+	SYMBOLS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-./:;<=>?@[]^_`{|}~';
+
+	ITEMS = {
+		// Buildings
+		academy: 'a',
+		barracks: 'b',
+		docks: 'd',
+		farm: 'f',
+		hide: 'h',
+		ironer: 'i',
+		lumber: 'l',
+		main: 'm',
+		market: 'k',
+		stoner: 'c',
+		storage: 's',
+		temple: 't',
+		wall: 'w',
+
+		// Troops
+		sword: 'A',
+		archer: 'B',
+		hoplite: 'C',
+		slinger: 'D',
+		rider: 'E',
+		chariot: 'F',
+		catapult: 'G',
+		big_transporter: 'H',
+		small_transporter: 'I',
+		bireme: 'L',
+		demolition_ship: 'M',
+		attack_ship: 'N',
+		trireme: 'O',
+		colonize_ship: 'P',
+	};
+
+	constructor() {
+		const swap = json => {
+			var ret = {};
+			for (var key in json) {
+				ret[json[key]] = key;
+			}
+			return ret;
+		};
+
+		this.ITEMS_REV = swap(this.ITEMS);
+	}
+
+	/* Pass a storage object, return it encoded */
+	encode(storage) {
+		for (let item in storage) {
+			if (typeof storage[item] !== 'object') continue;
+
+			if (item == 'buildings') {
+				for (let polis_id in storage[item]) {
+					let obj = storage[item][polis_id];
+					storage[item][polis_id] = this.encode_building(obj);
+				}
+			}
+
+			if (item == 'troops') {
+				for (let polis_id in storage[item]) {
+					let obj = storage[item][polis_id];
+					storage[item][polis_id] = this.encode_troops(obj);
+				}
+			}
+		}
+
+		return storage;
+	}
+
+	decode(storage) {
+		for (let item in storage) {
+			if (typeof storage[item] !== 'object') continue;
+
+			if (item == 'buildings') {
+				for (let polis_id in storage[item]) {
+					let str = storage[item][polis_id];
+					storage[item][polis_id] = this.decode_bulding(str);
+				}
+			}
+
+			if (item === 'troops') {
+				for (let polis_id in storage[item]) {
+					let str = storage[item][polis_id];
+					storage[item][polis_id] = this.decode_troops(str);
+				}
+			}
+		}
+
+		return storage;
+	}
+
+	compressNumber(num) {
+		let base = this.SYMBOLS.length;
+		let digits = [];
+		while (num > 0) {
+			digits.unshift(this.SYMBOLS[num % base]);
+			num = Math.floor(num / base);
+		}
+		if (digits.length == 1) {
+			digits.unshift('0');
+		}
+		return digits.slice(-2).join('');
+	}
+
+	decompressNumber(str) {
+		let base = this.SYMBOLS.length;
+		let digits = str.split('');
+		let num = 0;
+		for (let i = 0; i < digits.length; i++) {
+			num += this.SYMBOLS.indexOf(digits[i]) * Math.pow(base, digits.length - i - 1);
+		}
+		return num;
+	}
+
+	/* Give the object of building, return the encoded string */
+	encode_building(obj) {
+		let str = '';
+		for (let item in obj) {
+			str += this.ITEMS[item] + this.NUMBERS[obj[item]];
+		}
+		return str;
+	}
+
+	/* Give an encoded string with building, return the correspong object */
+	decode_bulding(str) {
+		let json_str = '{';
+		for (let item of str.match(/.{1,2}/g)) {
+			json_str += `"${this.ITEMS_REV[item[0]]}"` + ':' + this.NUMBERS.indexOf(item[1]) + ',';
+		}
+		json_str = json_str.replace(/,$/, '}');
+		return JSON.parse(json_str);
+	}
+
+	encode_troops(obj) {
+		let str = '';
+		for (let item in obj) {
+			str += this.ITEMS[item] + this.compressNumber(obj[item]);
+		}
+		return str;
+	}
+
+	decode_troops(str) {
+		let json_str = '{';
+		for (let item of str.match(/.{1,3}/g)) {
+			json_str += `"${this.ITEMS_REV[item[0]]}"` + ':' + this.decompressNumber(item.slice(-2)) + ',';
+		}
+		json_str = json_str.replace(/,$/, '}');
+		return JSON.parse(json_str);
+	}
+}
+
+/* 
+    Create a new window
+ */
+
+class createGrepoWindow {
+	constructor({ id, title, size, tabs, start_tab, minimizable = true }) {
+		this.minimizable = minimizable;
+		this.width = size[0];
+		this.height = size[1];
+		this.title = title;
+		this.id = id;
+		this.tabs = tabs;
+		this.start_tab = start_tab;
+
+		/* Private methods */
+		const createWindowType = (name, title, width, height, minimizable) => {
+			function WndHandler(wndhandle) {
+				this.wnd = wndhandle;
+			}
+			Function.prototype.inherits.call(WndHandler, uw.WndHandlerDefault);
+			WndHandler.prototype.getDefaultWindowOptions = function () {
+				return {
+					position: ['center', 'center', 100, 100],
+					width: width,
+					height: height,
+					minimizable: minimizable,
+					title: title,
+				};
+			};
+			uw.GPWindowMgr.addWndType(name, `${name}_75624`, WndHandler, 1);
+		};
+
+		const getTabById = (id) => {
+			return this.tabs.filter((tab) => tab.id === id)[0];
+		};
+
+		this.activate = function () {
+			createWindowType(this.id, this.title, this.width, this.height, this.minimizable); //
+			uw.$(
+				`<style id="${this.id}_custom_window_style">
+                 #${this.id} .tab_icon { left: 23px;}
+                 #${this.id} {top: -36px; right: 95px;}
+                 #${this.id} .submenu_link {color: #000;}
+                 #${this.id} .submenu_link:hover {text-decoration: none;}
+                 #${this.id} li { float:left; min-width: 60px; }
+                 </style>
+                `,
+			).appendTo('head');
+		};
+
+		this.deactivate = function () {
+			if (uw.Layout.wnd.getOpenFirst(uw.GPWindowMgr[`TYPE_${this.id}`])) {
+				uw.Layout.wnd.getOpenFirst(uw.GPWindowMgr[`TYPE_${this.id}`]).close();
+			}
+			uw.$(`#${this.id}_custom_window_style`).remove();
+		};
+
+		/* open the window */
+		this.openWindow = function () {
+			let wn = uw.Layout.wnd.getOpenFirst(uw.GPWindowMgr[`TYPE_${this.id}`]);
+
+			/* if open is called but window it's alreay open minimized, maximize that */
+			if (wn) {
+				if (wn.isMinimized()) {
+					wn.maximizeWindow();
+				}
+				return;
+			}
+
+			let content = `<ul id="${this.id}" class="menu_inner"></ul><div id="${this.id}_content"> </div>`;
+			uw.Layout.wnd.Create(uw.GPWindowMgr[`TYPE_${this.id}`]).setContent(content);
+			/* Add and reder tabs */
+			this.tabs.forEach((e) => {
+				let html = `
+                    <li><a id="${e.id}" class="submenu_link" href="#"><span class="left"><span class="right"><span class="middle">
+                    <span class="tab_label"> ${e.title} </span>
+                    </span></span></span></a></li>
+                `;
+				uw.$(html).appendTo(`#${this.id}`);
+			});
+
+			/* Add events to tabs */
+			let tabs = '';
+			this.tabs.forEach((e) => {
+				tabs += `#${this.id} #${e.id}, `;
+			});
+			tabs = tabs.slice(0, -2);
+			let self = this;
+			uw.$(tabs).click(function () {
+				self.renderTab(this.id);
+			});
+			/* render default tab*/
+			this.renderTab(this.tabs[this.start_tab].id);
+		};
+
+		this.closeWindow = function () {
+			uw.Layout.wnd.getOpenFirst(uw.GPWindowMgr[`TYPE_${this.id}`]).close();
+		};
+
+		/* Handle active tab */
+		this.renderTab = function (id) {
+			let tab = getTabById(id);
+			uw.$(`#${this.id}_content`).html(getTabById(id).render());
+			uw.$(`#${this.id} .active`).removeClass('active');
+			uw.$(`#${id}`).addClass('active');
+			getTabById(id).afterRender ? getTabById(id).afterRender() : '';
+		};
+	}
+}
+
+// TODO:
+// - disable note notifiation
+// - add logs in console
+
+class ModernStorage extends Compressor {
+	constructor() {
+		super();
+		this.check_done = 0;
+
+		/* Add event to add the button in the notes */
+		uw.$.Observer(uw.GameEvents.window.open).subscribe((e, i) => {
+			if (!i.attributes) return;
+			if (i.attributes.window_type != 'notes') return;
+			setTimeout(this.addButton, 100);
+		});
+		uw.$.Observer(uw.GameEvents.window.tab.rendered).subscribe((e, i) => {
+			const { attributes } = i.window_model;
+			if (!attributes) return;
+			if (attributes.window_type !== 'notes') return;
+			requestAnimationFrame(this.addButton);
+		});
+	}
+
+	getStorage = () => {
+		const worldId = uw.Game.world_id;
+		const savedValue = localStorage.getItem(`${worldId}_modernBot`);
+		let storage = {};
+
+		if (savedValue !== null && savedValue !== undefined) {
+			try {
+				storage = JSON.parse(savedValue);
+			} catch (error) {
+				console.error(`Error parsing localStorage data: ${error}`);
+			}
+		}
+
+		return storage;
+	};
+
+	saveStorage = storage => {
+		try {
+			const worldId = uw.Game.world_id;
+			localStorage.setItem(`${worldId}_modernBot`, JSON.stringify(storage));
+			this.lastUpdateTime = Date.now();
+			return true;
+		} catch (error) {
+			console.error(`Error saving data to localStorage: ${error}`);
+			return false;
+		}
+	};
+
+	save = (key, content) => {
+		const storage = this.getStorage();
+		storage[key] = content;
+		return this.saveStorage(storage);
+	};
+
+	load = (key, defaultValue = null) => {
+		const storage = this.getStorage();
+		const savedValue = storage[key];
+		return savedValue !== undefined ? savedValue : defaultValue;
+	};
+
+	/* Call to save the setting to the given note id */
+	saveSettingsNote = note_id => {
+		const storage = JSON.stringify(this.encode(this.getStorage()));
+		const data = {
+			model_url: `PlayerNote/${note_id}`,
+			action_name: 'save',
+			arguments: {
+				id: note_id,
+				text: storage,
+			},
+		};
+		uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
+		return storage;
+	};
+
+	/* Call to add the buttons */
+	addButton = () => {
+		this.check_done += 1;
+		if ($('#modern_storage_load').length) return;
+
+		const modern_settings_load = $('<div/>', {
+			class: 'button_new',
+			id: 'modern_storage_load',
+			style: 'position: absolute; bottom: 5px; left: 6px; ',
+			onclick: 'modernBot.storage.loadSettings()',
+			html: '<div class="left"></div><div class="right"></div><div class="caption js-caption"> Load <div class="effect js-effect"></div></div>',
+		});
+
+		const modern_settings_save = $('<div/>', {
+			class: 'button_new',
+			id: 'modern_storage_save',
+			style: 'position: absolute; bottom: 5px; left: 75px; ',
+			onclick: 'modernBot.storage.saveSettings()',
+			html: '<div class="left"></div><div class="right"></div><div class="caption js-caption"> Save <div class="effect js-effect"></div></div>',
+		});
+
+		const box = $('.notes_container');
+		if (box.length) {
+			$('.notes_container').append(modern_settings_load, modern_settings_save);
+		} else {
+			if (this.check_done > 10) {
+				this.check_done = 0;
+				return;
+			}
+			setTimeout(this.addButton, 100);
+		}
+	};
+
+	saveSettings = () => {
+		uw.ConfirmationWindowFactory.openSimpleConfirmation(
+			'ModernStorage',
+			'This operation will overwrite the current note with the local settings of the ModernBot',
+			() => {
+				// trigged when user press yes
+				const note = this.getActiveNote();
+				if (!note) return; // TODO: display an error
+				const content = this.saveSettingsNote(note.id);
+				$('.preview_box').text(content);
+			},
+			() => {}
+		);
+	};
+
+	loadSettings = () => {
+		// TODO: check that the current note has settimhs
+		uw.ConfirmationWindowFactory.openSimpleConfirmation(
+			'ModernStorage',
+			'This operation will load the settings of the current note and overwrite the local settings',
+			() => {
+				// Trigged when the user press yes
+				const note = this.getActiveNote();
+				const { text } = note.attributes;
+				let decoded;
+				try {
+					decoded = this.decode(JSON.parse(text));
+				} catch {
+					HumanMessage.error("This note don't contains the settings");
+					return;
+				}
+
+				this.saveStorage(decoded);
+				location.reload();
+			},
+			() => {}
+		);
+	};
+
+	/* Return the current active note */
+	getActiveNote() {
+		const noteClass = $('.tab.selected').attr('class');
+		if (!noteClass) return null;
+		const noteX = noteClass.match(/note(\d+)/)[1];
+		const note_index = parseInt(noteX) - 1;
+
+		const collection = MM.getOnlyCollectionByName('PlayerNote');
+		if (!collection) return null;
+		let { models } = collection;
+
+		return models[note_index];
+	}
+}
+
+/* Setup autofarm in the window object */
