@@ -32,6 +32,7 @@
         'auto_trade.js',
         'auto_train.js',
         'status.js',
+        'auto_militia.js',
         'colonize_ship_sender.js',
         'mult_tools.js',
         'multbot.js',
