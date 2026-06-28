@@ -1,0 +1,199 @@
+// ══════════════════════════════════════════════════════
+//  MODULE: AutoSendResources
+//  Condições para enviar da cidade X para cidade Y:
+//  - Cidade X: sem upgrades pendentes, pop < 160,
+//    não pode fazer festa/teatro
+//  - Cidade Y: cidade do jogador com menor % storage
+//  Envia o máximo balanceado via town_info/trade
+// ══════════════════════════════════════════════════════
+class AutoSendResources extends ModernUtil {
+    constructor(c, s) {
+        super(c, s);
+        this._active     = false;
+        this._intervalId = null;
+        this._lastRun    = null;
+
+        if (this.storage.load('asr_active', false)) {
+            setTimeout(() => this.start(), 2500);
+        }
+    }
+
+    settings = () => {
+        requestAnimationFrame(() => this._updateTitle());
+        return `
+        <div class="game_border" style="margin-bottom:20px;">
+            <div class="game_border_top"></div><div class="game_border_bottom"></div>
+            <div class="game_border_left"></div><div class="game_border_right"></div>
+            <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
+            <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
+            ${this.getTitleHtml('asr_title', 'Auto Envio de Recursos', this.toggle, '', this._active)}
+            <div style="padding:5px 10px;font-weight:bold;">
+                Envia recursos de cidades ociosas para a cidade com menor % de storage. Verifica a cada 30 min.
+            </div>
+            <div style="padding:2px 10px 4px;font-size:11px;color:#5a3a0a;">
+                Condição para enviar: sem construções pendentes + pop &lt; 160 + sem festa/teatro possível.
+            </div>
+            <div id="asr_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
+        </div>`;
+    };
+
+    toggle = () => {
+        if (this._active) this.stop();
+        else this.start();
+    };
+
+    start() {
+        if (this._active) return;
+        this._active = true;
+        this.storage.save('asr_active', true);
+        this._updateTitle();
+        this.console.log('[AutoRecursos] Iniciado. Intervalo: 30 min.');
+        this._tick();
+        this._intervalId = setInterval(() => this._tick(), 30 * 60 * 1000);
+    }
+
+    stop() {
+        this._active = false;
+        this.storage.save('asr_active', false);
+        if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
+        this._updateTitle();
+        this.console.log('[AutoRecursos] Parado.');
+    }
+
+    _updateTitle() {
+        uw.$('#asr_title').css('filter', this._active
+            ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
+    }
+
+    async _tick() {
+        if (window.__multbot_conquest_check?.()) return;
+        this.console.log('[AutoRecursos] Verificando cidades...');
+
+        const townIds = Object.keys(uw.ITowns.towns);
+        if (townIds.length < 2) return;
+
+        // Encontra a cidade com menor % de storage (receptora)
+        const target = this._findPoorestTown(townIds);
+        if (!target) return;
+
+        const targetTown = uw.ITowns.towns[target];
+        const targetName = targetTown.getName();
+        this.console.log(`[AutoRecursos] Destino: ${targetName}`);
+
+        let totalSent = 0;
+
+        for (const fromId of townIds) {
+            if (fromId === target) continue;
+            if (!this._isEligibleSender(fromId)) continue;
+
+            const sent = await this._sendResources(fromId, target);
+            if (sent) totalSent++;
+            if (sent) await this.sleep(1000 + Math.random() * 1000);
+        }
+
+        const msg = totalSent > 0
+            ? `✓ Recursos enviados de ${totalSent} cidade(s) → ${targetName}`
+            : 'Nenhuma cidade elegível para envio.';
+        this.console.log('[AutoRecursos] ' + msg);
+        uw.$('#asr_log').text(msg);
+    }
+
+    // Cidade com menor % de storage (wood+stone+iron / storage*3)
+    _findPoorestTown(townIds) {
+        let bestId  = null;
+        let bestPct = Infinity;
+
+        for (const id of townIds) {
+            try {
+                const town = uw.ITowns.towns[id];
+                const res  = town.resources();
+                const pct  = (res.wood + res.stone + res.iron) / (res.storage * 3);
+                if (pct < bestPct) { bestPct = pct; bestId = id; }
+            } catch(e) {}
+        }
+        return bestId;
+    }
+
+    // Verifica se a cidade pode enviar recursos
+    _isEligibleSender(townId) {
+        try {
+            const town      = uw.ITowns.towns[townId];
+            const buildings = town.buildings().attributes;
+            const res       = town.resources();
+
+            // 1. Sem construções pendentes (fila vazia)
+            if (town.buildingOrders().length > 0) return false;
+
+            // 2. População disponível < 160
+            if (town.getAvailablePopulation() >= 160) return false;
+
+            // 3. Não pode fazer festa (academia >= 30 e recursos suficientes)
+            const canParty = buildings.academy >= 30
+                && res.wood >= 15000 && res.stone >= 18000 && res.iron >= 15000;
+            if (canParty) return false;
+
+            // 4. Não pode fazer teatro (teatro construído)
+            if (buildings.theater >= 1) return false;
+
+            // 5. Precisa ter mercado e capacidade de troca
+            if (!buildings.market || buildings.market < 1) return false;
+            if (town.getAvailableTradeCapacity() < 500) return false;
+
+            return true;
+        } catch(e) { return false; }
+    }
+
+    // Envia o máximo balanceado de recursos para a cidade destino
+    _sendResources(fromId, toId) {
+        return new Promise(resolve => {
+            try {
+                const from     = uw.ITowns.towns[fromId];
+                const to       = uw.ITowns.towns[toId];
+                const fromRes  = from.resources();
+                const toRes    = to.resources();
+                const capacity = from.getAvailableTradeCapacity();
+
+                if (capacity < 100) { resolve(false); return; }
+
+                // Calcula quanto enviar de cada recurso balanceado
+                // Envia igualmente dos 3 recursos, limitado pela capacidade e pelo que tem
+                const perRes  = Math.floor(capacity / 3);
+                const wood    = Math.min(perRes, fromRes.wood);
+                const stone   = Math.min(perRes, fromRes.stone);
+                const iron    = Math.min(perRes, fromRes.iron);
+                const total   = wood + stone + iron;
+
+                if (total < 100) { resolve(false); return; }
+
+                const fromName = from.getName();
+                const toName   = to.getName();
+
+                const data = {
+                    id:      parseInt(toId),
+                    wood,
+                    stone,
+                    iron,
+                    town_id: parseInt(fromId),
+                    nl_init: true
+                };
+
+                this.console.log(`[AutoRecursos] ${fromName} → ${toName}: ${wood}🪵 ${stone}🪨 ${iron}⚙`);
+
+                uw.gpAjax.ajaxPost('town_info', 'trade', data, true,
+                    res => {
+                        if (res && !res.error) {
+                            resolve(true);
+                        } else {
+                            this.console.log(`[AutoRecursos] ✗ Erro trade: ${res?.error ?? JSON.stringify(res)}`);
+                            resolve(false);
+                        }
+                    },
+                    () => resolve(false)
+                );
+            } catch(e) {
+                this.console.log('[AutoRecursos] Exceção: ' + e?.message);
+                resolve(false);
+            }
+        });
+    }
+}
