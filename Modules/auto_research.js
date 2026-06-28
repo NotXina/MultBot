@@ -191,29 +191,37 @@ class AutoResearch extends ModernUtil {
 
     _doResearch(townId, tech, townName) {
         return new Promise(resolve => {
-            // Endpoint correto: building_academy / research
-            // com town_id e research_id no payload
+            // Payload exato interceptado via XHR:
+            // frontend_bridge/execute + ResearchOrder/research + arguments:{id:tech}
+            // town_id vai via Game.townId (não no body)
+            const origTownId = uw.Game.townId;
+            uw.Game.townId   = parseInt(townId);
+
             const data = {
-                id:       tech,
-                town_id:  parseInt(townId),
-                nl_init:  true,
+                model_url:   'ResearchOrder',
+                action_name: 'research',
+                captcha:     null,
+                arguments:   { id: tech },
             };
             this.console.log(`[AutoPesquisa] ${townName}: pesquisando ${tech}`);
-            uw.gpAjax.ajaxPost('building_academy', 'research', data, true,
+            uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
                 res => {
+                    uw.Game.townId = origTownId;
                     if (res && !res.error) {
                         this.console.log(`[AutoPesquisa] ✓ ${townName}: ${tech} iniciado`);
                         resolve(true);
                     } else {
-                        this.console.log(`[AutoPesquisa] ✗ ${townName}: ${tech} falhou — ${JSON.stringify(res)}`);
+                        this.console.log(`[AutoPesquisa] ✗ ${townName}: ${tech} — ${JSON.stringify(res)}`);
                         resolve(false);
                     }
                 },
                 err => {
+                    uw.Game.townId = origTownId;
                     this.console.log(`[AutoPesquisa] ✗ rede: ${err}`);
                     resolve(false);
                 }
             );
+            setTimeout(() => { uw.Game.townId = origTownId; }, 200);
         });
     }
 }
