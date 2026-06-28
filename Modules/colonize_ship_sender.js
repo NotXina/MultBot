@@ -144,6 +144,7 @@ class ColonizeShipSender extends ModernUtil {
     }
 
     _tick = async () => {
+        if (window.__multbot_conquest_check?.()) { this._log('Conquista em curso — pausado.', 'warning'); return; }
         this._log('Verificando colonize_ships em todas as cidades...', 'info');
         try {
             const townIds = Object.keys(uw.ITowns.towns);
@@ -219,6 +220,40 @@ class ColonizeShipSender extends ModernUtil {
             uw.Game.townId  = orig;
             uw.Game.town_id = origStr;
             window.__gp_townId_lock = false;
+        }
+    }
+
+    // Verifica se uma cidade está em processo de conquista (colonization em curso)
+    _isTownUnderConquest(townId) {
+        try {
+            const models = uw.MM.getModels().MovementsUnits;
+            if (!models) return false;
+            for (const key in models) {
+                const mv = models[key].attributes;
+                // Apoio com colonize_ship chegando nessa cidade = conquista em curso
+                if (String(mv.target_town_id) === String(townId) &&
+                    mv.type === 'support' &&
+                    mv.units?.colonize_ship > 0) {
+                    return true;
+                }
+                // Ataque com colonize_ship = conquista
+                if (String(mv.target_town_id) === String(townId) &&
+                    mv.type === 'attack' &&
+                    mv.units?.colonize_ship > 0) {
+                    return true;
+                }
+            }
+            // Verifica também via Town model — conquest_votes indica conquista ativa
+            const allTowns = uw.MM.getOnlyCollectionByName('Town').models;
+            for (const t of allTowns) {
+                if (String(t.attributes.id ?? t.id) === String(townId)) {
+                    if (t.attributes.conquest_votes > 0) return true;
+                    break;
+                }
+            }
+            return false;
+        } catch(e) {
+            return false;
         }
     }
 
