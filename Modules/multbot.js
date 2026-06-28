@@ -201,3 +201,10 @@ const loader = setInterval(() => {
     uw.modernBot = new ModernBot();
     clearInterval(loader);
 }, 100);
+
+// Load the bot when the loader is ready
+const loader = setInterval(() => {
+    if ($("#loader").length > 0) return;
+    uw.modernBot = new ModernBot();
+    clearInterval(loader);
+}, 100);
