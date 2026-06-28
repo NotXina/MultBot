@@ -191,16 +191,28 @@ class AutoResearch extends ModernUtil {
 
     _doResearch(townId, tech, townName) {
         return new Promise(resolve => {
+            // Endpoint correto: building_academy / research
+            // com town_id e research_id no payload
             const data = {
-                model_url:   'ResearchOrder',
-                action_name: 'research',
-                arguments:   { research_id: tech },
-                town_id:     parseInt(townId),
+                id:       tech,
+                town_id:  parseInt(townId),
+                nl_init:  true,
             };
             this.console.log(`[AutoPesquisa] ${townName}: pesquisando ${tech}`);
-            uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
-                res => resolve(res && !res.error),
-                ()  => resolve(false)
+            uw.gpAjax.ajaxPost('building_academy', 'research', data, true,
+                res => {
+                    if (res && !res.error) {
+                        this.console.log(`[AutoPesquisa] ✓ ${townName}: ${tech} iniciado`);
+                        resolve(true);
+                    } else {
+                        this.console.log(`[AutoPesquisa] ✗ ${townName}: ${tech} falhou — ${JSON.stringify(res)}`);
+                        resolve(false);
+                    }
+                },
+                err => {
+                    this.console.log(`[AutoPesquisa] ✗ rede: ${err}`);
+                    resolve(false);
+                }
             );
         });
     }
