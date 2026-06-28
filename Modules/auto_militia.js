@@ -2,6 +2,7 @@
 //  MODULE: AutoMilitia
 //  Ativa milícia automaticamente em cidades com ataque
 //  entrante. Endpoint: building_farm / request_militia
+//  Payload exato do Noct AutoMilitia.
 // ══════════════════════════════════════════════════════
 class AutoMilitia extends ModernUtil {
     constructor(c, s) {
@@ -63,9 +64,9 @@ class AutoMilitia extends ModernUtil {
     }
 
     _tick() {
-        if (window.__multbot_conquest_check?.()) return;
         try {
             const attacks = this._getIncomingAttacks();
+            const now     = Math.floor(Date.now() / 1000);
 
             // Limpa cidades processadas que já não têm ataques
             const attackedTowns = new Set(attacks.map(a => String(a.target_town_id)));
@@ -76,9 +77,14 @@ class AutoMilitia extends ModernUtil {
             if (attacks.length === 0) return;
 
             for (const atk of attacks) {
-                const townId = String(atk.target_town_id);
+                const townId    = String(atk.target_town_id);
                 if (this._processed.has(townId)) continue;
                 if (!uw.ITowns?.towns?.[townId]) continue;
+
+                // Ativa apenas quando faltam <= 10 segundos para o impacto
+                const arrival   = atk.arrival_at ?? atk.time_of_arrival ?? 0;
+                const remaining = arrival - now;
+                if (remaining > 10) continue;
 
                 this._processed.add(townId);
                 this._activateMilitia(townId);
@@ -113,16 +119,16 @@ class AutoMilitia extends ModernUtil {
             const data = { town_id: parseInt(townId), nl_init: true };
             uw.gpAjax.ajaxPost('building_farm', 'request_militia', data, true,
                 res => {
-                    if (res && res.json) {
+                    if (res && !res.error) {
                         const msg = `✓ Milícia ativada em ${townName}`;
                         this.console.log('[AutoMilícia] ' + msg);
                         uw.$('#militia_log').text(msg).css('color', '#1a6b2a');
                         if (uw.HumanMessage) uw.HumanMessage.success(msg);
                     } else {
-                        const msg = `✗ Falha em ${townName}: ${JSON.stringify(res)}`;
+                        const msg = `✗ Falha em ${townName}`;
                         this.console.log('[AutoMilícia] ' + msg);
                         uw.$('#militia_log').text(msg).css('color', '#8a2a2a');
-                        this._processed.delete(String(townId)); // Permite retry
+                        this._processed.delete(String(townId));
                     }
                 },
                 err => {
