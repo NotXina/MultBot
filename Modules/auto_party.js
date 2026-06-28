@@ -222,7 +222,7 @@ class AutoParty extends ModernUtil {
     };
 
     main = async () => {
-        if (this.active_types['procession']) await this.checkTriumph();
+        if (this.active_types        ['procession']) await this.checkTriumph();
         if (this.active_types['festival']) await this.checkParty();
         if (this.active_types['theater']) await this.checkTheater();
         this._renderActiveCelebrations();
