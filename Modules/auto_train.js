@@ -149,7 +149,7 @@ class AutoTrain extends ModernUtil {
 
     getTotalPopulation = town_id => {
         const town = uw.ITowns.towns[town_id];
-        const data = GameData.units;
+        const data = uw.GameData.units;
         const { models: orders } = town.getUnitOrdersCollection();
 
         let used = 0;
@@ -239,7 +239,7 @@ class AutoTrain extends ModernUtil {
         clearInterval(this.interval);
         this.interval = setInterval(this.main, 2345);
 
-        const { units } = GameData;
+        const { units } = uw.GameData;
         const { city_troops } = this;
 
         // Add the town to the city_troops object if it doesn't already exist
@@ -272,7 +272,7 @@ class AutoTrain extends ModernUtil {
     };
 
     updatePolisInSettings = town_id => {
-        const { units } = GameData;
+        const { units } = uw.GameData;
         const cityTroops = this.city_troops[town_id];
 
         Object.keys(units).forEach(troop => {
@@ -379,7 +379,7 @@ class AutoTrain extends ModernUtil {
 
     /* Return list of town that have power active */
     getPowerActive = () => {
-        const { fragments } = MM.getFirstTownAgnosticCollectionByName('CastedPowers');
+        const { fragments } = uw.MM.getFirstTownAgnosticCollectionByName('CastedPowers');
         let towns_list = [];
         for (let town_id in this.city_troops) {
             const { models } = fragments[town_id];
