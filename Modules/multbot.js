@@ -27,13 +27,19 @@ class ModernBot {
         this.antiRage = new AntiRage(this.console, this.storage);
         this.autoTrade = new AutoTrade(this.console, this.storage);
         this.colonizeShipSender = new ColonizeShipSender(this.console, this.storage);
-        this.multTools = new MultTools(this.console, this.storage);
+        this.multTools    = new MultTools(this.console, this.storage);
+        this.statusPanel  = new StatusPanel(this.console, this.storage);
 
         this.settingsFactory = new createGrepoWindow({
             id: 'MODERN_BOT',
             title: 'ModernBot',
             size: [845, 300],
             tabs: [
+                {
+                    title: 'Status',
+                    id: 'status',
+                    render: this.settingsStatus,
+                },
                 {
                     title: 'Farm',
                     id: 'farm',
@@ -80,6 +86,10 @@ class ModernBot {
 
         this.setup();
     }
+
+    settingsStatus = () => {
+        return this.statusPanel.settings();
+    };
 
     settingsFarm = () => {
         let html = '';
