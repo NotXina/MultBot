@@ -261,24 +261,24 @@ class AutoBuild extends ModernUtil {
         await Promise.allSettled(
             Object.keys(this.towns_buildings).map(async (town_id, i) => {
                 await this.sleep(i * 300); // delay escalonado
-            /* If the town don't exists in list, remove it to prevent errors */
-            if (!uw.ITowns.towns[town_id]) {
-                delete this.towns_buildings[town_id];
-                this.storage.save('buildings', this.towns_buildings);
-                continue;
-            }
 
-            if (this.isFullQueue(town_id)) continue;
+                if (!uw.ITowns.towns[town_id]) {
+                    delete this.towns_buildings[town_id];
+                    this.storage.save('buildings', this.towns_buildings);
+                    return; // continue → return dentro de async map
+                }
 
-            /* If town is done, remove from the list */
-            if (this.isDone(town_id)) {
-                delete this.towns_buildings[town_id];
-                this.storage.save('buildings', this.towns_buildings);
-                this.updateTitle();
-                const town = uw.ITowns.getTown(town_id);
-                this.console.log(`${town.name}: Auto Build Done`);
-                continue;
-            }
+                if (this.isFullQueue(town_id)) return;
+
+                if (this.isDone(town_id)) {
+                    delete this.towns_buildings[town_id];
+                    this.storage.save('buildings', this.towns_buildings);
+                    this.updateTitle();
+                    const town = uw.ITowns.getTown(town_id);
+                    this.console.log(`${town.name}: Auto Build Done`);
+                    return;
+                }
+
                 await this.getNextBuild(town_id);
             })
         );
