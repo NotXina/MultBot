@@ -40,7 +40,7 @@ class StatusPanel extends ModernUtil {
             rows.push(this._row('⚔ Recrutamento',      trainCount > 0, trainCount > 0 ? `${trainCount} cidade(s)` : 'Nenhuma cidade', null, null));
             rows.push(this._row('🎉 Festividades',      partyActive, partyActive ? celStr : 'Parado',     'autoParty',          'toggle'));
             rows.push(this._row('⚡ Construção Grátis', gratisActive, gratisActive ? 'Ativo' : 'Parado', 'autoGratis',          'toggle'));
-            rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ #${bot.colonizeShipSender.config.targetTownId}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
+            rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this._getTownName(bot.colonizeShipSender.config.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
 
             uw.$('#status_rows').html(rows.join(''));
         } catch(e) {
@@ -70,6 +70,19 @@ class StatusPanel extends ModernUtil {
                 ${btn}
             </div>
         </div>`;
+    }
+
+    _getTownName(townId) {
+        if (!townId) return '';
+        try {
+            const allTowns = uw.MM.getOnlyCollectionByName('Town').models;
+            for (const t of allTowns) {
+                if (String(t.attributes.id ?? t.id) === String(townId)) {
+                    return (t.attributes.name ?? '') + ' (#' + townId + ')';
+                }
+            }
+        } catch(e) {}
+        return '#' + townId;
     }
 
     _countCelebrations() {
