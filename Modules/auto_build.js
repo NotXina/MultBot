@@ -12,7 +12,11 @@ class AutoBuild extends ModernUtil {
         this.interval = setInterval(this.main.bind(this), 20000);
 
         /* Add listener that change the Senate look */
-        uw.$.Observer(uw.GameEvents.window.open).subscribe("modernSenate", this.updateSenate);
+        try {
+            uw.$.Observer(uw.GameEvents.window.open).subscribe("modernSenate", this.updateSenate);
+        } catch(e) {
+            this.console.log('[AutoBuild] Observer error: ' + e.message);
+        }
 
         this.simulateCaptcha = false;
         this.captchaActive = false;
@@ -254,6 +258,7 @@ class AutoBuild extends ModernUtil {
 
     /* Main loop for building */
     main = async () => {
+        this.console.log(`[AutoBuild] tick - ${Object.keys(this.towns_buildings).length} cidade(s)`);
         for (let town_id of Object.keys(this.towns_buildings)) {
             /* If the town don't exists in list, remove it to prevent errors */
             if (!uw.ITowns.towns[town_id]) {
@@ -281,11 +286,22 @@ class AutoBuild extends ModernUtil {
     postBuild = async (type, town_id) => {
         const town = uw.ITowns.getTown(town_id);
         let { wood, stone, iron } = town.resources();
-        let { resources_for, population_for } = uw.MM.getModels().BuildingBuildData[town_id].attributes.building_data[type];
+        let buildData = uw.MM.getModels().BuildingBuildData?.[town_id]?.attributes?.building_data?.[type];
+        if (!buildData) {
+            this.console.log(`[AutoBuild] BuildingBuildData não encontrado para ${town_id}/${type}`);
+            return;
+        }
+        let { resources_for, population_for } = buildData;
 
-        if (town.getAvailablePopulation() < population_for) return;
+        if (town.getAvailablePopulation() < population_for) {
+            this.console.log(`[AutoBuild] ${town.getName()}: sem população para ${type}`);
+            return;
+        }
         const m = 20;
-        if (wood < resources_for.wood + m || stone < resources_for.stone + m || iron < resources_for.iron + m) return;
+        if (wood < resources_for.wood + m || stone < resources_for.stone + m || iron < resources_for.iron + m) {
+            this.console.log(`[AutoBuild] ${town.getName()}: sem recursos para ${type}`);
+            return;
+        }
         let data = {
             model_url: 'BuildingOrder',
             action_name: 'buildUp',
@@ -293,7 +309,7 @@ class AutoBuild extends ModernUtil {
             town_id: town_id,
         };
         uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
-        this.console.log(`${town.getName()}: Build Up ${type}`);
+        this.console.log(`[AutoBuild] ${town.getName()}: Build Up ${type}`);
         await this.sleep(1234);
     };
 
