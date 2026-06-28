@@ -771,16 +771,17 @@ class ModernStorage extends Compressor {
 // ── Guard global: detecta conquista em curso e pausa módulos ──
 window.__multbot_conquest_check = function() {
     try {
+        // Verifica conquest_votes nas cidades do mapa
         const models = uw.MM.getOnlyCollectionByName('Town').models;
         for (const t of models) {
             if ((t.attributes.conquest_votes ?? 0) > 0) return true;
         }
-        // Verifica também MovementsUnits com colonize_ship
+        // Verifica APENAS ataques com colonize_ship (não apoios)
         const mv = uw.MM.getModels().MovementsUnits;
         if (mv) {
             for (const key in mv) {
                 const m = mv[key].attributes;
-                if (m.units?.colonize_ship > 0) return true;
+                if (m.type === 'attack' && (m.units?.colonize_ship ?? 0) > 0) return true;
             }
         }
         return false;
