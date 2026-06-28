@@ -30,6 +30,7 @@ class ModernBot {
         this.multTools    = new MultTools(this.console, this.storage);
         this.autoMilitia      = new AutoMilitia(this.console, this.storage);
         this.autoSendResources = new AutoSendResources(this.console, this.storage);
+        this.autoResearch      = new AutoResearch(this.console, this.storage);
         this.statusPanel  = new StatusPanel(this.console, this.storage);
 
         this.settingsFactory = new createGrepoWindow({
@@ -121,6 +122,7 @@ class ModernBot {
     settingsTrain = () => {
         let html = '';
         html += this.autoTrain.settings();
+        html += this.autoResearch.settings();
         return html;
     };
 
