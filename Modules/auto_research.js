@@ -111,18 +111,21 @@ class AutoResearch extends ModernUtil {
 
     async _tick() {
         const townIds = Object.keys(uw.ITowns.towns);
-        let count = 0;
 
-        for (const townId of townIds) {
-            const researched = await this._researchNext(townId);
-            if (researched) { count++; await this.sleep(800 + Math.random() * 400); }
-        }
+        // Corre em paralelo com delay escalonado entre cidades
+        const results = await Promise.allSettled(
+            townIds.map(async (townId, i) => {
+                await this.sleep(i * 600);
+                return this._researchNext(townId);
+            })
+        );
 
+        const count = results.filter(r => r.status === 'fulfilled' && r.value).length;
         if (count > 0) {
             const msg = `✓ ${count} pesquisa(s) iniciada(s)`;
             this.console.log('[AutoPesquisa] ' + msg);
             uw.$('#ares_log').text(msg);
-            this._renderStatus(); // Atualiza status
+            this._renderStatus();
         }
     }
 
