@@ -22,10 +22,7 @@
     window.__gp_townId_lock = false;
 
     const MODULES = [
-        // ── Core (deve ser o primeiro) ──
         'core.js',
-
-        // ── Módulos originais do ModernBot ──
         'anti_rage.js',
         'auto_bootcamp.js',
         'auto_build.js',
@@ -37,14 +34,19 @@
         'auto_rural_trade.js',
         'auto_trade.js',
         'auto_train.js',
-
-        // ── Módulos novos (NotXina) ──
         'colonize_ship_sender.js',
         'mult_tools.js',
-
-        // ── Entry point (deve ser o último) ──
         'multbot.js',
     ];
+
+    // Injeta o código como <script> tag no DOM para garantir
+    // que as classes ficam no escopo global da página
+    function injectScript(code) {
+        const script = document.createElement('script');
+        script.textContent = code;
+        document.head.appendChild(script);
+        script.remove();
+    }
 
     function loadModule(index) {
         if (index >= MODULES.length) {
@@ -59,7 +61,7 @@
             onload(r) {
                 if (r.status === 200) {
                     try {
-                        new Function(r.responseText)();
+                        injectScript(r.responseText);
                         console.log(`[MultBot] ✓ ${mod}`);
                     } catch(e) {
                         console.error(`[MultBot] ✗ Erro em ${mod}:`, e.message);
