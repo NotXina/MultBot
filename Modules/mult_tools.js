@@ -83,10 +83,11 @@ class MultTools extends ModernUtil {
                 if (!buildings?.docks || buildings.docks < 10) continue;
                 if (!researches?.colonize_ship) continue;
 
-                // Max colonize_ship = população disponível / custo de população
-                const pop     = uw.ITowns.towns[townId].getAvailablePopulation?.() ?? 0;
-                const popCost = uw.GameData.units['colonize_ship']?.population ?? 170;
-                const maxQty  = Math.floor(pop / popCost);
+                // Max colonize_ship = população total da cidade / custo de população
+                // Usa getTotalPopulation do AutoTrain para consistência
+                const totalPop = uw.modernBot.autoTrain.getTotalPopulation(townId);
+                const popCost  = uw.GameData.units['colonize_ship']?.population ?? 170;
+                const maxQty   = Math.floor(totalPop / popCost);
                 if (maxQty <= 0) continue;
 
                 // Seta no AutoTrain
