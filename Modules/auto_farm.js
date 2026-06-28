@@ -24,23 +24,23 @@ class AutoFarm extends ModernUtil {
 
     /* Create the dropdown menu */
     createDropdown = () => {
-        this.$content = $("<div></div>")
-        this.$title = $("<p>Modern Farm</p>").css({ "text-align": "center", "margin": "2px", "font-weight": "bold", "font-size": "16px" })
+        this.$content = uw.$("<div></div>")
+        this.$title = uw.$("<p>Modern Farm</p>").css({ "text-align": "center", "margin": "2px", "font-weight": "bold", "font-size": "16px" })
         this.$content.append(this.$title)
 
-        this.$duration = $("<p>Duration:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
+        this.$duration = uw.$("<p>Duration:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
         this.$button5 = this.createButton("modern_farm_5", "5 min", this.toggleDuration)
         this.$button10 = this.createButton("modern_farm_10", "10 min", this.toggleDuration)
         this.$button20 = this.createButton("modern_farm_20", "20 min", this.toggleDuration)
         this.$content.append(this.$duration, this.$button5, this.$button10, this.$button20)
 
-        this.$storage = $("<p>Storage:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
+        this.$storage = uw.$("<p>Storage:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
         this.$button80 = this.createButton("modern_farm_80", "80%", this.toggleStorage).css({ "width": "70px" })
         this.$button90 = this.createButton("modern_farm_90", "90%", this.toggleStorage).css({ "width": "80px" })
         this.$button100 = this.createButton("modern_farm_100", "100%", this.toggleStorage).css({ "width": "80px" })
         this.$content.append(this.$storage, this.$button80, this.$button90, this.$button100)
 
-        this.$gui = $("<p>Gui:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
+        this.$gui = uw.$("<p>Gui:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
         this.$guiOn = this.createButton("modern_farm_gui_on", "ON", this.toggleGui)
         this.$guiOff = this.createButton("modern_farm_gui_off", "OFF", this.toggleGui)
         this.$content.append(this.$gui, this.$guiOn, this.$guiOff)
@@ -396,30 +396,30 @@ class AutoFarm extends ModernUtil {
     fakeGuiUpdate = () =>
         new Promise(async (myResolve, myReject) => {
             // Open the farm town overview
-            $(".toolbar_button.premium .icon").trigger('mouseenter')
+            uw.$(".toolbar_button.premium .icon").trigger('mouseenter')
             await this.sleep(1019.39, 127.54)
 
             // Click on the farm town overview
-            $(".farm_town_overview a").trigger('click')
+            uw.$(".farm_town_overview a").trigger('click')
             await this.sleep(1156.65, 165.62)
 
             // Select all the polis
-            $(".checkbox.select_all").trigger("click")
+            uw.$(".checkbox.select_all").trigger("click")
             await this.sleep(1036.20, 135.69)
 
             // Claim the resources
-            $("#fto_claim_button").trigger("click")
+            uw.$("#fto_claim_button").trigger("click")
             await this.sleep(1036.20, 135.69)
 
             // Confirm the claim if needed
-            const el = $(".confirmation .btn_confirm.button_new")
+            const el = uw.$(".confirmation .btn_confirm.button_new")
             if (el.length) {
                 el.trigger("click")
                 await this.sleep(1036.20, 135.69)
             }
 
             // Close the window
-            $(".icon_right.icon_type_speed.ui-dialog-titlebar-close").trigger("click")
+            uw.$(".icon_right.icon_type_speed.ui-dialog-titlebar-close").trigger("click")
             myResolve();
         });
 }
