@@ -25,7 +25,7 @@ class AntiRage extends ModernUtil {
 
 			let max = 10;
 			const addSpell = () => {
-				let spellMenu = $('#command_info-god')[0];
+				let spellMenu = uw.$('#command_info-god')[0];
 				if (!spellMenu) {
 					if (max > 0) {
 						max -= 1;
@@ -33,7 +33,7 @@ class AntiRage extends ModernUtil {
 					}
 					return;
 				}
-				$(spellMenu).on('click', this.trigger);
+				uw.$(spellMenu).on('click', this.trigger);
 
 				this.command_id = commandId;
 			};
@@ -43,7 +43,7 @@ class AntiRage extends ModernUtil {
 	}
 
 	handleGod = good => {
-		const godEl = $(`.god_mini.${good}.${good}`).eq(0);
+		const godEl = uw.$(`.god_mini.${good}.${good}`).eq(0);
 		if (!godEl.length) return;
 
 		const powerClassName = this.GOODS_ICONS[good];
@@ -56,7 +56,7 @@ class AntiRage extends ModernUtil {
 			boxShadow: '0px 0px 10px 5px rgba(255, 215, 0, 0.5)',
 		});
 
-		const powerEl = $(`.${powerClassName}`).eq(0);
+		const powerEl = uw.$(`.${powerClassName}`).eq(0);
 		if (!powerEl.length) return;
 
 		godEl.click(() => {
@@ -95,7 +95,7 @@ class AntiRage extends ModernUtil {
 			this.handleGod('zeus');
 			this.handleGod('artemis');
 
-			$('.js-god-box[data-god_id="zeus"]').find('.powers').append(`
+			uw.$('.js-god-box[data-god_id="zeus"]').find('.powers').append(`
             <div id="enchanted_rage" class="js-power-icon animated_power_icon animated_power_icon_45x45 power_icon45x45 power transformation" style="filter: brightness(70%) sepia(104%) hue-rotate(14deg) saturate(1642%) contrast(0.8)">
                 <div class="extend_spell">
                     <div class="gold"></div>
@@ -161,28 +161,28 @@ class AntiRage extends ModernUtil {
 
 			const { artemis_favor, zeus_favor } = uw.ITowns.player_gods.attributes;
 			const enable = artemis_favor >= 200 && zeus_favor >= 300;
-			if (!enable) $('#enchanted_rage').css('filter', 'grayscale(1)');
+			if (!enable) uw.$('#enchanted_rage').css('filter', 'grayscale(1)');
 
 			// TODO: disable if not enable
-			$('#enchanted_rage').on({
+			uw.$('#enchanted_rage').on({
 				click: () => {
 					if (!enable) return;
 					this.enchanted('zeus');
 				},
 				mouseenter: event => {
-					$('#popup_div_curtain').html(html);
-					const $popupDiv = $('#popup_div');
+					uw.$('#popup_div_curtain').html(html);
+					const $popupDiv = uw.$('#popup_div');
 					const offset = $popupDiv.offset();
 					const height = $popupDiv.outerHeight();
 					const width = $popupDiv.outerWidth();
 					const left = event.pageX + 10;
 					const top = event.pageY + 10;
-					if (left + width > $(window).width()) {
+					if (left + width > uw.$(window).width()) {
 						offset.left -= width;
 					} else {
 						offset.left = left;
 					}
-					if (top + height > $(window).height()) {
+					if (top + height > uw.$(window).height()) {
 						offset.top -= height;
 					} else {
 						offset.top = top;
@@ -194,19 +194,19 @@ class AntiRage extends ModernUtil {
 					});
 				},
 				mousemove: event => {
-					const $popupDiv = $('#popup_div');
+					const $popupDiv = uw.$('#popup_div');
 					if ($popupDiv.is(':visible')) {
 						const offset = $popupDiv.offset();
 						const height = $popupDiv.outerHeight();
 						const width = $popupDiv.outerWidth();
 						const left = event.pageX + 10;
 						const top = event.pageY + 10;
-						if (left + width > $(window).width()) {
+						if (left + width > uw.$(window).width()) {
 							offset.left -= width;
 						} else {
 							offset.left = left;
 						}
-						if (top + height > $(window).height()) {
+						if (top + height > uw.$(window).height()) {
 							offset.top -= height;
 						} else {
 							offset.top = top;
@@ -218,14 +218,14 @@ class AntiRage extends ModernUtil {
 					}
 				},
 				mouseleave: () => {
-					$('#popup_div_curtain').html(default_popup);
+					uw.$('#popup_div_curtain').html(default_popup);
 				},
 			});
 		}, 100);
 	};
 
 	clicker = el => {
-		let check = $('.js-power-icon.animated_power_icon.animated_power_icon_45x45.power_icon45x45.power').eq(0);
+		let check = uw.$('.js-power-icon.animated_power_icon.animated_power_icon_45x45.power_icon45x45.power').eq(0);
 		if (!check.length) {
 			clearInterval(this.loop_funct);
 			this.loop_funct = null;
