@@ -256,9 +256,11 @@ class AutoBuild extends ModernUtil {
         this.updateTitle();
     };
 
-    /* Main loop for building */
+    /* Main loop for building — cidades em paralelo */
     main = async () => {
-        for (let town_id of Object.keys(this.towns_buildings)) {
+        await Promise.allSettled(
+            Object.keys(this.towns_buildings).map(async (town_id, i) => {
+                await this.sleep(i * 300); // delay escalonado
             /* If the town don't exists in list, remove it to prevent errors */
             if (!uw.ITowns.towns[town_id]) {
                 delete this.towns_buildings[town_id];
@@ -277,8 +279,9 @@ class AutoBuild extends ModernUtil {
                 this.console.log(`${town.name}: Auto Build Done`);
                 continue;
             }
-            await this.getNextBuild(town_id);
-        }
+                await this.getNextBuild(town_id);
+            })
+        );
     };
 
     /* Make post request to the server to buildup the building */
