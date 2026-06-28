@@ -92,8 +92,8 @@ class AutoResearch extends ModernUtil {
         this.storage.save('ares_active', true);
         this._updateTitle();
         this.console.log('[AutoPesquisa] Iniciado.');
-        this._tick();
-        this._interval = setInterval(() => this._tick(), 30000);
+        this._tick(); // primeiro tick imediato
+        this._interval = null; // controlado pelo orquestrador
     }
 
     stop() {
@@ -111,16 +111,17 @@ class AutoResearch extends ModernUtil {
 
     async _tick() {
         const townIds = Object.keys(uw.ITowns.towns);
+        let count = 0;
 
-        // Corre em paralelo com delay escalonado entre cidades
-        const results = await Promise.allSettled(
-            townIds.map(async (townId, i) => {
-                await this.sleep(i * 600);
-                return this._researchNext(townId);
-            })
-        );
+        // Sequencial com delay — evita conflito de Game.townId com outros módulos
+        for (const townId of townIds) {
+            const done = await this._researchNext(townId);
+            if (done) {
+                count++;
+                await this.sleep(800);
+            }
+        }
 
-        const count = results.filter(r => r.status === 'fulfilled' && r.value).length;
         if (count > 0) {
             const msg = `✓ ${count} pesquisa(s) iniciada(s)`;
             this.console.log('[AutoPesquisa] ' + msg);
@@ -194,22 +195,16 @@ class AutoResearch extends ModernUtil {
 
     _doResearch(townId, tech, townName) {
         return new Promise(resolve => {
-            // Payload exato interceptado via XHR:
-            // frontend_bridge/execute + ResearchOrder/research + arguments:{id:tech}
-            // town_id vai via Game.townId (não no body)
-            const origTownId = uw.Game.townId;
-            uw.Game.townId   = parseInt(townId);
-
             const data = {
                 model_url:   'ResearchOrder',
                 action_name: 'research',
                 captcha:     null,
                 arguments:   { id: tech },
+                town_id:     parseInt(townId),
             };
             this.console.log(`[AutoPesquisa] ${townName}: pesquisando ${tech}`);
             uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
                 res => {
-                    uw.Game.townId = origTownId;
                     if (res && !res.error) {
                         this.console.log(`[AutoPesquisa] ✓ ${townName}: ${tech} iniciado`);
                         resolve(true);
@@ -219,12 +214,10 @@ class AutoResearch extends ModernUtil {
                     }
                 },
                 err => {
-                    uw.Game.townId = origTownId;
                     this.console.log(`[AutoPesquisa] ✗ rede: ${err}`);
                     resolve(false);
                 }
             );
-            setTimeout(() => { uw.Game.townId = origTownId; }, 200);
         });
     }
 }
