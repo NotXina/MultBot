@@ -34,6 +34,7 @@
         'status.js',
         'auto_militia.js',
         'auto_send_resources.js',
+        'auto_research.js',
         'colonize_ship_sender.js',
         'mult_tools.js',
         'multbot.js',
