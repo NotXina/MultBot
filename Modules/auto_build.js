@@ -341,105 +341,28 @@ class AutoBuild extends ModernUtil {
         return true;
     };
 
-    /* */
+    /* Tenta construir tudo que for possível — sem ordem de prioridade */
     getNextBuild = async town_id => {
-        let town = uw.ITowns.towns[town_id];
+        const town    = uw.ITowns.towns[town_id];
+        const target  = this.towns_buildings[town_id];
+        const current = { ...town.getBuildings().attributes };
 
-        /* livello attuale */
-        let buildings = { ...town.getBuildings().attributes };
-
-        /* Add the the list the current building progress */
-        for (let order of town.buildingOrders().models) {
-            if (order.attributes.tear_down) {
-                buildings[order.attributes.building_type] -= 1;
-            } else {
-                buildings[order.attributes.building_type] += 1;
-            }
+        // Conta ordens já na fila
+        for (const order of town.buildingOrders().models) {
+            if (order.attributes.tear_down) current[order.attributes.building_type] -= 1;
+            else                            current[order.attributes.building_type] += 1;
         }
-        /* livello in cui deve arrivare */
-        let target = this.towns_buildings[town_id];
 
-        /* Check if the building is duable, if yes build it and return true, else false  */
-        const check = async (build, level) => {
-            /* if the given is an array, randomically try all of the array */
-            if (Array.isArray(build)) {
-                build.sort(() => Math.random() - 0.5);
-                for (let el of build) {
-                    if (await check(el, level)) return true;
-                }
-                return false;
-            }
-            if (target[build] <= buildings[build]) return false;
-            else if (buildings[build] < level) {
+        // Tenta cada edifício que ainda precisa de trabalho
+        for (const build of Object.keys(target)) {
+            if (this.isFullQueue(town_id)) break;
+            if (target[build] > current[build]) {
                 const built = await this.postBuild(build, town_id);
-                return built === true;
-            }
-            return false;
-        };
-
-        const tearCheck = async build => {
-            if (Array.isArray(build)) {
-                build.sort(() => Math.random() - 0.5);
-                for (let el of build) {
-                    if (await tearCheck(el)) return true;
-                }
-                return false;
-            }
-            if (target[build] < buildings[build]) {
+                if (built) current[build] += 1;
+            } else if (target[build] < current[build]) {
                 await this.postTearDown(build, town_id, town);
-                return true;
+                current[build] -= 1;
             }
-            return false;
-        };
-
-        /* IF the docks is not build yet, then follow the tutorial */
-        if (buildings.docks < 1) {
-            if (await check('lumber', 3)) return;
-            if (await check('stoner', 3)) return;
-            if (await check('farm', 4)) return;
-            if (await check('ironer', 3)) return;
-            if (await check('storage', 4)) return;
-            if (await check('temple', 3)) return;
-            if (await check('main', 5)) return;
-            if (await check('barracks', 5)) return;
-            if (await check('storage', 5)) return;
-            if (await check('stoner', 6)) return;
-            if (await check('lumber', 6)) return;
-            if (await check('ironer', 6)) return;
-            if (await check('main', 8)) return;
-            if (await check('farm', 8)) return;
-            if (await check('market', 6)) return;
-            if (await check('storage', 8)) return;
-            if (await check('academy', 7)) return;
-            if (await check('temple', 5)) return;
-            if (await check('farm', 12)) return;
-            if (await check('main', 15)) return;
-            if (await check('storage', 12)) return;
-            if (await check('main', 25)) return;
-            if (await check('hide', 10)) return;
         }
-
-        /* Resouces */
-        // WALLS!
-        if (await check('farm', 15)) return;
-        if (await check(['storage', 'main'], 25)) return;
-        if (await check('market', 4)) return;
-        if (await check('hide', 10)) return;
-        if (await check(['lumber', 'stoner', 'ironer'], 15)) return;
-        if (await check(['academy', 'farm'], 36)) return;
-        if (await check(['docks', 'barracks'], 10)) return;
-        if (await check('wall', 25)) return;
-        // terme
-        if (await check(['docks', 'barracks', 'market'], 20)) return;
-        if (await check('farm', 45)) return;
-        if (await check(['docks', 'barracks', 'market'], 30)) return;
-        if (await check(['lumber', 'stoner', 'ironer'], 40)) return;
-        if (await check('temple', 30)) return;
-        if (await check('storage', 35)) return;
-
-        /* Demolish */
-        let lista = ['lumber', 'stoner', 'ironer', 'docks', 'barracks', 'market', 'temple', 'academy', 'farm', 'hide', 'storage', 'wall'];
-        if (await tearCheck(lista)) return;
-        if (await tearCheck('main')) return;
     };
 }
