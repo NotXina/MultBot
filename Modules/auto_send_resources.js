@@ -66,7 +66,6 @@ class AutoSendResources extends ModernUtil {
     }
 
     async _tick() {
-        if (window.__multbot_conquest_check?.()) return;
         this.console.log('[AutoRecursos] Verificando cidades...');
 
         const townIds = Object.keys(uw.ITowns.towns);
@@ -168,7 +167,7 @@ class AutoSendResources extends ModernUtil {
                 if (total < 100) { resolve(false); return; }
 
                 const fromName = from.getName();
-                const toName   = to.getName();
+                const toName   = uw.ITowns.towns[toId]?.getName?.() ?? '#' + toId;
 
                 const data = {
                     id:      parseInt(toId),
