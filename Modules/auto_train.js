@@ -33,7 +33,7 @@ class AutoTrain extends ModernUtil {
 
         // Check for captcha every 300ms
         this.checkCaptchaInterval = setInterval(() => {
-            if (this.simulateCaptcha || $('.botcheck').length || $('#recaptcha_window').length) {
+            if (this.simulateCaptcha || uw.$('.botcheck').length || uw.$('#recaptcha_window').length) {
                 if (!this.captchaActive) {
                     this.console.log('Captcha active, autotrain stopped working');
                     clearInterval(this.interval); // Stop autotrain
@@ -128,19 +128,19 @@ class AutoTrain extends ModernUtil {
             this.storage.save('at_spell', e);
         }
         if (e) {
-            $('#train_passive').addClass('disabled');
-            $('#train_spell').removeClass('disabled');
+            uw.$('#train_passive').addClass('disabled');
+            uw.$('#train_spell').removeClass('disabled');
         } else {
-            $('#train_passive').removeClass('disabled');
-            $('#train_spell').addClass('disabled');
+            uw.$('#train_passive').removeClass('disabled');
+            uw.$('#train_spell').addClass('disabled');
         }
     };
 
     handlePercentual = n => {
-        let box = $('#train_percentuals');
+        let box = uw.$('#train_percentuals');
         let buttons = box.find('.button_new');
         buttons.addClass('disabled');
-        $(`#train_percentuals_${n}`).removeClass('disabled');
+        uw.$(`#train_percentuals_${n}`).removeClass('disabled');
         if (this.percentual != n) {
             this.percentual = n;
             this.storage.save('at_per', n);
