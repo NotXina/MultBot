@@ -9,13 +9,8 @@ class StatusPanel extends ModernUtil {
     }
 
     settings = () => {
-        requestAnimationFrame(() => {
-            this._startRefresh();
-        });
-        return `
-        <div id="autoparty_types">
-            <div id="status_rows"></div>
-        </div>`;
+        requestAnimationFrame(() => this._startRefresh());
+        return `<div id="status_rows" style="padding:4px;"></div>`;
     };
 
     _startRefresh() {
@@ -74,24 +69,21 @@ class StatusPanel extends ModernUtil {
     }
 
     _row(label, active, value, module, method) {
-        const filter = 'brightness(100%) saturate(186%) hue-rotate(241deg)';
-        const btnStyle = active ? `style="filter:${filter}"` : '';
-        const onclick  = module && method ? `onclick="window.modernBot.${module}.${method}()"` : '';
-        const cursor   = onclick ? 'cursor:pointer;' : '';
+        const filter  = 'brightness(100%) saturate(186%) hue-rotate(241deg)';
+        const onclick = module && method ? `onclick="window.modernBot.${module}.${method}()"` : '';
+        const cursor  = onclick ? 'cursor:pointer;' : '';
+        const dot     = active ? '●' : '○';
+        const dotCol  = active ? 'color:#2d6a2d;' : 'color:#8a7a5a;';
 
         return `
-        <div class="game_border" style="margin:4px 5px;">
-            <div class="game_border_top"></div><div class="game_border_bottom"></div>
-            <div class="game_border_left"></div><div class="game_border_right"></div>
-            <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
-            <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            <div class="game_header bold" ${btnStyle} ${onclick}
-                style="${cursor}position:relative;padding-right:120px;">
-                ${label}
-                <span style="position:absolute;right:10px;top:4px;font-size:11px;font-weight:normal;">
-                    ${value}
-                </span>
-            </div>
+        <div ${onclick} style="${cursor}display:flex;justify-content:space-between;
+            align-items:center;padding:3px 8px;
+            border-bottom:1px solid rgba(0,0,0,0.1);
+            ${active ? 'background:rgba(0,80,0,0.06);' : ''}">
+            <span style="font-weight:bold;font-size:12px;">
+                <span style="${dotCol}">${dot}</span> ${label}
+            </span>
+            <span style="font-size:11px;color:#3a2a0a;">${value}</span>
         </div>`;
     }
 
