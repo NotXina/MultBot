@@ -25,34 +25,19 @@ class AutoMilitia extends ModernUtil {
             <div class="game_border_left"></div><div class="game_border_right"></div>
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            <div class="game_header bold" style="position:relative;">
-                <span style="z-index:10;position:relative;">Auto Milícia</span>
-                <span class="command_count"></span>
+            ${this.getTitleHtml('auto_militia_title', 'Auto Milícia', this.toggle, '', this._active)}
+            <div style="padding:5px 10px;font-weight:bold;">
+                Ativa milícia nas cidades sob ataque automaticamente. Verifica a cada 15s.
             </div>
-            <div id="autoparty_types">
-                <div style="padding:5px 8px;font-size:11px;color:#7a5c2a;line-height:1.6;">
-                    Detecta ataques entrantes e ativa a milícia automaticamente
-                    nas cidades afetadas. Verifica a cada 15 segundos.
-                </div>
-
-                <div class="split_content" style="padding:5px;">
-                    <div>
-                        ${this.getButtonHtml('militia_start_btn', '▶ Ativar', this._startBtn)}
-                        ${this.getButtonHtml('militia_stop_btn',  '■ Parar',  this._stopBtn)}
-                    </div>
-                    <span id="militia_status"
-                        style="font-size:12px;font-weight:bold;color:#94a3b8;line-height:28px;">
-                        ${this._active ? '● Ativo' : '○ Parado'}
-                    </span>
-                </div>
-
-                <div id="militia_log" style="padding:5px 8px;font-size:11px;color:#5a3a0a;min-height:20px;"></div>
-            </div>
+            <div id="militia_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
     };
 
-    _startBtn = () => this.start();
-    _stopBtn  = () => this.stop();
+    toggle = () => {
+        if (this._active) this.stop();
+        else this.start();
+        uw.$('#auto_militia_title').css('filter', this._active ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
+    };
 
     start() {
         if (this._active) return;
@@ -74,16 +59,8 @@ class AutoMilitia extends ModernUtil {
     }
 
     _updateButtons() {
-        if (this._active) {
-            uw.$('#militia_start_btn').addClass('disabled');
-            uw.$('#militia_stop_btn').removeClass('disabled');
-        } else {
-            uw.$('#militia_start_btn').removeClass('disabled');
-            uw.$('#militia_stop_btn').addClass('disabled');
-        }
-        uw.$('#militia_status')
-            .text(this._active ? '● Ativo' : '○ Parado')
-            .css('color', this._active ? '#1a6b2a' : '#94a3b8');
+        uw.$('#auto_militia_title').css('filter', this._active
+            ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
 
     _tick() {
