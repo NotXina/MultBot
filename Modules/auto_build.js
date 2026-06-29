@@ -17,26 +17,6 @@ class AutoBuild extends ModernUtil {
         } catch(e) {
             this.console.log('[AutoBuild] Observer error: ' + e.message);
         }
-
-        this.simulateCaptcha = false;
-        this.captchaActive = false;
-
-        /* Check for captcha conditions every 300ms */
-        this.checkCaptchaInterval = setInterval(() => {
-            if (this.simulateCaptcha || uw.$('.botcheck').length || uw.$('#recaptcha_window').length) {
-                if (!this.captchaActive) {
-                    this.console.log('Captcha active, autobuild stopped working');
-                    clearInterval(this.interval);
-                    this.captchaActive = true;
-                }
-            } else {
-                if (this.captchaActive) {
-                    this.console.log('Captcha resolved, autobuild resumed');
-                    this.startInterval(); // Restart autobuild
-                    this.captchaActive = false;
-                }
-            }
-        }, 300);
     }
 
     startInterval() {
@@ -258,7 +238,6 @@ class AutoBuild extends ModernUtil {
 
     /* Main loop for building — cidades em paralelo */
     main = async () => {
-        if (window.__multbot_captcha_active) return;
         await Promise.allSettled(
             Object.keys(this.towns_buildings).map(async (town_id, i) => {
                 await this.sleep(i * 300); // delay escalonado

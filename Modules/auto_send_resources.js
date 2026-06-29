@@ -66,7 +66,6 @@ class AutoSendResources extends ModernUtil {
     }
 
     async _tick() {
-        if (window.__multbot_captcha_active) return;
         this.console.log('[AutoRecursos] Verificando cidades...');
 
         const townIds = Object.keys(uw.ITowns.towns);

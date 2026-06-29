@@ -168,7 +168,6 @@ class AutoBootcamp extends ModernUtil {
 
     /* Main function, call in loop */
     main = () => {
-        if (window.__multbot_captcha_active) return;
         if (this.rewardBootcamp()) return;
         if (this.attackBootcamp()) return;
     };

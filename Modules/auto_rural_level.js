@@ -3,30 +3,10 @@ class AutoRuralLevel extends ModernUtil {
         super(c, s);
 
         this.rural_level = this.storage.load('enable_autorural_level', 1);
-        this.captchaActive = false;
 
         if (this.storage.load('enable_autorural_level_active')) {
             this.startInterval();
         }
-
-        this.simulateCaptcha = false;
-
-        // Check for captcha every 300ms
-        this.checkCaptchaInterval = setInterval(() => {
-            if (this.simulateCaptcha || uw.$('.botcheck').length || uw.$('#recaptcha_window').length) {
-                if (!this.captchaActive) {
-                    this.console.log('Captcha active, autorural level stopped working');
-                    clearInterval(this.enable); // Stop autorural level
-                    this.captchaActive = true;
-                }
-            } else {
-                if (this.captchaActive) {
-                    this.console.log('Captcha resolved, autorural level resumed');
-                    this.startInterval(); // Restart autorural level
-                    this.captchaActive = false;
-                }
-            }
-        }, 300);
     }
 
     startInterval() {
@@ -95,7 +75,6 @@ class AutoRuralLevel extends ModernUtil {
     };
 
     main = async () => {
-        if (window.__multbot_captcha_active) return;
         let player_relation_models = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation').models;
         let farm_town_models = uw.MM.getOnlyCollectionByName('FarmTown').models;
         let killpoints = uw.MM.getModelByNameAndPlayerId('PlayerKillpoints').attributes;

@@ -4,31 +4,11 @@ class AutoParty extends ModernUtil {
 
         this.active_types = this.storage.load('ap_types', { festival: false, procession: false, theater: false });
         this.single = this.storage.load('ap_single', true);
-        this.captchaActive = false;
         this.randomInterval = null;
 
         if (this.storage.load('ap_enable', false)) {
             this.startInterval();
         }
-
-        this.simulateCaptcha = false;
-
-        // Check for captcha every 300ms
-        this.checkCaptchaInterval = setInterval(() => {
-            if (this.simulateCaptcha || uw.$('.botcheck').length || uw.$('#recaptcha_window').length) {
-                if (!this.captchaActive) {
-                    this.console.log('Captcha active, autoparty stopped working');
-                    clearInterval(this.enable); // Stop autoparty
-                    this.captchaActive = true;
-                }
-            } else {
-                if (this.captchaActive) {
-                    this.console.log('Captcha resolved, autoparty resumed');
-                    this.startInterval(); // Restart autoparty
-                    this.captchaActive = false;
-                }
-            }
-        }, 300);
     }
 
     startInterval() {
@@ -222,7 +202,6 @@ class AutoParty extends ModernUtil {
     };
 
     main = async () => {
-        if (window.__multbot_captcha_active) return;
         if (this.active_types['procession']) await this.checkTriumph();
         if (this.active_types['festival']) await this.checkParty();
         if (this.active_types['theater']) await this.checkTheater();

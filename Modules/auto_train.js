@@ -26,27 +26,8 @@ class AutoTrain extends ModernUtil {
         this.percentual = this.storage.load('at_per', 1);
         this.city_troops = this.storage.load('troops', {});
         this.shiftHeld = false;
-        this.simulateCaptcha = false; // Switch to simulate captcha
-        this.captchaActive = false;
 
         this.interval = setInterval(this.main.bind(this), this.getRandomDelay(1000, 10000));
-
-        // Check for captcha every 300ms
-        this.checkCaptchaInterval = setInterval(() => {
-            if (this.simulateCaptcha || uw.$('.botcheck').length || uw.$('#recaptcha_window').length) {
-                if (!this.captchaActive) {
-                    this.console.log('Captcha active, autotrain stopped working');
-                    clearInterval(this.interval); // Stop autotrain
-                    this.captchaActive = true;
-                }
-            } else {
-                if (this.captchaActive) {
-                    this.console.log('Captcha resolved, autotrain resumed');
-                    this.startInterval(); // Restart autotrain
-                    this.captchaActive = false;
-                }
-            }
-        }, 300);
     }
 
     getRandomDelay(min, max) {
@@ -416,7 +397,6 @@ class AutoTrain extends ModernUtil {
 
     /* Main function — treina ground + naval em todas as cidades em paralelo */
     main = () => {
-        if (window.__multbot_captcha_active) return;
         const town_list = this.getActiveList();
         town_list.forEach(town_id => {
             if (town_id in uw.ITowns.towns) {
