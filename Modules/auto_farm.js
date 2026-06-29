@@ -300,7 +300,8 @@ class AutoFarm extends ModernUtil {
     };
 
     main = async () => {
-        // Check that         the timer is not too high
+        if (window.__multbot_captcha_active) return;
+        // Check that the timer is not too high
         const next_collection = this.getNextCollection();
         if (next_collection && (this.timer > next_collection + 60 * 1_000 || this.timer < next_collection)) {
             this.timer = next_collection + Math.floor(Math.random() * 20_000) + 10_000;

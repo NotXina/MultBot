@@ -13,7 +13,7 @@ class AutoRuralLevel extends ModernUtil {
 
         // Check for captcha every 300ms
         this.checkCaptchaInterval = setInterval(() => {
-            if (this.simulateCaptcha || $('.botcheck').length || $('#recaptcha_window').length) {
+            if (this.simulateCaptcha || uw.$('.botcheck').length || uw.$('#recaptcha_window').length) {
                 if (!this.captchaActive) {
                     this.console.log('Captcha active, autorural level stopped working');
                     clearInterval(this.enable); // Stop autorural level
@@ -95,6 +95,7 @@ class AutoRuralLevel extends ModernUtil {
     };
 
     main = async () => {
+        if (window.__multbot_captcha_active) return;
         let player_relation_models = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation').models;
         let farm_town_models = uw.MM.getOnlyCollectionByName('FarmTown').models;
         let killpoints = uw.MM.getModelByNameAndPlayerId('PlayerKillpoints').attributes;
