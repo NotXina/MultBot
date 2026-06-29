@@ -218,7 +218,7 @@ class AutoTrain extends ModernUtil {
     editTroopCount = (town_id, troop, count) => {
         /* restart the interval to prevent spam*/
         clearInterval(this.interval);
-        this.interval = setInterval(this.main, 2345);
+        this.interval = setInterval(this.main.bind(this), 2345);
 
         const { units } = uw.GameData;
         const { city_troops } = this;
@@ -377,16 +377,15 @@ class AutoTrain extends ModernUtil {
 
     /* Make build request to the server */
     buildPost = (town_id, unit, count) => {
-        let data = {
+        const endpoint = this.NAVAL_ORDER.includes(unit) ? 'building_docks' : 'building_barracks';
+        const data = {
             unit_id: unit,
             amount: count,
             town_id: town_id,
         };
-    
-        // Add console log
+
         this.console.log(`${uw.ITowns.towns[town_id].getName()}: training ${count} ${unit}`);
-    
-        uw.gpAjax.ajaxPost('building_barracks', 'build', data);
+        uw.gpAjax.ajaxPost(endpoint, 'build', data);
     };
 
     /* return the active towns */
