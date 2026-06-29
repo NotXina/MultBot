@@ -36,24 +36,28 @@ class ColonizeShipSender extends ModernUtil {
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             ${this.getTitleHtml('css_title', 'Navio Colonizador', this.toggle, '', this._running)}
             <div id="autoparty_types">
-                <div class="split_content" style="padding:5px 8px;">
-                    <div>
-                        <label style="font-weight:bold;font-size:11px;">Cidade destino (ID ou [town]...[/town])</label><br>
-                        <input id="css_target_town" type="text" placeholder="Ex: 123456"
-                            value="${cfg.targetTownId || ''}"
-                            style="width:150px;padding:2px 5px;margin-top:2px;" />
-                        ${this.getButtonHtml('css_save_target', 'Salvar', this._saveTarget)}
+                <div class="split_content">
+                    <div style="padding:5px 8px;">
+                        <label style="font-weight:bold;font-size:11px;">Destino (ID ou [town]...[/town])</label><br>
+                        <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
+                            <input id="css_target_town" type="text" placeholder="ID da cidade"
+                                value="${cfg.targetTownId || ''}"
+                                style="width:120px;padding:2px 5px;" />
+                            ${this.getButtonHtml('css_save_target', 'Salvar', this._saveTarget)}
+                        </div>
+                        <div id="css_target_status" style="font-size:11px;color:#5a3a0a;margin-top:3px;">
+                            ${cfg.targetTownId ? '✓ ' + this._getTownName(cfg.targetTownId) : 'Nenhum destino'}
+                        </div>
                     </div>
-                    <div>
+                    <div style="padding:5px 8px;">
                         <label style="font-weight:bold;font-size:11px;">Intervalo (min)</label><br>
-                        <input id="css_interval" type="number" min="1" max="120"
-                            value="${cfg.intervalMinutes || 5}"
-                            style="width:55px;padding:2px 5px;margin-top:2px;" />
-                        ${this.getButtonHtml('css_save_interval', 'Salvar', this._saveInterval)}
+                        <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
+                            <input id="css_interval" type="number" min="1" max="120"
+                                value="${cfg.intervalMinutes || 5}"
+                                style="width:55px;padding:2px 5px;" />
+                            ${this.getButtonHtml('css_save_interval', 'Salvar', this._saveInterval)}
+                        </div>
                     </div>
-                </div>
-                <div id="css_target_status" style="padding:2px 10px 6px;font-size:11px;color:#5a3a0a;">
-                    ${cfg.targetTownId ? '✓ Destino: ' + this._getTownName(cfg.targetTownId) : 'Nenhum destino configurado'}
                 </div>
             </div>
         </div>`;
