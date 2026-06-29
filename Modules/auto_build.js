@@ -301,8 +301,15 @@ class AutoBuild extends ModernUtil {
             arguments: { building_id: type },
             town_id: town_id,
         };
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
-        this.console.log(`[AutoBuild] ${town.getName()}: Build Up ${type}`);
+        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
+            res => {
+                if (res && !res.error) {
+                    this.console.log(`[AutoBuild] ${town.getName()}: Build Up ${type}`);
+                } else {
+                    this.console.log(`[AutoBuild] ✗ ${town.getName()}: ${type} — ${res?.error ?? JSON.stringify(res)}`);
+                }
+            }
+        );
         await this.sleep(1234);
         return true;
     };
