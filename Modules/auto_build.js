@@ -2,25 +2,23 @@ class AutoBuild extends ModernUtil {
     constructor(c, s) {
         super(c, s);
 
-        /* Load settings, the polis in the settings are the active */
         this.towns_buildings = this.storage.load('buildings', {});
-
-        /* Check if shift is pressed */
         this.shiftHeld = false;
 
-        /* Active always, check if the towns are in the active list */
         this.interval = setInterval(this.main.bind(this), 5000);
 
-        /* Add listener that change the Senate look */
+        // Observer do Senado registrado uma vez no constructor
         try {
-            uw.$.Observer(uw.GameEvents.window.open).subscribe("modernSenate", this.updateSenate);
+            uw.$.Observer(uw.GameEvents.window.open).subscribe('autoBuild_senate', this.updateSenate);
         } catch(e) {
             this.console.log('[AutoBuild] Observer error: ' + e.message);
         }
-    }
 
-    startInterval() {
-        this.interval = setInterval(this.main.bind(this), 5000);
+        // Observer de troca de cidade registrado uma vez no constructor — evita duplicatas
+        uw.$.Observer(uw.GameEvents.town.town_switch).subscribe('autoBuild_townSwitch', () => {
+            this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
+            this.updateTitle();
+        });
     }
 
     settings = () => {
@@ -33,10 +31,6 @@ class AutoBuild extends ModernUtil {
             this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
             this.updateTitle();
 
-            uw.$.Observer(uw.GameEvents.town.town_switch).subscribe(() => {
-                this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
-                this.updateTitle();
-            });
         });
 
         return `
@@ -59,55 +53,50 @@ class AutoBuild extends ModernUtil {
 
     /* Update the senate view */
     updateSenate = (event, handler) => {
-        if (handler.context !== "building_senate") return;
+        if (handler.context !== 'building_senate') return;
 
-        // Edit the width of the window to fit the new element
         handler.wnd.setWidth(850);
-
-        // Compute the id of the window
         const id = `gpwnd_${handler.wnd.getID()}`;
 
-        // Loop until the element is found
-        const updateView = () => {
-            const interval = setInterval(() => {
-                const $window = uw.$('#' + id);
+        const injectUI = ($window) => {
+            const $mainTasks = $window.find('#main_tasks');
+            if (!$mainTasks.length) return false;
 
-                const $mainTasks = $window.find('#main_tasks');
-                if (!$mainTasks.length) return;
+            $mainTasks.hide();
 
-                $mainTasks.hide();
+            const $newElement = uw.$('<div></div>').append(this.settings()).css({
+                position: $mainTasks.css('position'),
+                left:     $mainTasks.css('left') - 20,
+                top:      $mainTasks.css('top'),
+            });
+            $mainTasks.after($newElement);
 
-                let $newElement = uw.$('<div></div>').append(this.settings());
-
-                $newElement.css({
-                    position: $mainTasks.css('position'),
-                    left: $mainTasks.css('left') - 20,
-                    top: $mainTasks.css('top'),
-                });
-                $mainTasks.after($newElement);
-
-                // Center the techTree
-                const $techTree = $window.find('#techtree');
-                $techTree.css({
-                    position: 'relative',
-                    left: "40px",
-                });
-
-                // Edit the width of the 
-                $window.css({
-                    overflowY: 'visible',
-                });
-
-                clearInterval(interval);
-            }, 10);
-
-            // If the element is not found, stop the interval 
-            setTimeout(() => {
-                clearInterval(interval);
-            }, 100);
+            $window.find('#techtree').css({ position: 'relative', left: '40px' });
+            $window.css({ overflowY: 'visible' });
+            return true;
         };
 
-        // subscribe to set content event
+        const updateView = () => {
+            const $window = uw.$('#' + id);
+
+            // Tenta injetar imediatamente — se o DOM já estiver pronto
+            if (injectUI($window)) return;
+
+            // Caso contrário, usa MutationObserver para esperar #main_tasks aparecer
+            const container = document.getElementById(id);
+            if (!container) return;
+
+            const observer = new MutationObserver(() => {
+                if (injectUI(uw.$('#' + id))) {
+                    observer.disconnect();
+                }
+            });
+            observer.observe(container, { childList: true, subtree: true });
+
+            // Timeout de segurança: desconecta após 5s se não injetou
+            setTimeout(() => observer.disconnect(), 5000);
+        };
+
         const oldSetContent = handler.wnd.setContent2;
         handler.wnd.setContent2 = (...params) => {
             updateView();
