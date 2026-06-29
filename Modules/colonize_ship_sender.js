@@ -23,55 +23,51 @@ class ColonizeShipSender extends ModernUtil {
 
     settings = () => {
         const cfg = this.config;
-        requestAnimationFrame(() => this._bindEvents());
+        requestAnimationFrame(() => {
+            this._updateTitle();
+            uw.$('#css_target_town').off('keydown').on('keydown', e => { if (e.key === 'Enter') this._saveTarget(); });
+            uw.$('#css_interval').off('keydown').on('keydown',    e => { if (e.key === 'Enter') this._saveInterval(); });
+        });
         return `
-        <div class="game_border" style="margin-bottom: 20px;">
-            <div class="game_border_top"></div>
-            <div class="game_border_bottom"></div>
-            <div class="game_border_left"></div>
-            <div class="game_border_right"></div>
-            <div class="game_border_corner corner1"></div>
-            <div class="game_border_corner corner2"></div>
-            <div class="game_border_corner corner3"></div>
-            <div class="game_border_corner corner4"></div>
-            <div class="game_header bold" style="position:relative;">
-                <span style="z-index:10;position:relative;">Colonize Ship Sender</span>
-                <span class="command_count"></span>
-            </div>
-            <div style="padding:10px;display:flex;flex-direction:column;gap:10px;">
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                    <label style="font-weight:bold;font-size:12px;">Cidade destino (ID ou [town]...[/town])</label>
-                    <div style="display:flex;gap:6px;align-items:center;">
+        <div class="game_border" style="margin-bottom:20px;">
+            <div class="game_border_top"></div><div class="game_border_bottom"></div>
+            <div class="game_border_left"></div><div class="game_border_right"></div>
+            <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
+            <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
+            ${this.getTitleHtml('css_title', 'Navio Colonizador', this.toggle, '', this._running)}
+            <div id="autoparty_types">
+                <div class="split_content" style="padding:5px 8px;">
+                    <div>
+                        <label style="font-weight:bold;font-size:11px;">Cidade destino (ID ou [town]...[/town])</label><br>
                         <input id="css_target_town" type="text" placeholder="Ex: 123456"
                             value="${cfg.targetTownId || ''}"
-                            style="width:180px;padding:3px 6px;" />
+                            style="width:150px;padding:2px 5px;margin-top:2px;" />
                         ${this.getButtonHtml('css_save_target', 'Salvar', this._saveTarget)}
                     </div>
-                    <div id="css_target_status" style="font-size:11px;color:#4ade80;min-height:14px;">
-                        ${cfg.targetTownId ? '✓ Destino: ' + this._getTownName(cfg.targetTownId) : ''}
-                    </div>
-                </div>
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                    <label style="font-weight:bold;font-size:12px;">Intervalo entre ciclos (minutos)</label>
-                    <div style="display:flex;gap:6px;align-items:center;">
+                    <div>
+                        <label style="font-weight:bold;font-size:11px;">Intervalo (min)</label><br>
                         <input id="css_interval" type="number" min="1" max="120"
                             value="${cfg.intervalMinutes || 5}"
-                            style="width:70px;padding:3px 6px;" />
+                            style="width:55px;padding:2px 5px;margin-top:2px;" />
                         ${this.getButtonHtml('css_save_interval', 'Salvar', this._saveInterval)}
                     </div>
                 </div>
-                <div style="display:flex;gap:8px;">
-                    ${this.getButtonHtml('css_start_btn', '▶ Iniciar', this._startBtn)}
-                    ${this.getButtonHtml('css_stop_btn',  '■ Parar',  this._stopBtn)}
+                <div id="css_target_status" style="padding:2px 10px 6px;font-size:11px;color:#5a3a0a;">
+                    ${cfg.targetTownId ? '✓ Destino: ' + this._getTownName(cfg.targetTownId) : 'Nenhum destino configurado'}
                 </div>
-                <div id="css_status" style="font-size:12px;font-weight:bold;color:#94a3b8;">
-                    ${this._running ? '● Rodando' : '○ Parado'}
-                </div>
-
             </div>
         </div>`;
     };
 
+    toggle = () => {
+        if (this._running) this.stop();
+        else this.start();
+    };
+
+    _updateTitle() {
+        uw.$('#css_title').css('filter', this._running
+            ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
+    }
     _bindEvents() {
         uw.$('#css_target_town').off('keydown').on('keydown', e => { if (e.key === 'Enter') this._saveTarget(); });
         uw.$('#css_interval').off('keydown').on('keydown',   e => { if (e.key === 'Enter') this._saveInterval(); });
@@ -118,13 +114,14 @@ class ColonizeShipSender extends ModernUtil {
         if (!uw.gpAjax || !uw.Game)    { this._log('Jogo não está pronto. Tente novamente.', 'error'); return; }
         this._stop = false;
         this._startLoop();
+        this._updateTitle();
     }
 
     stop() {
         this._stop = true;
         this._stopLoop();
         this._log('Loop parado manualmente.', 'warning');
-        this._updateButtons();
+        this._updateTitle();
     }
 
     _startLoop() {
