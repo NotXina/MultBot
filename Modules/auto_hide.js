@@ -4,7 +4,7 @@ class AutoHide extends ModernUtil {
 
         this.activePolis = this.storage.load('autohide_active', 0);
 
-        setInterval(this.main, 5000)
+        setInterval(this.main.bind(this), 5000)
 
         const addButton = () => {
             let box = uw.$('.order_count');
@@ -22,13 +22,13 @@ class AutoHide extends ModernUtil {
             }
         };
 
-        uw.$.Observer(uw.GameEvents.window.open).subscribe((e, i) => {
-            if (!i.attributes) return
-            if (i.attributes.window_type != "hide") return
+        uw.$.Observer(uw.GameEvents.window.open).subscribe('autoHide_windowOpen', (e, i) => {
+            if (!i.attributes) return;
+            if (i.attributes.window_type !== 'hide') return;
             setTimeout(addButton, 100);
         })
 
-        uw.$.Observer(uw.GameEvents.town.town_switch).subscribe(() => {
+        uw.$.Observer(uw.GameEvents.town.town_switch).subscribe('autoHide_townSwitch', () => {
             this.updateSettings(uw.ITowns.getCurrentTown().id);
             let cave = document.getElementsByClassName(
                 'js-window-main-container classic_window hide',
