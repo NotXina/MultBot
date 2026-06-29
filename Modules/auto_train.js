@@ -349,8 +349,18 @@ class AutoTrain extends ModernUtil {
     /* Envia o pedido de recrutamento ao servidor */
     buildPost = (town_id, unit, count) => {
         const endpoint = this.NAVAL_ORDER.includes(unit) ? 'building_docks' : 'building_barracks';
-        this.console.log(`[AutoTrain] ${uw.ITowns.towns[town_id].getName()}: ${count}x ${unit}`);
-        uw.gpAjax.ajaxPost(endpoint, 'build', { unit_id: unit, amount: count, town_id });
+        const townName = uw.ITowns.towns[town_id].getName();
+
+        uw.gpAjax.ajaxPost(endpoint, 'build', { unit_id: unit, amount: count, town_id },
+            false,
+            res => {
+                if (res && !res.error) {
+                    this.console.log(`[AutoTrain] ${townName}: ${count}x ${unit}`);
+                } else {
+                    this.console.log(`[AutoTrain] ✗ ${townName}: ${unit} — ${res?.error ?? JSON.stringify(res)}`);
+                }
+            }
+        );
     };
 
     getActiveList = () => {
@@ -362,13 +372,13 @@ class AutoTrain extends ModernUtil {
         const town_list = this.getActiveList();
         if (!town_list.length) return;
         town_list.forEach(town_id => {
-            if (town_id in uw.ITowns.towns) {
-                this.checkPolis('naval',  town_id);
-                this.checkPolis('ground', town_id);
-            } else {
+            if (!(town_id in uw.ITowns.towns)) {
                 delete this.city_troops[town_id];
                 this.storage.save('troops', this.city_troops);
+                return;
             }
+            this.checkPolis('naval',  town_id);
+            this.checkPolis('ground', town_id);
         });
     };
 }
