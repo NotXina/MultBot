@@ -96,7 +96,7 @@ class ModernUtil {
     getButtonHtml(id, text, fn, props) {
         const name = this.constructor.name.charAt(0).toLowerCase() + this.constructor.name.slice(1);
         props = isNaN(parseInt(props)) ? `'${props}'` : props;
-        const click = `window.modernBot.${name}.${fn.name}(${props || ''})`;
+        const click = `window.modernBot.${name}.${fn.name}(${props ?? ''})`;
 
         return `
       <div id="${id}" style="cursor: pointer" class="button_new" onclick="${click}">
@@ -120,7 +120,7 @@ class ModernUtil {
     getTitleHtml(id, text, fn, props, enable, desc = '(click to toggle)') {
         const name = this.constructor.name.charAt(0).toLowerCase() + this.constructor.name.slice(1);
         props = isNaN(parseInt(props)) && props ? `"${props}"` : props;
-        const click = `window.modernBot.${name}.${fn.name}(${props || ''})`;
+        const click = `window.modernBot.${name}.${fn.name}(${props ?? ''})`;
         const filter = 'brightness(100%) saturate(186%) hue-rotate(241deg)';
 
         return `
