@@ -1,222 +1,416 @@
-class ModernBot {
-    constructor() {
-        this.console = new BotConsole();
-        this.storage = new ModernStorage();
+class AutoTrain extends ModernUtil {
+    POWER_LIST = ['call_of_the_ocean', 'spartan_training', 'fertility_improvement'];
+    GROUND_ORDER = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot'];
+    NAVAL_ORDER = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship'];
+    SHIFT_LEVELS = {
+        catapult: [5, 5],
+        sword: [200, 50],
+        archer: [200, 50],
+        hoplite: [200, 50],
+        slinger: [200, 50],
+        rider: [100, 25],
+        chariot: [100, 25],
+        small_transporter: [10, 5],
+        bireme: [50, 10],
+        trireme: [50, 10],
+        attack_ship: [50, 10],
+        big_transporter: [50, 10],
+        demolition_ship: [50, 10],
+        colonize_ship: [5, 1],
+    };
 
-        this.$ui = uw.$("#ui_box");
-        // Create the quick menu and the divider element
-        this.$menu = this.createModernMenu();
-        const $divider = uw.$('<div class="divider"></div>');
+    constructor(c, s) {
+        super(c, s);
 
-        // Add AutoFarm to the new menu
-        this.autoFarm = new AutoFarm(this.console, this.storage);
-        this.$menu.append(this.autoFarm.$activity)
-        this.$ui.append(this.autoFarm.$popup)
+        this.spell = this.storage.load('at_spell', false);
+        this.percentual = this.storage.load('at_per', 1);
+        this.city_troops = this.storage.load('troops', {});
+        this.shiftHeld = false;
 
-        //const $farm = this.createActivity("url(https://gpit.innogamescdn.com/images/game/premium_features/feature_icons_2.08.png) no-repeat 0 -240px");
-        // this.$menu.append($farm, $divider.clone());
+        this.interval = setInterval(this.main.bind(this), this.getRandomDelay(1000, 10000));
 
-        this.autoGratis = new AutoGratis(this.console, this.storage);
-        this.autoRuralLevel = new AutoRuralLevel(this.console, this.storage);
-        this.autoBuild = new AutoBuild(this.console, this.storage);
-        this.autoRuralTrade = new AutoRuralTrade(this.console, this.storage);
-        this.autoBootcamp = new AutoBootcamp(this.console, this.storage);
-        this.autoParty = new AutoParty(this.console, this.storage);
-        this.autoTrain = new AutoTrain(this.console, this.storage);
-        this.autoHide = new AutoHide(this.console, this.storage);
-        this.antiRage = new AntiRage(this.console, this.storage);
-        this.autoTrade = new AutoTrade(this.console, this.storage);
-        this.colonizeShipSender = new ColonizeShipSender(this.console, this.storage);
-        this.multTools    = new MultTools(this.console, this.storage);
-        this.autoMilitia      = new AutoMilitia(this.console, this.storage);
-        this.autoSendResources = new AutoSendResources(this.console, this.storage);
-        this.statusPanel  = new StatusPanel(this.console, this.storage);
-
-        this.settingsFactory = new createGrepoWindow({
-            id: 'MODERN_BOT',
-            title: 'ModernBot',
-            size: [845, 380],
-            tabs: [
-                {
-                    title: 'Status',
-                    id: 'status',
-                    render: this.settingsStatus,
-                },
-                {
-                    title: 'Farm',
-                    id: 'farm',
-                    render: this.settingsFarm,
-                },
-                {
-                    title: 'Build',
-                    id: 'build',
-                    render: this.settingsBuild,
-                },
-                {
-                    title: 'Train',
-                    id: 'train',
-                    render: this.settingsTrain,
-                } /*
-				{
-					title: 'Trade',
-					id: 'trade',
-					render: this.settingsTrade,
-				},*/,
-                {
-                    title: 'Mix',
-                    id: 'mix',
-                    render: this.settingsMix,
-                },
-                {
-                    title: 'Mult',
-                    id: 'mult',
-                    render: this.settingsMult,
-                },
-                {
-                    title: 'Ships',
-                    id: 'ships',
-                    render: this.settingsShips,
-                },
-                {
-                    title: 'Console',
-                    id: 'console',
-                    render: this.console.renderSettings,
-                },
-            ],
-            start_tab: 0,
+        // Observer registrado uma única vez — evita duplicatas ao reabrir a aba Train
+        uw.$.Observer(uw.GameEvents.town.town_switch).subscribe('autoTrain_townSwitch', () => {
+            this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
+            this.updatePolisInSettings(uw.ITowns.getCurrentTown().id);
         });
-
-        this.setup();
     }
 
-    settingsStatus = () => {
-        return this.statusPanel.settings();
-    };
-
-    settingsFarm = () => {
-        let html = '';
-        // html += this.autoFarm.settings();
-        html += this.autoRuralLevel.settings();
-        html += this.autoRuralTrade.settings();
-        html += this.autoSendResources.settings();
-        return html;
-    };
-
-    settingsBuild = () => {
-        let html = '';
-        html += this.autoGratis.settings();
-        html += this.autoBuild.settings();
-        return html;
-    };
-
-    settingsMix = () => {
-        let html = '';
-        html += this.autoBootcamp.settings();
-        html += this.autoParty.settings();
-        html += this.autoHide.settings();
-        html += this.autoMilitia.settings();
-        return html;
-    };
-
-    settingsTrain = () => {
-        let html = '';
-        html += this.autoTrain.settings();
-        return html;
-    };
-
-    settingsMult = () => {
-        return this.multTools.settings();
-    };
-
-    settingsShips = () => {
-        return this.colonizeShipSender.settings();
-    };
-
-    settingsTrade = () => {
-        let html = ``;
-        html += this.autoTrade.settings();
-        return html;
-    };
-
-    setup = () => {
-        /* Activate */
-        this.settingsFactory.activate();
-        uw.$('.gods_area_buttons').append("<div class='circle_button modern_bot_settings' onclick='window.modernBot.settingsFactory.openWindow()'><div style='width: 27px; height: 27px; background: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/gear.png) no-repeat 6px 5px' class='icon js-caption'></div></div>");
-
-        /* Add event to polis list menu */
-        const editController = () => {
-            const townController = uw.layout_main_controller.sub_controllers.find(controller => controller.name === 'town_name_area');
-            if (!townController) {
-                setTimeout(editController, 2500);
-                return;
-            }
-
-            const oldRender = townController.controller.town_groups_list_view.render;
-            townController.controller.town_groups_list_view.render = function () {
-                oldRender.call(this);
-                const both = `<div style='position: absolute; background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/hammer_wrench.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const build = `<div style='background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/hammer_only.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const troop = `<div style='background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/wrench.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const townIds = Object.keys(uw.modernBot.autoBuild.towns_buildings);
-                const troopsIds = uw.modernBot.autoTrain.getActiveList().map(entry => entry.toString());
-                uw.$('.town_group_town').each(function () {
-                    const townId = parseInt(uw.$(this).attr('data-townid'));
-                    const is_build = townIds.includes(townId.toString());
-                    const id_troop = troopsIds.includes(townId.toString());
-                    if (!id_troop && !is_build) return;
-                    if (id_troop && !is_build) uw.$(this).prepend(troop);
-                    else if (is_build && !id_troop) uw.$(this).prepend(build);
-                    else uw.$(this).prepend(both);
-                });
-            };
-        };
-
-        setTimeout(editController, 2500);
-
-        // Move o botão do ModernBot para posição customizada
-        const moveBtn = () => {
-            const btn = document.querySelector('.modern_bot_settings');
-            if (btn) {
-                btn.style.setProperty('top', '95px', 'important');
-                btn.style.setProperty('right', '113px', 'important');
-            }
-        };
-        const btnObserver = new MutationObserver(moveBtn);
-        btnObserver.observe(document.body, { childList: true, subtree: true });
-        setTimeout(() => btnObserver.disconnect(), 15000);
-    };
-
-    /* New quick menu */
-    // Create the html of an activity in the new quick menu
-    createModernMenu = () => {
-        const $menu = uw.$('<div id="modern_menu" class="toolbar_activities"></div>');
-        $menu.css({
-            'position': 'absolute',
-            'top': '3px',
-            'left': '400px',
-            'z-index': '1000',
-        });
-
-        // Add left, middle, right
-        const $left = uw.$('<div class="left"></div>');
-        const $middle = uw.$('<div class="middle"></div>');
-        const $right = uw.$('<div class="right"></div>');
-
-        $menu.append($left, $middle, $right);
-        uw.$("#ui_box").prepend($menu);
-
-        return $middle
+    getRandomDelay(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
+    startInterval() {
+        const randomDelay = this.getRandomDelay(1000, 10000);
+        this.interval = setInterval(this.main.bind(this), randomDelay);
+    }
+
+    settings = () => {
+        requestAnimationFrame(() => {
+            this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
+            this.updatePolisInSettings(uw.ITowns.getCurrentTown().id);
+            this.handlePercentual(this.percentual);
+            this.handleSpell(this.spell);
+
+            uw.$('#troops_lvl_buttons').on('mousedown', e => {
+                this.shiftHeld = e.shiftKey;
+            });
+        });
+
+        return `
+        <div class="game_border" style="margin-bottom: 20px">
+            <div class="game_border_top"></div>
+            <div class="game_border_bottom"></div>
+            <div class="game_border_left"></div>
+            <div class="game_border_right"></div>
+            <div class="game_border_corner corner1"></div>
+            <div class="game_border_corner corner2"></div>
+            <div class="game_border_corner corner3"></div>
+            <div class="game_border_corner corner4"></div>
+            <div class="game_header bold" style="position: relative; cursor: pointer"> 
+            <span style="z-index: 10; position: relative;"> Settings </span>
+            <span class="command_count"></span></div>
+
+            <div class="split_content">
+                <div style="padding: 5px;">
+                ${this.getButtonHtml('train_passive', 'Passive', this.handleSpell, 0)}
+                ${this.getButtonHtml('train_spell', 'Spell', this.handleSpell, 1)}
+                </div>
+
+                <div id="train_percentuals" style="padding: 5px;">
+                ${this.getButtonHtml('train_percentuals_1', '80%', this.handlePercentual, 1)}
+                ${this.getButtonHtml('train_percentuals_2', '90%', this.handlePercentual, 2)}
+                ${this.getButtonHtml('train_percentuals_3', '100%', this.handlePercentual, 3)}
+                </div>
+            </div>
+        </div>
+
+        <div class="game_border">
+            <div class="game_border_top"></div>
+            <div class="game_border_bottom"></div>
+            <div class="game_border_left"></div>
+            <div class="game_border_right"></div>
+            <div class="game_border_corner corner1"></div>
+            <div class="game_border_corner corner2"></div>
+            <div class="game_border_corner corner3"></div>
+            <div class="game_border_corner corner4"></div>
+            <div id="auto_train_title" class="game_header bold" style="position: relative; cursor: pointer" onclick="window.modernBot.autoTrain.trigger()"> 
+            <span style="z-index: 10; position: relative;">Auto Train </span>
+            <div style="position: absolute; right: 10px; top: 4px; font-size: 10px; z-index: 10"> (click to reset) </div>
+            <span class="command_count"></span></div>
+            <div id="troops_lvl_buttons"></div>    
+        </div>
+    `;
+    };
+
+    handleSpell = e => {
+        e = !!e;
+        if (this.spell != e) {
+            this.spell = e;
+            this.storage.save('at_spell', e);
+        }
+        if (e) {
+            uw.$('#train_passive').addClass('disabled');
+            uw.$('#train_spell').removeClass('disabled');
+        } else {
+            uw.$('#train_passive').removeClass('disabled');
+            uw.$('#train_spell').addClass('disabled');
+        }
+    };
+
+    handlePercentual = n => {
+        let box = uw.$('#train_percentuals');
+        let buttons = box.find('.button_new');
+        buttons.addClass('disabled');
+        uw.$(`#train_percentuals_${n}`).removeClass('disabled');
+        if (this.percentual != n) {
+            this.percentual = n;
+            this.storage.save('at_per', n);
+        }
+    };
+
+    getTotalPopulation = town_id => {
+        const town = uw.ITowns.towns[town_id];
+        const data = uw.GameData.units;
+        const { models: orders } = town.getUnitOrdersCollection();
+
+        let used = 0;
+        for (let order of orders) {
+            used += data[order.attributes.unit_type].population * (order.attributes.units_left / order.attributes.count) * order.attributes.count;
+        }
+        let units = town.units();
+        for (let unit of Object.keys(units)) {
+            used += data[unit].population * units[unit];
+        }
+        let outher = town.unitsOuter();
+        for (let out of Object.keys(outher)) {
+            used += data[out].population * outher[out];
+        }
+        return town.getAvailablePopulation() + used;
+    };
+
+    setPolisInSettings = town_id => {
+        let town = uw.ITowns.towns[town_id];
+        let researches = town.researches().attributes;
+        let buildings = town.buildings().attributes;
+
+        const isGray = troop => {
+            if (!this.REQUIREMENTS.hasOwnProperty(troop)) {
+                return true; // Troop type not recognized
+            }
+
+            const { research, building, level } = this.REQUIREMENTS[troop];
+            if (research && !researches[research]) return true;
+            if (building && buildings[building] < level) return true;
+            return false;
+        };
+
+        const getTroopHtml = (troop, bg) => {
+            let gray = isGray(troop, researches, buildings);
+            let color = 'red';
+
+            if (gray) {
+                return `
+                <div class="auto_build_box">
+                    <div class="item_icon auto_trade_troop" style="background-position: -${bg[0]}px -${bg[1]}px; filter: grayscale(1);"></div>
+                </div>
+                `;
+            }
+            return `
+                <div class="auto_build_box">
+                <div class="item_icon auto_trade_troop" onclick="window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 0)" style="background-position: -${bg[0]}px -${bg[1]}px; cursor: pointer">
+                    <div class="auto_build_up_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 1)" ></div>
+                    <div class="auto_build_down_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', -1)"></div>
+                    <p style="color: ${color}" id="troop_lvl_${troop}" class="auto_build_lvl"> 0 <p>
+                </div>
+            </div>`;
+        };
+
+        uw.$('#troops_lvl_buttons').html(`
+        <div id="troops_settings_${town_id}">
+            <div style="width: 600px; margin-bottom: 3px; display: inline-flex">
+            <a class="gp_town_link" href="${town.getLinkFragment()}">${town.getName()}</a> 
+            <p style="font-weight: bold; margin: 0px 5px"> [${town.getPoints()} pts] </p>
+            <p style="font-weight: bold; margin: 0px 5px"> </p>
+            <div class="population_icon_bot">
+                <p id="troops_lvl_population"> ${this.getTotalPopulation(town_id)} <p>
+            </div>
+            </div>
+            <div style="width: 831px; display: inline-flex; gap: 1px;">
+            ${getTroopHtml('sword', [400, 0])}
+            ${getTroopHtml('archer', [50, 100])}
+            ${getTroopHtml('hoplite', [300, 50])}
+            ${getTroopHtml('slinger', [250, 350])}
+            ${getTroopHtml('rider', [50, 350])}
+            ${getTroopHtml('chariot', [200, 100])}
+            ${getTroopHtml('catapult', [150, 150])}
+
+            ${getTroopHtml('big_transporter', [0, 150])}
+            ${getTroopHtml('small_transporter', [300, 350])}
+            ${getTroopHtml('bireme', [50, 150])}
+            ${getTroopHtml('demolition_ship', [250, 0])}
+            ${getTroopHtml('attack_ship', [150, 100])}
+            ${getTroopHtml('trireme', [400, 250])}
+            ${getTroopHtml('colonize_ship', [50, 200])}
+            </div>
+        </div>`);
+    };
+
+    editTroopCount = (town_id, troop, count) => {
+        /* restart the interval to prevent spam*/
+        clearInterval(this.interval);
+        this.interval = setInterval(this.main.bind(this), 2345);
+
+        const { units } = uw.GameData;
+        const { city_troops } = this;
+
+        // Add the town to the city_troops object if it doesn't already exist
+        if (!city_troops.hasOwnProperty(town_id)) city_troops[town_id] = {};
+
+        if (count) {
+            // Modify count based on whether the shift key is held down
+            const index = count > 0 ? 0 : 1;
+            count = this.shiftHeld ? count * this.SHIFT_LEVELS[troop][index] : count;
+        } else {
+            count = 10000;
+        }
+
+        // Check if the troop count can be increased without exceeding population capacity
+        const total_pop = this.getTotalPopulation(town_id);
+        const used_pop = this.countPopulation(this.city_troops[town_id]);
+        const unit_pop = units[troop].population;
+        if (total_pop - used_pop < unit_pop * count) count = parseInt((total_pop - used_pop) / unit_pop);
+
+        // Update the troop count for the specified town and troop type
+        if (troop in city_troops[town_id]) city_troops[town_id][troop] += count;
+        else city_troops[town_id][troop] = count;
+
+        /* Clenaup */
+        if (city_troops[town_id][troop] <= 0) delete city_troops[town_id][troop];
+        if (uw.$.isEmptyObject(city_troops[town_id])) delete this.city_troops[town_id];
+
+        this.updatePolisInSettings(town_id);
+        this.storage.save('troops', this.city_troops);
+    };
+
+    updatePolisInSettings = town_id => {
+        const { units } = uw.GameData;
+        const cityTroops = this.city_troops[town_id];
+
+        Object.keys(units).forEach(troop => {
+            const guiCount = cityTroops?.[troop] ?? 0;
+            const selector = `#troops_settings_${town_id} #troop_lvl_${troop}`;
+
+            if (guiCount > 0) uw.$(selector).css('color', 'orange').text(guiCount);
+            else uw.$(selector).css('color', '').text('-');
+        });
+
+        const isTownActive = this.city_troops[town_id];
+        uw.$('#auto_train_title').css('filter', isTownActive ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
+    };
+
+    trigger = () => {
+        const town = uw.ITowns.getCurrentTown();
+        const town_id = town.getId();
+        if (this.city_troops[town_id]) {
+            delete this.city_troops[town_id];
+            [...this.NAVAL_ORDER, ...this.GROUND_ORDER].forEach(troop => {
+                const selector = `#troops_settings_${town_id} #troop_lvl_${troop}`;
+                uw.$(selector).css('color', '').text('-');
+            });
+            uw.$('#auto_train_title').css('filter', '');
+            this.storage.save('troops', this.city_troops);
+        }
+    };
+
+    /* return the count of the order type (naval or ground) */
+    getUnitOrdersCount = (type, town_id) => {
+        const town = uw.ITowns.getTown(town_id);
+        return town.getUnitOrdersCollection().where({ kind: type }).length;
+    };
+
+    getNextInList = (unitType, town_id) => {
+        const troops = this.city_troops[town_id];
+        if (!troops) return null;
+
+        const unitOrder = unitType === 'naval' ? this.NAVAL_ORDER : this.GROUND_ORDER;
+        for (const unit of unitOrder) {
+            if (troops[unit] && this.getTroopCount(unit, town_id) !== 0) return unit;
+        }
+
+        return null;
+    };
+
+    getTroopCount = (troop, town_id) => {
+        const town = uw.ITowns.getTown(town_id);
+        if (!this.city_troops[town_id] || !this.city_troops[town_id][troop]) return 0;
+        let count = this.city_troops[town_id][troop];
+        for (let order of town.getUnitOrdersCollection().models) {
+            if (order.attributes.unit_type === troop) count -= order.attributes.count;
+        }
+        let townUnits = town.units();
+        if (townUnits.hasOwnProperty(troop)) count -= townUnits[troop];
+        let outerUnits = town.unitsOuter();
+        if (outerUnits.hasOwnProperty(troop)) count -= outerUnits[troop];
+        //TODO: in viaggio
+        if (count < 0) return 0;
+
+        /* Get the duable ammount with the current resouces of the polis */
+        let resources = town.resources();
+        let discount = uw.GeneralModifications.getUnitBuildResourcesModification(town_id, uw.GameData.units[troop]);
+        let { wood, stone, iron } = uw.GameData.units[troop].resources;
+        let w = resources.wood / Math.round(wood * discount);
+        let s = resources.stone / Math.round(stone * discount);
+        let i = resources.iron / Math.round(iron * discount);
+        let current = parseInt(Math.min(w, s, i));
+
+        /* Check for free population */
+        let duable_with_pop = parseInt(resources.population / uw.GameData.units[troop].population); // for each troop
+
+        /* Get the max duable */
+        let w_max = resources.storage / (wood * discount);
+        let s_max = resources.storage / (stone * discount);
+        let i_max = resources.storage / (iron * discount);
+        let max = parseInt(Math.min(w_max, s_max, i_max) * 0.85); // 0.8 it's the full percentual -> 80%
+        max = max > duable_with_pop ? duable_with_pop : max;
+
+        if (max > count) {
+            return count > current ? -1 : count;
+        } else {
+            if (current >= max && current < duable_with_pop) return current;
+            if (current >= max && current > duable_with_pop) return duable_with_pop;
+            return -1;
+        }
+    };
+
+    /* Check the given town, for ground or land */
+    checkPolis = (type, town_id) => {
+        let order_count = this.getUnitOrdersCount(type, town_id);
+        if (order_count > 6) return 0;
+        let count = 1;
+        while (count >= 0) {
+            let next = this.getNextInList(type, town_id);
+            if (!next) return 0;
+            count = this.getTroopCount(next, town_id);
+            if (count < 0) return 0;
+            if (count === 0) continue;
+            this.buildPost(town_id, next, count);
+            return true;
+        }
+    };
+
+    /* Return list of town that have power active */
+    getPowerActive = () => {
+        const { fragments } = uw.MM.getFirstTownAgnosticCollectionByName('CastedPowers');
+        let towns_list = [];
+        for (let town_id in this.city_troops) {
+            const { models } = fragments[town_id];
+            for (let power of models) {
+                let { attributes } = power;
+                if (this.POWER_LIST.includes(attributes.power_id)) {
+                    towns_list.push(town_id);
+                    break;
+                }
+            }
+        }
+        return towns_list;
+    };
+
+    /* Make build request to the server */
+    buildPost = (town_id, unit, count) => {
+        const endpoint = this.NAVAL_ORDER.includes(unit) ? 'building_docks' : 'building_barracks';
+        const data = {
+            unit_id: unit,
+            amount: count,
+            town_id: town_id,
+        };
+
+        this.console.log(`${uw.ITowns.towns[town_id].getName()}: training ${count} ${unit}`);
+        uw.gpAjax.ajaxPost(endpoint, 'build', data);
+    };
+
+    /* return the active towns */
+    getActiveList = () => {
+        if (!this.spell) return Object.keys(this.city_troops);
+        return this.getPowerActive();
+    };
+
+    /* Main function — treina ground + naval em todas as cidades em paralelo */
+    main = () => {
+        const town_list = this.getActiveList();
+        town_list.forEach(town_id => {
+            if (town_id in uw.ITowns.towns) {
+                this.checkPolis('naval', town_id);
+                this.checkPolis('ground', town_id);
+            } else {
+                delete this.city_troops[town_id];
+            }
+        });
+    };
 }
 
-
-// Load the bot when the loader is ready (guard against double injection)
-if (!window.__multbot_loaded__) {
-    window.__multbot_loaded__ = true;
-    var _multbot_loader = setInterval(() => {
-        if (uw.$("#loader").length > 0) return;
-        uw.modernBot = new ModernBot();
-        clearInterval(_multbot_loader);
-    }, 100);
-}
+/* 
+    botConsole.log(message);
+    ideas:
+        - add colors  
+*/
