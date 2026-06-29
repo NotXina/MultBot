@@ -81,7 +81,6 @@
     function waitForGame() {
         if (typeof Game !== 'undefined' && Game.player_id) {
             console.log('[MultBot] Game detectado, baixando módulos...');
-            window.__gp_townId_lock = false;
             MODULES.forEach((_, i) => fetchModule(i));
         } else {
             setTimeout(waitForGame, 500);
