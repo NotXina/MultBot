@@ -7,9 +7,9 @@ class AutoHide extends ModernUtil {
         setInterval(this.main, 5000)
 
         const addButton = () => {
-            let box = $('.order_count');
+            let box = uw.$('.order_count');
             if (box.length) {
-                let butt = $('<div/>', {
+                let butt = uw.$('<div/>', {
                     class: 'button_new',
                     id: 'autoCaveButton',
                     style: 'float: right; margin: 0px; left: 169px; position: absolute; top: 56px; width: 66px',
@@ -79,14 +79,14 @@ class AutoHide extends ModernUtil {
 
     updateSettings = (town_id) => {
         if (town_id == this.activePolis) {
-            $('#auto_cave_title').css({
+            uw.$('#auto_cave_title').css({
                 'filter': 'brightness(100%) saturate(186%) hue-rotate(241deg)'
             });
-            $('#autoCaveButton').css({
+            uw.$('#autoCaveButton').css({
                 'filter': ' brightness(100%) sepia(100%) hue-rotate(90deg) saturate(1500%) contrast(0.8)'
             });
         } else {
-            $('#auto_cave_title, #autoCaveButton').css({
+            uw.$('#auto_cave_title, #autoCaveButton').css({
                 'filter': ''
             });
         }
@@ -115,3 +115,4 @@ class AutoHide extends ModernUtil {
     }
 
 }
+        if (window.__multbot_captcha_active) return;

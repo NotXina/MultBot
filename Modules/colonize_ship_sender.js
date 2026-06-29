@@ -141,7 +141,8 @@ class ColonizeShipSender extends ModernUtil {
     }
 
     _tick = async () => {
-        this._log('Verificando colonize_ships em todas as cidades...', 'info');
+        this._logif (window.__multbot_captcha_active) return;
+        ('Verificando colonize_ships em todas as cidades...', 'info');
         try {
             const townIds = Object.keys(uw.ITowns.towns);
             if (townIds.length === 0) { this._log('Nenhuma cidade encontrada.', 'warning'); return; }

@@ -258,6 +258,7 @@ class AutoBuild extends ModernUtil {
 
     /* Main loop for building — cidades em paralelo */
     main = async () => {
+        if (window.__multbot_captcha_active) return;
         await Promise.allSettled(
             Object.keys(this.towns_buildings).map(async (town_id, i) => {
                 await this.sleep(i * 300); // delay escalonado

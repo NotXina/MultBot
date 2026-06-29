@@ -110,6 +110,7 @@ class AutoResearch extends ModernUtil {
     }
 
     async _tick() {
+        if (window.__multbot_captcha_active) return;
         const townIds = Object.keys(uw.ITowns.towns);
         let count = 0;
 

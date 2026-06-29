@@ -1,3 +1,4 @@
+
 // ==UserScript==
 // @name         ModernBot
 // @author       Sau1707
@@ -767,3 +768,41 @@ class ModernStorage extends Compressor {
 }
 
 /* Setup autofarm in the window object */
+
+// ── Guard global de captcha ──
+window.__multbot_captcha_active = false;
+
+// Intercepta ajaxPost para detectar captcha na resposta do servidor
+(function() {
+    const origPost = uw.gpAjax.ajaxPost.bind(uw.gpAjax);
+    uw.gpAjax.ajaxPost = function(endpoint, action, data, nl, success, error) {
+        const wrappedSuccess = function(res) {
+            // Detecta captcha na resposta do servidor
+            if (res && (res.human_check || res.captcha || (res.error && String(res.error).toLowerCase().includes('captcha')))) {
+                if (!window.__multbot_captcha_active) {
+                    window.__multbot_captcha_active = true;
+                    console.warn('[MultBot] ⚠ Captcha detectado na resposta — módulos pausados');
+                    if (uw.HumanMessage) uw.HumanMessage.error('⚠ MultBot: Captcha detectado! Resolva para continuar.');
+                    // Tenta abrir a janela de captcha do jogo se existir
+                    try { uw.GPWindowMgr.Create(uw.Layout.wnd.TYPE_CAPTCHA); } catch(e) {}
+                }
+            }
+            if (success) success(res);
+        };
+        return origPost(endpoint, action, data, nl, wrappedSuccess, error);
+    };
+})();
+
+// Detecta captcha no DOM
+setInterval(() => {
+    const hasCaptcha = uw.$('.botcheck').length > 0 || uw.$('#recaptcha_window').length > 0;
+    if (hasCaptcha && !window.__multbot_captcha_active) {
+        window.__multbot_captcha_active = true;
+        console.warn('[MultBot] ⚠ Captcha no DOM — módulos pausados');
+        if (uw.HumanMessage) uw.HumanMessage.error('⚠ MultBot: Captcha detectado! Resolva para continuar.');
+    } else if (!hasCaptcha && window.__multbot_captcha_active) {
+        window.__multbot_captcha_active = false;
+        console.log('[MultBot] ✓ Captcha resolvido — módulos retomados');
+        if (uw.HumanMessage) uw.HumanMessage.success('✓ MultBot: Captcha resolvido — módulos retomados!');
+    }
+}, 500);

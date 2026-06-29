@@ -66,6 +66,7 @@ class AutoSendResources extends ModernUtil {
     }
 
     async _tick() {
+        if (window.__multbot_captcha_active) return;
         this.console.log('[AutoRecursos] Verificando cidades...');
 
         const townIds = Object.keys(uw.ITowns.towns);
@@ -124,7 +125,7 @@ class AutoSendResources extends ModernUtil {
             if (town.getAvailablePopulation() >= 200) return false;
 
             // 2. AutoBuild done — fila de construção vazia
-            if (town.buildingOrders().length > 0) return false;
+            if ((town.buildingOrders?.()?.length ?? 0) > 0) return false;
 
             // 3. Mercado ativo com capacidade > 500
             if (!buildings.market || buildings.market < 1) return false;

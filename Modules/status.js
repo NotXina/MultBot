@@ -10,7 +10,12 @@ class StatusPanel extends ModernUtil {
 
     settings = () => {
         requestAnimationFrame(() => this._startRefresh());
-        return `<div id="status_rows" style="padding:4px;"></div>`;
+        return `
+        <div style="padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.1);">
+            ${this.getButtonHtml('btn_solve_captcha', '🔒 Solve Captcha', this._openCaptcha)}
+            <span id="captcha_status" style="font-size:11px;color:#5a3a0a;margin-left:8px;"></span>
+        </div>
+        <div id="status_rows" style="padding:4px;"></div>`;
     };
 
     _startRefresh() {
@@ -18,6 +23,26 @@ class StatusPanel extends ModernUtil {
         this._render();
         this._interval = setInterval(() => this._render(), 3000);
     }
+
+    _openCaptcha = () => {
+        try {
+            if (uw.GPWindowMgr?.Create && uw.Layout?.wnd?.TYPE_CAPTCHA) {
+                uw.GPWindowMgr.Create(uw.Layout.wnd.TYPE_CAPTCHA);
+                uw.$('#captcha_status').text('Janela aberta');
+                return;
+            }
+            const wndKeys = Object.keys(uw.GPWindowMgr?.handlers ?? {});
+            const captchaKey = wndKeys.find(k => k.toLowerCase().includes('captcha'));
+            if (captchaKey) {
+                uw.GPWindowMgr.Create(captchaKey);
+                uw.$('#captcha_status').text('Janela aberta');
+                return;
+            }
+            uw.$('#captcha_status').text('Janela não encontrada');
+        } catch(e) {
+            uw.$('#captcha_status').text('Erro: ' + e.message);
+        }
+    };
 
     _render() {
         try {
@@ -49,6 +74,9 @@ class StatusPanel extends ModernUtil {
             rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this._getTownName(bot.colonizeShipSender.config.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
 
             uw.$('#status_rows').html(rows.join(''));
+            if (window.__multbot_captcha_active) {
+                uw.$('#captcha_status').text('⚠ Captcha ativo!').css('color','#8a2a2a');
+            }
         } catch(e) {
             uw.$('#status_rows').html(`<div style="padding:5px;color:red;">Erro: ${e.message}</div>`);
         }

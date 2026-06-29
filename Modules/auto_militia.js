@@ -64,7 +64,8 @@ class AutoMilitia extends ModernUtil {
     }
 
     _tick() {
-        try {
+        try {if (window.__multbot_captcha_active) return;
+        
             const attacks = this._getIncomingAttacks();
             const now     = Math.floor(Date.now() / 1000);
 
@@ -83,6 +84,7 @@ class AutoMilitia extends ModernUtil {
 
                 // Ativa apenas quando faltam <= 10 segundos para o impacto
                 const arrival   = atk.arrival_at ?? atk.time_of_arrival ?? 0;
+                if (!arrival) continue; // sem timestamp, pula
                 const remaining = arrival - now;
                 if (remaining > 10) continue;
 

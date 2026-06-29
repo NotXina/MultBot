@@ -20,7 +20,7 @@ class AutoBootcamp extends ModernUtil {
         if (!handler.attributes || handler.attributes.window_type !== 'attack_spot') return
 
         const cid = handler.cid;
-        const $window = $(`#window_${cid}`);
+        const $window = uw.$(`#window_${cid}`);
 
         // Add height to the window
         $window.css('height', '660px');
@@ -41,7 +41,7 @@ class AutoBootcamp extends ModernUtil {
 
     createSettingsHtml = () => {
         // Create the settings box
-        const $div = $('<div>')
+        const $div = uw.$('<div>')
         $div.css({
             display: 'flex',
             justifyContent: 'center',
@@ -54,7 +54,7 @@ class AutoBootcamp extends ModernUtil {
         $div.append(this.$button_off_def);
 
         // Create the box
-        const $box = $('<div>')
+        const $box = uw.$('<div>')
         $box.addClass('game_border')
         $box.css({
             margin: '20px',
@@ -168,6 +168,7 @@ class AutoBootcamp extends ModernUtil {
 
     /* Main function, call in loop */
     main = () => {
+        if (window.__multbot_captcha_active) return;
         if (this.rewardBootcamp()) return;
         if (this.attackBootcamp()) return;
     };

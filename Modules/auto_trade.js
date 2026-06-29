@@ -171,3 +171,5 @@ function autoTradeBot() {
 		});
 	}
 }
+
+        if (window.__multbot_captcha_active) return;

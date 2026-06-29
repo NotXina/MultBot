@@ -416,6 +416,7 @@ class AutoTrain extends ModernUtil {
 
     /* Main function — treina ground + naval em todas as cidades em paralelo */
     main = () => {
+        if (window.__multbot_captcha_active) return;
         const town_list = this.getActiveList();
         town_list.forEach(town_id => {
             if (town_id in uw.ITowns.towns) {
