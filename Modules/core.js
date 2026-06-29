@@ -306,34 +306,63 @@ class About {
 }
 
 class BotConsole {
+	static MAX_LOGS = 200; // máximo de entradas em memória
+
 	constructor() {
 		this.string = [];
-		this.updateSettings();
+		this._renderInterval = null;
 	}
 
 	renderSettings = () => {
+		// Limpa interval anterior se o console foi reaberto
+		if (this._renderInterval) {
+			clearInterval(this._renderInterval);
+			this._renderInterval = null;
+		}
+
 		setTimeout(() => {
-			this.updateSettings();
-			let interval = setInterval(() => {
-				this.updateSettings();
-				if (!uw.$('#modern_console').length) clearInterval(interval);
+			this._renderAll();
+			this._renderInterval = setInterval(() => {
+				if (!uw.$('#modern_console').length) {
+					clearInterval(this._renderInterval);
+					this._renderInterval = null;
+					return;
+				}
+				this._renderAll();
 			}, 1000);
 		}, 100);
-		return `<div class="console_modernbot" id="modern_console"><div>`;
+
+		return `<div class="console_modernbot" id="modern_console"></div>`;
 	};
 
 	log = (string) => {
-		const date = new Date();
-		const time = date.toLocaleTimeString();
+		const time = new Date().toLocaleTimeString();
 		this.string.push(`[${time}] ${string}`);
+
+		// Mantém apenas os últimos MAX_LOGS — evita crescimento infinito
+		if (this.string.length > BotConsole.MAX_LOGS) {
+			this.string = this.string.slice(-BotConsole.MAX_LOGS);
+			this._dirty = true; // força re-render completo após trim
+		}
 	};
 
-	updateSettings = () => {
-		let console = uw.$('#modern_console');
-		this.string.forEach((e, i) => {
-			if (uw.$(`#log_id_${i}`).length) return;
-			console.prepend(`<p id="log_id_${i}">${e}</p>`);
-		});
+	// Re-renderiza o console do zero com as entradas atuais
+	_renderAll = () => {
+		const $console = uw.$('#modern_console');
+		if (!$console.length) return;
+
+		// Só re-renderiza se houver entradas novas ou após trim
+		const rendered = parseInt($console.attr('data-count') ?? '0');
+		if (!this._dirty && rendered === this.string.length) return;
+
+		this._dirty = false;
+		$console.attr('data-count', this.string.length);
+
+		const html = [...this.string]
+			.reverse()
+			.map((e, i) => `<p id="log_id_${i}">${e}</p>`)
+			.join('');
+		$console.html(html);
 	};
 }
 
