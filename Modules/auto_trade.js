@@ -1,173 +1,182 @@
+// ══════════════════════════════════════════════════════
+//  MODULE: AutoTrade
+//  Placeholder — funcionalidade de trade manual via autoTradeBot
+//  A classe AutoTrade existe para ser instanciada pelo multbot.js
+// ══════════════════════════════════════════════════════
 class AutoTrade extends ModernUtil {
-	constructor(c, s) {
-		super(c, s);
-	}
+    constructor(c, s) {
+        super(c, s);
+    }
 
-	settings = () => {
-		return `
+    settings = () => {
+        return `
         <div class="game_border" style="margin-bottom: 20px">
-            ${this.getTitleHtml('auto_trade', 'Auto Trade', '', '', this.enable_auto_farming)}
-            <div class="split_content">
-            <div id="trade_types" style="padding: 5px;">
-                ${this.getButtonHtml('farming_lvl_1', '5 min', this.setAutoFarmLevel, 1)}
-                ${this.getButtonHtml('farming_lvl_2', '10 min', this.setAutoFarmLevel, 2)}
-                ${this.getButtonHtml('farming_lvl_3', '20 min', this.setAutoFarmLevel, 3)}
-                ${this.getButtonHtml('farming_lvl_4', '40 min', this.setAutoFarmLevel, 4)}
+            <div class="game_border_top"></div><div class="game_border_bottom"></div>
+            <div class="game_border_left"></div><div class="game_border_right"></div>
+            <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
+            <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
+            <div class="game_header bold">Auto Trade</div>
+            <div style="padding:8px;font-size:11px;color:#5a3a0a;">
+                Use <code>autoTradeBot</code> no console do navegador para acionar manualmente.
             </div>
-            </div>    
-        </div> `;
-	};
-}
+        </div>`;
+    };
 
-function autoTradeBot() {
-	const uw = unsafeWindow;
-	const unit_counnt = {
-		bireme: 2.9,
-		slinger: 28,
-	};
+    /* ── Lógica de trade (chamada manualmente via console) ─────── */
 
-	this.tradeUntilComplete = async (target = 'active', troop = 'bireme') => {
-		console.log(troop);
-		let ammount;
-		if (target === 'active') target = uw.ITowns.getCurrentTown().id;
-		do {
-			console.log('Trade Loop');
-			ammount = await this.trade(target, troop);
-			await sleep(30000);
-		} while (ammount > 0);
-		console.log('Tradeing Done');
-	};
+    tradeUntilComplete = async (target = 'active', troop = 'bireme') => {
+        if (target === 'active') target = uw.ITowns.getCurrentTown().id;
+        this.console.log(`[AutoTrade] Iniciando trade para ${target} (${troop})`);
 
-	this.trade = async function (target = 'active', troop = 'bireme') {
-		if (target === 'active') target = uw.ITowns.getCurrentTown().id;
-		let ammount = await calculateAmmount(target, troop);
-		let current_ammount;
-		do {
-			current_ammount = ammount;
-			for (let town of Object.values(uw.ITowns.towns)) {
-				if (town.id == target) continue;
-				if (uw.stopBot) break;
-				if (ammount <= 0) break;
-				ammount = await sendBalance(town.id, target, troop, ammount);
-			}
-		} while (current_ammount > ammount);
-		return ammount;
-	};
+        let attempts = 0;
+        const MAX_ATTEMPTS = 20;
 
-	/* return all the trades */
-	async function getAllTrades() {
-		return new Promise(function (myResolve, myReject) {
-			uw.gpAjax.ajaxGet('town_overviews', 'trade_overview', {}, !0, e => {
-				myResolve(e.movements);
-			});
-		});
-	}
+        try {
+            let amount;
+            do {
+                if (attempts++ >= MAX_ATTEMPTS) {
+                    this.console.log('[AutoTrade] Limite de tentativas atingido — abortando.');
+                    break;
+                }
+                amount = await this._calculateAmount(target, troop);
+                if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) break;
 
-	/* Return the ammount of toops duable with the current resouces */
-	function getCount(targtet_id, troop) {
-		let target_polis = uw.ITowns.towns[targtet_id];
-		if (!target_polis) return {};
-		let resources = target_polis.resources();
-		let wood = resources.wood / uw.GameData.units[troop].resources.wood;
-		let stone = resources.stone / uw.GameData.units[troop].resources.stone;
-		let iron = resources.iron / uw.GameData.units[troop].resources.iron;
-		let min = Math.min(wood, stone, iron);
-		return min;
-	}
+                amount = await this._trade(target, troop, amount);
+                if (amount > 0) await this._sleep(30000);
+            } while (amount > 0);
 
-	/* Return the id of the polis from the name */
-	function getTradeTarget(html) {
-		const element = document.createElement('div');
-		element.innerHTML = html;
-		let name = element.textContent;
-		for (let town of Object.values(uw.ITowns.towns)) {
-			if (town.name == name) return town.id;
-		}
-	}
+            this.console.log('[AutoTrade] Trade concluído.');
+        } catch (e) {
+            this.console.log(`[AutoTrade] Erro: ${e.message}`);
+            console.error('[AutoTrade] tradeUntilComplete error:', e);
+        }
+    };
 
-	/* Return ammount of troops duable for resouces in a trade */
-	function getCountFromTrade(trade, troop) {
-		let wood = trade.res.wood / uw.GameData.units[troop].resources.wood;
-		let stone = trade.res.stone / uw.GameData.units[troop].resources.stone;
-		let iron = trade.res.iron / uw.GameData.units[troop].resources.iron;
-		let min = Math.min(wood, stone, iron);
-		return min;
-	}
+    _trade = async (target, troop, amount) => {
+        let current;
+        let safetyCounter = 0;
 
-	/* Return ammount of resouces to be send */
-	async function calculateAmmount(targtet_id, troop) {
-		let target_polis = uw.ITowns.towns[targtet_id];
-		if (!target_polis) return {};
-		let current_count = {};
+        do {
+            if (safetyCounter++ > 50) {
+                this.console.log('[AutoTrade] Safety break no loop de trade.');
+                break;
+            }
+            current = amount;
+            for (const town of Object.values(uw.ITowns.towns)) {
+                if (town.id == target) continue;
+                if (amount <= 0) break;
+                try {
+                    amount = await this._sendBalance(town.id, target, troop, amount);
+                } catch (e) {
+                    this.console.log(`[AutoTrade] Erro ao enviar de ${town.getName()}: ${e.message}`);
+                }
+            }
+        } while (current > amount);
 
-		let discount = uw.GeneralModifications.getUnitBuildResourcesModification(targtet_id, uw.GameData.units[troop]);
-		let todo = parseInt(target_polis.getAvailablePopulation() / uw.GameData.units[troop].population) * discount;
-		let in_polis = getCount(targtet_id, troop);
+        return amount;
+    };
 
-		/* If the polis has all the resouces -> no resouces has to be sent */
-		todo -= in_polis;
-		if (todo < 0) return 0;
+    _getAllTrades = () => {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('getAllTrades timeout')), 10000);
+            uw.gpAjax.ajaxGet('town_overviews', 'trade_overview', {}, true, res => {
+                clearTimeout(timeout);
+                if (!res?.movements) return reject(new Error('getAllTrades: resposta inválida'));
+                resolve(res.movements);
+            });
+        });
+    };
 
-		let trade = uw.MM.getCollections().Trade[0].models;
-		let trades = await getAllTrades();
-		for (let trade of trades) {
-			if (getTradeTarget(trade.to.link) != targtet_id) continue;
-			todo -= getCountFromTrade(trade, troop);
-		}
-		return todo;
-	}
+    _getCount = (town_id, troop) => {
+        const town = uw.ITowns.towns[town_id];
+        if (!town) return 0;
+        const res  = town.resources();
+        const cost = uw.GameData.units[troop].resources;
+        return Math.min(
+            res.wood  / cost.wood,
+            res.stone / cost.stone,
+            res.iron  / cost.iron
+        );
+    };
 
-	function getCountWithTrade(targtet_id, troop) {
-		let target_polis = uw.ITowns.towns[targtet_id];
-		if (!target_polis) return {};
-		let resources = target_polis.resources();
-		let wood = resources.wood / uw.GameData.units[troop].resources.wood;
-		let stone = resources.stone / uw.GameData.units[troop].resources.stone;
-		let iron = resources.iron / uw.GameData.units[troop].resources.iron;
-		let min_resouces = Math.min(wood, stone, iron); // min ammount
-		let trade = target_polis.getAvailableTradeCapacity();
-		let max_trade = trade / (uw.GameData.units[troop].resources.wood + uw.GameData.units[troop].resources.stone + uw.GameData.units[troop].resources.iron); // max tradable
+    _getTradeTarget = html => {
+        const el = document.createElement('div');
+        el.innerHTML = html;
+        const name = el.textContent;
+        return Object.values(uw.ITowns.towns).find(t => t.name === name)?.id;
+    };
 
-		if (max_trade < min_resouces) return max_trade;
-		else return min_resouces;
-	}
+    _calculateAmount = async (target_id, troop) => {
+        const target = uw.ITowns.towns[target_id];
+        if (!target) return 0;
 
-	/* Set await and add promise */
-	function sendTradeRequest(from_id, target_id, troop, count) {
-		let data = {
-			id: target_id,
-			wood: uw.GameData.units[troop].resources.wood * count,
-			stone: uw.GameData.units[troop].resources.stone * count,
-			iron: uw.GameData.units[troop].resources.iron * count,
-			town_id: from_id,
-			nl_init: true,
-		};
+        const discount = uw.GeneralModifications.getUnitBuildResourcesModification(target_id, uw.GameData.units[troop]);
+        let todo = parseInt(target.getAvailablePopulation() / uw.GameData.units[troop].population) * discount;
+        todo -= this._getCount(target_id, troop);
+        if (todo <= 0) return 0;
 
-		return new Promise(function (myResolve, myReject) {
-			uw.gpAjax.ajaxPost('town_info', 'trade', data, !0, () => {
-				setTimeout(() => myResolve(), 500);
-			});
-		});
-	}
+        try {
+            const trades = await this._getAllTrades();
+            for (const trade of trades) {
+                if (this._getTradeTarget(trade.to.link) != target_id) continue;
+                const cost = uw.GameData.units[troop].resources;
+                todo -= Math.min(
+                    trade.res.wood  / cost.wood,
+                    trade.res.stone / cost.stone,
+                    trade.res.iron  / cost.iron
+                );
+            }
+        } catch (e) {
+            this.console.log(`[AutoTrade] Não foi possível obter trades em trânsito: ${e.message}`);
+        }
 
-	/* Send resouces from polis to target, balanced for that troop, return updated count*/
-	async function sendBalance(polis_id, target_id, troop, count) {
-		let troops_ammount = unit_counnt[troop];
-		if (!troops_ammount) return 0;
-		if (polis_id == target_id) return count;
-		let sender_polis = uw.ITowns.towns[polis_id];
-		let duable = getCount(polis_id, troop);
-		if (duable < troops_ammount) return count;
-		if (sender_polis.getAvailableTradeCapacity() < 500) return count;
-		let duable_with_trade = getCountWithTrade(polis_id, troop);
-		if (duable_with_trade < troops_ammount) return count;
-		await sendTradeRequest(polis_id, target_id, troop, troops_ammount);
-		return count - troops_ammount < 0 ? 0 : count - troops_ammount;
-	}
+        return Math.max(0, todo);
+    };
 
-	function sleep(time) {
-		return new Promise(function (myResolve, myReject) {
-			setTimeout(() => myResolve(), time);
-		});
-	}
+    _getCountWithTrade = (town_id, troop) => {
+        const town = uw.ITowns.towns[town_id];
+        if (!town) return 0;
+        const res  = town.resources();
+        const cost = uw.GameData.units[troop].resources;
+        const byRes   = Math.min(res.wood / cost.wood, res.stone / cost.stone, res.iron / cost.iron);
+        const byTrade = town.getAvailableTradeCapacity() / (cost.wood + cost.stone + cost.iron);
+        return Math.min(byRes, byTrade);
+    };
+
+    _sendTradeRequest = (from_id, target_id, troop, count) => {
+        const cost = uw.GameData.units[troop].resources;
+        const data = {
+            id:       target_id,
+            wood:     cost.wood  * count,
+            stone:    cost.stone * count,
+            iron:     cost.iron  * count,
+            town_id:  from_id,
+            nl_init:  true,
+        };
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('sendTradeRequest timeout')), 15000);
+            uw.gpAjax.ajaxPost('town_info', 'trade', data, true, () => {
+                clearTimeout(timeout);
+                setTimeout(resolve, 500);
+            });
+        });
+    };
+
+    _sendBalance = async (from_id, target_id, troop, count) => {
+        const UNIT_AMOUNTS = { bireme: 2.9, slinger: 28 };
+        const batch = UNIT_AMOUNTS[troop];
+        if (!batch) return 0;
+        if (from_id == target_id) return count;
+
+        const sender = uw.ITowns.towns[from_id];
+        if (!sender) return count;
+        if (this._getCount(from_id, troop) < batch) return count;
+        if (sender.getAvailableTradeCapacity() < 500) return count;
+        if (this._getCountWithTrade(from_id, troop) < batch) return count;
+
+        await this._sendTradeRequest(from_id, target_id, troop, batch);
+        return Math.max(0, count - batch);
+    };
+
+    _sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 }
