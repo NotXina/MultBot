@@ -95,7 +95,7 @@ class StatusPanel extends ModernUtil {
             const cssActive   = !!bot.colonizeShipSender?._running;
 
             rows.push(this._row('🌾 Fazenda',           farmActive,  farmActive  ? 'Ativo'               : 'Parado',             'autoFarm',           'toggle'));
-            rows.push(this._row('🏡 Aldeias Rurais',    ruralActive, ruralActive ? `Nível ${bot.autoRuralLevel.rural_level}` : 'Parado', 'autoRuralLevel', 'toggle'));
+            rows.push(this._row('🏡 Aldeias Rurais',    ruralActive, ruralActive ? `Nível ${bot.autoRuralLevel?.rural_level ?? '?'}` : 'Parado', 'autoRuralLevel', 'toggle'));
             rows.push(this._row('🏗 Construção',        buildCount > 0, buildCount > 0 ? `${buildCount} cidade(s)` : 'Nenhuma cidade', null, null));
             rows.push(this._row('⚔ Recrutamento',      trainCount > 0, trainCount > 0 ? `${trainCount} cidade(s)` : 'Nenhuma cidade', null, null));
             rows.push(this._row('🎉 Festividades',      partyActive, partyActive ? celStr : 'Parado',     'autoParty',          'toggle'));
@@ -106,7 +106,7 @@ class StatusPanel extends ModernUtil {
             const militiaActive = !!bot.autoMilitia?._active;
             rows.push(this._row('⚔️ Milícia Auto', militiaActive, militiaActive ? 'Ativo' : 'Parado', 'autoMilitia', militiaActive ? 'stop' : 'start'));
 
-            rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this._getTownName(bot.colonizeShipSender.config.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
+            rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this._getTownName(bot.colonizeShipSender?.config?.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
 
             uw.$('#status_rows').html(rows.join(''));
         } catch(e) {
