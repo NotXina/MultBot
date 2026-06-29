@@ -28,6 +28,12 @@ class AutoTrain extends ModernUtil {
         this.shiftHeld = false;
 
         this.interval = setInterval(this.main.bind(this), this.getRandomDelay(1000, 10000));
+
+        // Observer registrado uma única vez — evita duplicatas ao reabrir a aba Train
+        uw.$.Observer(uw.GameEvents.town.town_switch).subscribe('autoTrain_townSwitch', () => {
+            this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
+            this.updatePolisInSettings(uw.ITowns.getCurrentTown().id);
+        });
     }
 
     getRandomDelay(min, max) {
@@ -45,11 +51,6 @@ class AutoTrain extends ModernUtil {
             this.updatePolisInSettings(uw.ITowns.getCurrentTown().id);
             this.handlePercentual(this.percentual);
             this.handleSpell(this.spell);
-
-            uw.$.Observer(uw.GameEvents.town.town_switch).subscribe(() => {
-                this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
-                this.updatePolisInSettings(uw.ITowns.getCurrentTown().id);
-            });
 
             uw.$('#troops_lvl_buttons').on('mousedown', e => {
                 this.shiftHeld = e.shiftKey;
