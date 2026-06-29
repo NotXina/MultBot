@@ -93,6 +93,7 @@ class AutoHide extends ModernUtil {
     }
 
     main = () => {
+        if (window.__multbot_captcha_active) return;
         if (this.activePolis == 0) return;
         const town = uw.ITowns.towns[this.activePolis];
         const { iron } = town.resources()
@@ -115,4 +116,3 @@ class AutoHide extends ModernUtil {
     }
 
 }
-        if (window.__multbot_captcha_active) return;

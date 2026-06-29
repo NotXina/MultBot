@@ -64,8 +64,8 @@ class AutoMilitia extends ModernUtil {
     }
 
     _tick() {
-        try {if (window.__multbot_captcha_active) return;
-        
+        if (window.__multbot_captcha_active) return;
+        try {
             const attacks = this._getIncomingAttacks();
             const now     = Math.floor(Date.now() / 1000);
 

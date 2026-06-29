@@ -20,6 +20,7 @@ class AutoTrade extends ModernUtil {
 }
 
 function autoTradeBot() {
+    if (window.__multbot_captcha_active) return;
 	const uw = unsafeWindow;
 	const unit_counnt = {
 		bireme: 2.9,
@@ -172,4 +173,3 @@ function autoTradeBot() {
 	}
 }
 
-        if (window.__multbot_captcha_active) return;
