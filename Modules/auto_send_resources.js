@@ -123,10 +123,8 @@ class AutoSendResources extends ModernUtil {
             // 1. Pop disponível < 200
             if (town.getAvailablePopulation() >= 200) return false;
 
-            // 2. AutoBuild done — cidade não está na lista do AutoBuild
-            //    (foi removida porque atingiu todos os níveis alvo)
-            const autoBuildTowns = uw.modernBot?.autoBuild?.towns_buildings ?? {};
-            if (townId in autoBuildTowns) return false;
+            // 2. AutoBuild done — fila de construção vazia
+            if (town.buildingOrders().length > 0) return false;
 
             // 3. Mercado ativo com capacidade > 500
             if (!buildings.market || buildings.market < 1) return false;
