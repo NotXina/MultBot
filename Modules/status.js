@@ -5,15 +5,21 @@
 class StatusPanel extends ModernUtil {
     constructor(c, s) {
         super(c, s);
-        this._interval = null;
+        this._interval        = null;
+        this._refreshInterval = null;
     }
 
     settings = () => {
         requestAnimationFrame(() => this._startRefresh());
         return `
-        <div style="padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.1);">
-            ${this.getButtonHtml('btn_solve_captcha', '🔒 Solve Captcha', this._openCaptcha)}
-            <span id="captcha_status" style="font-size:11px;color:#5a3a0a;margin-left:8px;"></span>
+        <div style="padding:6px 10px;border-bottom:1px solid rgba(0,0,0,0.12);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-weight:bold;font-size:12px;">🔄 Auto Refresh:</span>
+            ${this.getButtonHtml('btn_refresh_off',  'Off',    this._setRefresh, 0)}
+            ${this.getButtonHtml('btn_refresh_5',    '5 min',  this._setRefresh, 5)}
+            ${this.getButtonHtml('btn_refresh_15',   '15 min', this._setRefresh, 15)}
+            ${this.getButtonHtml('btn_refresh_30',   '30 min', this._setRefresh, 30)}
+            ${this.getButtonHtml('btn_refresh_60',   '1h',     this._setRefresh, 60)}
+            <span id="refresh_status" style="font-size:11px;color:#5a3a0a;margin-left:4px;"></span>
         </div>
         <div id="status_rows" style="padding:4px;"></div>`;
     };
@@ -22,34 +28,55 @@ class StatusPanel extends ModernUtil {
         if (this._interval) clearInterval(this._interval);
         this._render();
         this._interval = setInterval(() => this._render(), 3000);
-        // Retoma o auto refresh salvo
+
+        // Retoma o auto refresh salvo e atualiza visual dos botões
         const saved = this.storage.load('refresh_minutes', 0);
-        if (saved > 0) setTimeout(() => this._setRefresh(saved), 500);
+        setTimeout(() => this._setRefresh(saved, true), 500);
     }
 
-    _openCaptcha = () => {
-        try {
-            // Tenta recarregar a página — o captcha aparece no reload
-            // mas primeiro salva que estava ativo para retomar depois
-            window.__multbot_captcha_active = true;
-            
-            // Tenta forçar o jogo a mostrar o captcha via requisição
-            // O Grepolis mostra o captcha automaticamente quando o servidor pede
-            // A melhor solução é fazer uma ação qualquer e o servidor vai mostrar
-            uw.gpAjax.ajaxPost('frontend_bridge', 'execute', {
-                model_url: 'BuildingOrder', action_name: 'buildUp',
-                captcha: null, arguments: { building_id: 'main' }, town_id: uw.Game.townId
-            }, false, res => {
-                if (res?.captcha_required) {
-                    uw.$('#captcha_status').text('Aguarde — o jogo deve mostrar o captcha...');
-                } else {
-                    uw.$('#captcha_status').text('Captcha não apareceu. Tente recarregar a página (F5).');
-                }
-            });
-            uw.$('#captcha_status').text('Tentando acionar captcha...');
-        } catch(e) {
-            uw.$('#captcha_status').text('Erro: ' + e.message);
+    _setRefresh = (minutes, silent = false) => {
+        if (this._refreshInterval) {
+            clearInterval(this._refreshInterval);
+            this._refreshInterval = null;
         }
+
+        this.storage.save('refresh_minutes', minutes);
+
+        // Atualiza visual dos botões de seleção
+        ['btn_refresh_off', 'btn_refresh_5', 'btn_refresh_15', 'btn_refresh_30', 'btn_refresh_60'].forEach(id => {
+            uw.$(`#${id}`).removeClass('disabled').css('filter', '');
+        });
+
+        const activeMap = { 0: 'btn_refresh_off', 5: 'btn_refresh_5', 15: 'btn_refresh_15', 30: 'btn_refresh_30', 60: 'btn_refresh_60' };
+        if (activeMap[minutes]) {
+            uw.$(`#${activeMap[minutes]}`).css('filter', 'brightness(100%) saturate(186%) hue-rotate(241deg)');
+        }
+
+        if (minutes === 0) {
+            uw.$('#refresh_status').text('desativado');
+            return;
+        }
+
+        const ms = minutes * 60 * 1000;
+        let nextReload = Date.now() + ms;
+
+        const tick = () => {
+            const remaining = Math.max(0, Math.round((nextReload - Date.now()) / 1000));
+            const m = Math.floor(remaining / 60);
+            const s = remaining % 60;
+            uw.$('#refresh_status').text(`próximo reload em ${m}:${String(s).padStart(2,'0')}`);
+
+            if (remaining <= 0) {
+                uw.$('#refresh_status').text('recarregando...');
+                clearInterval(this._refreshInterval);
+                location.reload();
+            }
+        };
+
+        tick();
+        this._refreshInterval = setInterval(tick, 1000);
+
+        if (!silent) this.console.log(`[Status] Auto Refresh: ${minutes} min`);
     };
 
     _render() {
@@ -82,9 +109,6 @@ class StatusPanel extends ModernUtil {
             rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this._getTownName(bot.colonizeShipSender.config.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
 
             uw.$('#status_rows').html(rows.join(''));
-            if (window.__multbot_captcha_active) {
-                uw.$('#captcha_status').text('⚠ Captcha ativo!').css('color','#8a2a2a');
-            }
         } catch(e) {
             uw.$('#status_rows').html(`<div style="padding:5px;color:red;">Erro: ${e.message}</div>`);
         }
