@@ -22,23 +22,31 @@ class StatusPanel extends ModernUtil {
         if (this._interval) clearInterval(this._interval);
         this._render();
         this._interval = setInterval(() => this._render(), 3000);
+        // Retoma o auto refresh salvo
+        const saved = this.storage.load('refresh_minutes', 0);
+        if (saved > 0) setTimeout(() => this._setRefresh(saved), 500);
     }
 
     _openCaptcha = () => {
         try {
-            if (uw.GPWindowMgr?.Create && uw.Layout?.wnd?.TYPE_CAPTCHA) {
-                uw.GPWindowMgr.Create(uw.Layout.wnd.TYPE_CAPTCHA);
-                uw.$('#captcha_status').text('Janela aberta');
-                return;
-            }
-            const wndKeys = Object.keys(uw.GPWindowMgr?.handlers ?? {});
-            const captchaKey = wndKeys.find(k => k.toLowerCase().includes('captcha'));
-            if (captchaKey) {
-                uw.GPWindowMgr.Create(captchaKey);
-                uw.$('#captcha_status').text('Janela aberta');
-                return;
-            }
-            uw.$('#captcha_status').text('Janela não encontrada');
+            // Tenta recarregar a página — o captcha aparece no reload
+            // mas primeiro salva que estava ativo para retomar depois
+            window.__multbot_captcha_active = true;
+            
+            // Tenta forçar o jogo a mostrar o captcha via requisição
+            // O Grepolis mostra o captcha automaticamente quando o servidor pede
+            // A melhor solução é fazer uma ação qualquer e o servidor vai mostrar
+            uw.gpAjax.ajaxPost('frontend_bridge', 'execute', {
+                model_url: 'BuildingOrder', action_name: 'buildUp',
+                captcha: null, arguments: { building_id: 'main' }, town_id: uw.Game.townId
+            }, false, res => {
+                if (res?.captcha_required) {
+                    uw.$('#captcha_status').text('Aguarde — o jogo deve mostrar o captcha...');
+                } else {
+                    uw.$('#captcha_status').text('Captcha não apareceu. Tente recarregar a página (F5).');
+                }
+            });
+            uw.$('#captcha_status').text('Tentando acionar captcha...');
         } catch(e) {
             uw.$('#captcha_status').text('Erro: ' + e.message);
         }
