@@ -609,6 +609,7 @@ class ModernStorage extends Compressor {
 	constructor() {
 		super();
 		this.check_done = 0;
+		this._cache = null; // cache em memória — evita parse JSON a cada save/load
 
 		/* Add event to add the button in the notes */
 		uw.$.Observer(uw.GameEvents.window.open).subscribe((e, i) => {
@@ -624,42 +625,68 @@ class ModernStorage extends Compressor {
 		});
 	}
 
+	/* Retorna o cache — lê do localStorage apenas na primeira vez */
 	getStorage = () => {
+		if (this._cache !== null) return this._cache;
+
 		const worldId = uw.Game.world_id;
 		const savedValue = localStorage.getItem(`${worldId}_modernBot`);
-		let storage = {};
+		this._cache = {};
 
-		if (savedValue !== null && savedValue !== undefined) {
+		if (savedValue) {
 			try {
-				storage = JSON.parse(savedValue);
+				this._cache = JSON.parse(savedValue);
 			} catch (error) {
-				console.error(`Error parsing localStorage data: ${error}`);
+				console.error(`[ModernStorage] Erro ao ler localStorage: ${error}`);
 			}
 		}
 
-		return storage;
+		return this._cache;
 	};
 
+	/* Persiste o cache no localStorage (write-through) */
 	saveStorage = storage => {
 		try {
 			const worldId = uw.Game.world_id;
+			this._cache = storage;
 			localStorage.setItem(`${worldId}_modernBot`, JSON.stringify(storage));
 			this.lastUpdateTime = Date.now();
 			return true;
 		} catch (error) {
-			console.error(`Error saving data to localStorage: ${error}`);
+			if (error.name === 'QuotaExceededError') {
+				console.error('[ModernStorage] localStorage cheio — limpando entradas antigas...');
+				this._evict();
+				return false;
+			}
+			console.error(`[ModernStorage] Erro ao salvar: ${error}`);
 			return false;
 		}
 	};
 
-	save = (key, content) => {
+	/* Remove as 10 chaves mais antigas para liberar espaço (fallback de QuotaExceeded) */
+	_evict = () => {
 		const storage = this.getStorage();
+		const keys = Object.keys(storage).slice(0, 10);
+		keys.forEach(k => delete storage[k]);
+		try {
+			const worldId = uw.Game.world_id;
+			localStorage.setItem(`${worldId}_modernBot`, JSON.stringify(storage));
+		} catch(e) {}
+	};
+
+	/* Invalida o cache — força releitura do localStorage na próxima chamada */
+	invalidateCache = () => {
+		this._cache = null;
+	};
+
+	save = (key, content) => {
+		const storage = this.getStorage(); // retorna cache (O(1))
 		storage[key] = content;
-		return this.saveStorage(storage);
+		return this.saveStorage(storage);  // persiste e atualiza cache
 	};
 
 	load = (key, defaultValue = null) => {
-		const storage = this.getStorage();
+		const storage = this.getStorage(); // retorna cache (O(1))
 		const savedValue = storage[key];
 		return savedValue !== undefined ? savedValue : defaultValue;
 	};
