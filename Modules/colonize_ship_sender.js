@@ -144,7 +144,6 @@ class ColonizeShipSender extends ModernUtil {
     }
 
     _tick = async () => {
-        window.__gp_townId_lock = false; // garante que o lock não está travado
         this._log('Verificando colonize_ships em todas as cidades...', 'info');
         try {
             const townIds = Object.keys(uw.ITowns.towns);
@@ -204,26 +203,17 @@ class ColonizeShipSender extends ModernUtil {
         }));
     }
 
-    // Lock global compartilhado — evita conflito de Game.townId entre módulos
+    // Define Game.townId temporariamente para o envio
     async _withTownId(townId, fn) {
-        // Timeout de segurança: se o lock ficar preso por mais de 3s, força liberação
-        let waited = 0;
-        while (window.__gp_townId_lock) {
-            await new Promise(r => setTimeout(r, 50));
-            waited += 50;
-            if (waited > 3000) { window.__gp_townId_lock = false; break; }
-        }
-        window.__gp_townId_lock = true;
         const orig    = uw.Game.townId;
         const origStr = uw.Game.town_id;
+        uw.Game.townId  = parseInt(townId, 10);
+        uw.Game.town_id = parseInt(townId, 10);
         try {
-            uw.Game.townId  = parseInt(townId, 10);
-            uw.Game.town_id = parseInt(townId, 10);
             return await fn();
         } finally {
             uw.Game.townId  = orig;
             uw.Game.town_id = origStr;
-            window.__gp_townId_lock = false;
         }
     }
 
