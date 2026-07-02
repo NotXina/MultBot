@@ -316,12 +316,10 @@ class AutoTrain extends ModernUtil {
         return uw.ITowns.getTown(town_id).getUnitOrdersCollection().where({ kind: type }).length;
     };
 
-    /* Favor disponível na cidade (requer deus ativo) */
+    /* Favor disponível na cidade — está em town.resources().favor */
     _getFavor = (town_id) => {
         try {
-            const model = uw.MM.getOnlyCollectionByName('Town')?.get(town_id)
-                       ?? uw.ITowns.towns[town_id];
-            return model?.getFavor?.() ?? model?.attributes?.favor ?? 0;
+            return uw.ITowns.towns[town_id]?.resources()?.favor ?? 0;
         } catch(e) { return 0; }
     };
 
