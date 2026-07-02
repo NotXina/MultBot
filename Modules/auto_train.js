@@ -304,7 +304,7 @@ class AutoTrain extends ModernUtil {
         const town_id = uw.ITowns.getCurrentTown().getId();
         if (this.city_troops[town_id]) {
             delete this.city_troops[town_id];
-            [...this.NAVAL_ORDER, ...this.GROUND_ORDER].forEach(troop => {
+            [...this.GROUND_ORDER, ...this.NAVAL_ORDER, ...this.MYTHICAL_GROUND, ...this.MYTHICAL_NAVAL].forEach(troop => {
                 uw.$(`#troops_settings_${town_id} #troop_lvl_${troop}`).css('color', '').text('-');
             });
             uw.$('#auto_train_title').css('filter', '');
