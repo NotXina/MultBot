@@ -71,25 +71,25 @@ class AutoSendResources extends ModernUtil {
         const townIds = Object.keys(uw.ITowns.towns);
         if (townIds.length < 2) return;
 
-        // Encontra a cidade com menor % de storage (receptora)
         const target = this._findPoorestTown(townIds);
         if (!target) return;
 
-        const targetTown = uw.ITowns.towns[target];
-        const targetName = targetTown.getName();
+        const targetName = uw.ITowns.towns[target].getName();
         this.console.log(`[AutoRecursos] Destino: ${targetName}`);
 
-        let totalSent = 0;
-
-        for (const fromId of townIds) {
-            if (fromId === target) continue;
-            if (!this._isEligibleSender(fromId)) continue;
-
-            const sent = await this._sendResources(fromId, target);
-            if (sent) totalSent++;
-            if (sent) await this.sleep(1000 + Math.random() * 1000);
+        const senders = townIds.filter(id => id !== target && this._isEligibleSender(id));
+        if (!senders.length) {
+            this.console.log('[AutoRecursos] Nenhuma cidade elegível para envio.');
+            uw.$('#asr_log').text('Nenhuma cidade elegível para envio.');
+            return;
         }
 
+        // Envia em paralelo — sem await sequencial
+        const results = await Promise.allSettled(
+            senders.map(fromId => this._sendResources(fromId, target))
+        );
+
+        const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
         const msg = totalSent > 0
             ? `✓ Recursos enviados de ${totalSent} cidade(s) → ${targetName}`
             : 'Nenhuma cidade elegível para envio.';
@@ -149,13 +149,11 @@ class AutoSendResources extends ModernUtil {
 
                 if (capacity < 100) { resolve(false); return; }
 
-                // Excedente = o que passa de 50% do storage
                 const threshold = fromRes.storage * 0.5;
                 const excessW = Math.max(0, Math.floor(fromRes.wood  - threshold));
                 const excessS = Math.max(0, Math.floor(fromRes.stone - threshold));
                 const excessI = Math.max(0, Math.floor(fromRes.iron  - threshold));
 
-                // Limita pela capacidade de troca (balanceado)
                 const perRes = Math.floor(capacity / 3);
                 const wood   = Math.min(perRes, excessW);
                 const stone  = Math.min(perRes, excessS);
@@ -166,20 +164,19 @@ class AutoSendResources extends ModernUtil {
 
                 const fromName = from.getName();
                 const toName   = uw.ITowns.towns[toId]?.getName?.() ?? '#' + toId;
-
-                const data = {
-                    id:      parseInt(toId),
-                    wood,
-                    stone,
-                    iron,
-                    town_id: parseInt(fromId),
-                    nl_init: true
-                };
+                const data = { id: parseInt(toId), wood, stone, iron, town_id: parseInt(fromId), nl_init: true };
 
                 this.console.log(`[AutoRecursos] ${fromName} → ${toName}: ${wood}🪵 ${stone}🪨 ${iron}⚙`);
 
+                // Timeout de 15s — evita Promise pendente para sempre
+                const timer = setTimeout(() => {
+                    this.console.log(`[AutoRecursos] ✗ ${fromName}: timeout`);
+                    resolve(false);
+                }, 15000);
+
                 uw.gpAjax.ajaxPost('town_info', 'trade', data, true,
                     res => {
+                        clearTimeout(timer);
                         if (res && !res.error) {
                             resolve(true);
                         } else {
@@ -187,7 +184,7 @@ class AutoSendResources extends ModernUtil {
                             resolve(false);
                         }
                     },
-                    () => resolve(false)
+                    () => { clearTimeout(timer); resolve(false); }
                 );
             } catch(e) {
                 this.console.log('[AutoRecursos] Exceção: ' + e?.message);
