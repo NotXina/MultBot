@@ -329,6 +329,24 @@ class AutoTrain extends ModernUtil {
         return this.MYTHICAL_GROUND.includes(troop) || this.MYTHICAL_NAVAL.includes(troop);
     };
 
+    /* Conta tropas desta cidade em suporte em outras cidades */
+    _unitsInSupport = (troop, town_id) => {
+        try {
+            const movements = uw.MM.getModels().MovementsUnits;
+            let total = 0;
+            for (const mv of Object.values(movements)) {
+                const a = mv.attributes;
+                if (a.type !== 'support') continue;
+                if (String(a.home_town_id) !== String(town_id)) continue;
+                // Tropas em suporte estão em units() da cidade destino
+                const destTown = uw.ITowns.towns[a.target_town_id];
+                if (!destTown) continue;
+                total += destTown.units()[troop] ?? 0;
+            }
+            return total;
+        } catch(e) { return 0; }
+    };
+
     getTroopCount = (troop, town_id) => {
         const town = uw.ITowns.getTown(town_id);
         if (!this.city_troops[town_id]?.[troop]) return 0;
@@ -338,10 +356,12 @@ class AutoTrain extends ModernUtil {
         for (let order of town.getUnitOrdersCollection().models) {
             if (order.attributes.unit_type === troop) count -= order.attributes.count;
         }
-        const townUnits  = town.units();
-        const outerUnits = town.unitsOuter();
+        const townUnits   = town.units();
+        const outerUnits  = town.unitsOuter();
+        const supportUnits = this._unitsInSupport(troop, town_id);
         if (townUnits[troop])  count -= townUnits[troop];
         if (outerUnits[troop]) count -= outerUnits[troop];
+        count -= supportUnits;
         if (count <= 0) return 0; // meta já atingida
 
         const resources = town.resources();
