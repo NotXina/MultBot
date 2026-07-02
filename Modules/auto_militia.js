@@ -8,9 +8,9 @@ class AutoMilitia extends ModernUtil {
     constructor(c, s) {
         super(c, s);
 
-        this._active        = false;
-        this._intervalId    = null;
-        this._processed     = new Set(); // cidades já processadas neste ciclo de ataques
+        this._active      = false;
+        this._intervalId  = null;
+        this._scheduled   = new Map(); // town_id → setTimeout id (ataques agendados)
 
         if (this.storage.load('militia_active', false)) {
             setTimeout(() => this.start(), 2000);
@@ -53,7 +53,9 @@ class AutoMilitia extends ModernUtil {
         this._active = false;
         this.storage.save('militia_active', false);
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
-        this._processed.clear();
+        // Cancela todos os timeouts agendados
+        for (const tid of this._scheduled.values()) clearTimeout(tid);
+        this._scheduled.clear();
         this._updateButtons();
         this.console.log('[AutoMilícia] Parado.');
     }
@@ -66,29 +68,48 @@ class AutoMilitia extends ModernUtil {
     _tick() {
         try {
             const attacks = this._getIncomingAttacks();
-            const now     = Math.floor(Date.now() / 1000);
+            const nowMs   = Date.now();
 
-            // Limpa cidades processadas que já não têm ataques
+            // Cancela timeouts de ataques que sumiram (retirados ou cancelados)
             const attackedTowns = new Set(attacks.map(a => String(a.target_town_id)));
-            for (const tid of this._processed) {
-                if (!attackedTowns.has(tid)) this._processed.delete(tid);
+            for (const [tid, timeoutId] of this._scheduled) {
+                if (!attackedTowns.has(tid)) {
+                    clearTimeout(timeoutId);
+                    this._scheduled.delete(tid);
+                }
             }
 
-            if (attacks.length === 0) return;
+            if (!attacks.length) return;
 
             for (const atk of attacks) {
-                const townId    = String(atk.target_town_id);
-                if (this._processed.has(townId)) continue;
-                if (!uw.ITowns?.towns?.[townId]) continue;
+                const townId = String(atk.target_town_id);
+                if (this._scheduled.has(townId)) continue;  // já agendado
+                if (!uw.ITowns?.towns?.[townId]) continue;  // não é nossa cidade
 
-                // Ativa apenas quando faltam <= 10 segundos para o impacto
-                const arrival   = atk.arrival_at ?? atk.time_of_arrival ?? 0;
-                if (!arrival) continue; // sem timestamp, pula
-                const remaining = arrival - now;
-                if (remaining > 10) continue;
+                const arrival = atk.arrival_at ?? atk.time_of_arrival ?? 0;
+                if (!arrival) continue;
 
-                this._processed.add(townId);
-                this._activateMilitia(townId);
+                const arrivalMs  = arrival * 1000;
+                const triggerMs  = arrivalMs - 10000; // 10s antes do impacto
+                const delayMs    = triggerMs - nowMs;
+
+                if (delayMs < 0) {
+                    // Ataque já passou ou está no impacto agora — ativa imediatamente
+                    this._scheduled.set(townId, -1);
+                    this._activateMilitia(townId);
+                } else {
+                    // Agenda para exatamente 10s antes do impacto
+                    const townName = uw.ITowns.towns[townId]?.getName?.() ?? '#' + townId;
+                    const mins = Math.floor(delayMs / 60000);
+                    const secs = Math.floor((delayMs % 60000) / 1000);
+                    this.console.log(`[AutoMilícia] ${townName}: milícia agendada em ${mins}m${secs}s`);
+
+                    const tid2 = setTimeout(() => {
+                        this._scheduled.delete(townId);
+                        this._activateMilitia(townId);
+                    }, delayMs);
+                    this._scheduled.set(townId, tid2);
+                }
             }
         } catch(e) {
             this.console.log('[AutoMilícia] Erro: ' + e?.message);
