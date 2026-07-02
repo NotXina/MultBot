@@ -178,17 +178,27 @@ class AutoTrain extends ModernUtil {
             return false;
         };
 
+        const isMythical = this._isMythical(troop => troop);
+
         const getTroopHtml = (troop, bg) => {
-            let gray = isGray(troop);
+            const mythical = this._isMythical(troop);
+            const gray     = isGray(troop);
+
+            // Míticas usam a classe nativa do jogo (unit_icon50x50) que tem o spritesheet correto
+            const iconStyle = mythical
+                ? `position:absolute;top:4px;left:4px;width:50px;height:50px;background-position:-${bg[0]}px -${bg[1]}px`
+                : `background-position: -${bg[0]}px -${bg[1]}px`;
+            const iconClass = mythical ? `unit_icon50x50 ${troop}` : 'item_icon auto_trade_troop';
+
             if (gray) {
                 return `
                 <div class="auto_build_box">
-                    <div class="item_icon auto_trade_troop" style="background-position: -${bg[0]}px -${bg[1]}px; filter: grayscale(1);"></div>
+                    <div class="${iconClass}" style="${iconStyle}; filter: grayscale(1);"></div>
                 </div>`;
             }
             return `
                 <div class="auto_build_box">
-                <div class="item_icon auto_trade_troop" onclick="window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 0)" style="background-position: -${bg[0]}px -${bg[1]}px; cursor: pointer">
+                <div class="${iconClass}" onclick="window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 0)" style="${iconStyle}; cursor: pointer">
                     <div class="auto_build_up_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 1)"></div>
                     <div class="auto_build_down_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', -1)"></div>
                     <p style="color: red" id="troop_lvl_${troop}" class="auto_build_lvl">0</p>
