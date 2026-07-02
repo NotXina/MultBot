@@ -1,22 +1,41 @@
 class AutoTrain extends ModernUtil {
     POWER_LIST = ['call_of_the_ocean', 'spartan_training', 'fertility_improvement'];
-    GROUND_ORDER = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot'];
-    NAVAL_ORDER = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship'];
+    GROUND_ORDER  = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot'];
+    NAVAL_ORDER   = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship'];
+    MYTHICAL_GROUND = ['minotaur', 'manticore', 'zyklop', 'harpy', 'medusa', 'centaur', 'cerberus', 'fury', 'griffin', 'calydonian_boar', 'satyr', 'spartoi', 'ladon', 'pegasus'];
+    MYTHICAL_NAVAL  = ['sea_monster', 'siren'];
     SHIFT_LEVELS = {
-        catapult: [5, 5],
-        sword: [200, 50],
-        archer: [200, 50],
-        hoplite: [200, 50],
-        slinger: [200, 50],
-        rider: [100, 25],
-        chariot: [100, 25],
-        small_transporter: [10, 5],
-        bireme: [50, 10],
-        trireme: [50, 10],
-        attack_ship: [50, 10],
-        big_transporter: [50, 10],
-        demolition_ship: [50, 10],
-        colonize_ship: [5, 1],
+        catapult:           [5,   5],
+        sword:              [200, 50],
+        archer:             [200, 50],
+        hoplite:            [200, 50],
+        slinger:            [200, 50],
+        rider:              [100, 25],
+        chariot:            [100, 25],
+        small_transporter:  [10,  5],
+        bireme:             [50,  10],
+        trireme:            [50,  10],
+        attack_ship:        [50,  10],
+        big_transporter:    [50,  10],
+        demolition_ship:    [50,  10],
+        colonize_ship:      [5,   1],
+        // Míticas
+        minotaur:           [5,   1],
+        manticore:          [5,   1],
+        zyklop:             [5,   1],
+        harpy:              [10,  2],
+        medusa:             [10,  2],
+        centaur:            [10,  2],
+        cerberus:           [5,   1],
+        fury:               [5,   1],
+        griffin:            [5,   1],
+        calydonian_boar:    [10,  2],
+        satyr:              [10,  2],
+        spartoi:            [20,  5],
+        ladon:              [2,   1],
+        pegasus:            [10,  2],
+        sea_monster:        [2,   1],
+        siren:              [10,  2],
     };
 
     constructor(c, s) {
@@ -150,6 +169,8 @@ class AutoTrain extends ModernUtil {
         let buildings = town.buildings().attributes;
 
         const isGray = troop => {
+            // Míticas sempre disponíveis se o deus estiver ativo (verificação no getTroopCount)
+            if (this._isMythical(troop)) return false;
             if (!this.REQUIREMENTS.hasOwnProperty(troop)) return true;
             const { research, building, level } = this.REQUIREMENTS[troop];
             if (research && !researches[research]) return true;
@@ -199,6 +220,24 @@ class AutoTrain extends ModernUtil {
                 ${getTroopHtml('attack_ship',        [150, 100])}
                 ${getTroopHtml('trireme',            [400, 250])}
                 ${getTroopHtml('colonize_ship',      [ 50, 200])}
+                ${getTroopHtml('sea_monster',        [300, 300])}
+                ${getTroopHtml('siren',              [350, 300])}
+            </div>
+            <div style="width: 831px; display: inline-flex; gap: 1px; margin-top: 4px; border-top: 1px solid rgba(0,0,0,0.15); padding-top: 4px;">
+                ${getTroopHtml('pegasus',            [  0, 300])}
+                ${getTroopHtml('harpy',              [ 50, 300])}
+                ${getTroopHtml('medusa',             [100, 300])}
+                ${getTroopHtml('centaur',            [150, 300])}
+                ${getTroopHtml('minotaur',           [200, 300])}
+                ${getTroopHtml('zyklop',             [250, 300])}
+                ${getTroopHtml('cerberus',           [400, 300])}
+                ${getTroopHtml('fury',               [450, 300])}
+                ${getTroopHtml('griffin',            [500, 300])}
+                ${getTroopHtml('calydonian_boar',    [550, 300])}
+                ${getTroopHtml('satyr',              [600, 300])}
+                ${getTroopHtml('spartoi',            [650, 300])}
+                ${getTroopHtml('manticore',          [700, 300])}
+                ${getTroopHtml('ladon',              [750, 300])}
             </div>
         </div>`);
     };
@@ -267,6 +306,19 @@ class AutoTrain extends ModernUtil {
         return uw.ITowns.getTown(town_id).getUnitOrdersCollection().where({ kind: type }).length;
     };
 
+    /* Favor disponível na cidade (requer deus ativo) */
+    _getFavor = (town_id) => {
+        try {
+            const model = uw.MM.getOnlyCollectionByName('Town')?.get(town_id)
+                       ?? uw.ITowns.towns[town_id];
+            return model?.getFavor?.() ?? model?.attributes?.favor ?? 0;
+        } catch(e) { return 0; }
+    };
+
+    _isMythical = (troop) => {
+        return this.MYTHICAL_GROUND.includes(troop) || this.MYTHICAL_NAVAL.includes(troop);
+    };
+
     getTroopCount = (troop, town_id) => {
         const town = uw.ITowns.getTown(town_id);
         if (!this.city_troops[town_id]?.[troop]) return 0;
@@ -282,49 +334,68 @@ class AutoTrain extends ModernUtil {
         if (outerUnits[troop]) count -= outerUnits[troop];
         if (count <= 0) return 0; // meta já atingida
 
-        // Quanto posso recrutar agora com os recursos atuais
         const resources = town.resources();
-        const discount  = uw.GeneralModifications.getUnitBuildResourcesModification(town_id, uw.GameData.units[troop]);
-        const { wood, stone, iron } = uw.GameData.units[troop].resources;
-        const current = parseInt(Math.min(
-            resources.wood  / Math.round(wood  * discount),
-            resources.stone / Math.round(stone * discount),
-            resources.iron  / Math.round(iron  * discount)
-        ));
-        if (current <= 0) return -1; // sem recursos agora
+        const unitData  = uw.GameData.units[troop];
+        const discount  = uw.GeneralModifications.getUnitBuildResourcesModification(town_id, unitData);
+        const { wood, stone, iron } = unitData.resources;
 
-        // População disponível
-        const duable_with_pop = parseInt(resources.population / uw.GameData.units[troop].population);
-        if (duable_with_pop <= 0) return -1;
+        // Limite por recursos normais
+        let byResources;
+        if (wood === 0 && stone === 0 && iron === 0) {
+            byResources = count; // godsent: sem custo de recursos
+        } else {
+            byResources = parseInt(Math.min(
+                resources.wood  / Math.round(wood  * discount),
+                resources.stone / Math.round(stone * discount),
+                resources.iron  / Math.round(iron  * discount)
+            ));
+        }
+        if (byResources <= 0) return -1;
 
-        // Limite máximo baseado no storage e no percentual configurado (1=80%, 2=90%, 3=100%)
+        // Limite por favor (apenas míticas)
+        let byFavor = count;
+        if (this._isMythical(troop) && unitData.favor > 0) {
+            const favor = this._getFavor(town_id);
+            byFavor = Math.floor(favor / unitData.favor);
+            if (byFavor <= 0) return -1; // sem favor suficiente
+        }
+
+        // Limite por população
+        const byPop = parseInt(resources.population / unitData.population);
+        if (byPop <= 0) return -1;
+
+        // Limite máximo por storage e percentual (1=80%, 2=90%, 3=100%)
         const pct = [0.8, 0.9, 1.0][(this.percentual ?? 1) - 1] ?? 0.85;
-        const max = Math.min(
-            parseInt(Math.min(
+        let byStorage = count;
+        if (wood > 0 || stone > 0 || iron > 0) {
+            byStorage = parseInt(Math.min(
                 resources.storage / (wood  * discount),
                 resources.storage / (stone * discount),
                 resources.storage / (iron  * discount)
-            ) * pct),
-            duable_with_pop
-        );
+            ) * pct);
+        }
 
-        const toRecruit = Math.min(count, current, max);
+        const toRecruit = Math.min(count, byResources, byFavor, byPop, byStorage);
         return toRecruit > 0 ? toRecruit : -1;
     };
 
-    /* Check the given town for ground or naval — itera todas as tropas sem loop infinito */
+    /* Check the given town for ground, naval ou mythical */
     checkPolis = (type, town_id) => {
         if (this.getUnitOrdersCount(type, town_id) > 6) return 0;
 
-        const order  = type === 'naval' ? this.NAVAL_ORDER : this.GROUND_ORDER;
+        let order;
+        if (type === 'naval')         order = [...this.NAVAL_ORDER,  ...this.MYTHICAL_NAVAL];
+        else if (type === 'ground')   order = [...this.GROUND_ORDER, ...this.MYTHICAL_GROUND];
+        else                          order = [];
+
         const troops = this.city_troops[town_id];
         if (!troops) return 0;
 
         for (const unit of order) {
-            if (!troops[unit]) continue;       // não configurada
+            if (!troops[unit]) continue;
             const count = this.getTroopCount(unit, town_id);
-            if (count === 0) continue;         // meta atingida, tenta próxima
-            if (count < 0)   continue;         // sem recursos agora, tenta próxima
+            if (count === 0) continue;
+            if (count < 0)   continue;
             this.buildPost(town_id, unit, count);
             return true;
         }
@@ -348,7 +419,8 @@ class AutoTrain extends ModernUtil {
 
     /* Envia o pedido de recrutamento ao servidor */
     buildPost = (town_id, unit, count) => {
-        const endpoint = this.NAVAL_ORDER.includes(unit) ? 'building_docks' : 'building_barracks';
+        const isNaval    = this.NAVAL_ORDER.includes(unit) || this.MYTHICAL_NAVAL.includes(unit);
+        const endpoint   = isNaval ? 'building_docks' : 'building_barracks';
         const townName = uw.ITowns.towns[town_id].getName();
 
         uw.gpAjax.ajaxPost(endpoint, 'build', { unit_id: unit, amount: count, town_id },
