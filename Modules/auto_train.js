@@ -220,24 +220,24 @@ class AutoTrain extends ModernUtil {
                 ${getTroopHtml('attack_ship',        [150, 100])}
                 ${getTroopHtml('trireme',            [400, 250])}
                 ${getTroopHtml('colonize_ship',      [ 50, 200])}
-                ${getTroopHtml('sea_monster',        [300, 300])}
-                ${getTroopHtml('siren',              [350, 300])}
+                ${getTroopHtml('sea_monster',        [150, 350])}
+                ${getTroopHtml('siren',              [200, 350])}
             </div>
             <div style="width: 831px; display: inline-flex; gap: 1px; margin-top: 4px; border-top: 1px solid rgba(0,0,0,0.15); padding-top: 4px;">
-                ${getTroopHtml('pegasus',            [  0, 300])}
-                ${getTroopHtml('harpy',              [ 50, 300])}
+                ${getTroopHtml('pegasus',            [350, 150])}
+                ${getTroopHtml('harpy',              [150, 250])}
                 ${getTroopHtml('medusa',             [100, 300])}
-                ${getTroopHtml('centaur',            [150, 300])}
-                ${getTroopHtml('minotaur',           [200, 300])}
-                ${getTroopHtml('zyklop',             [250, 300])}
-                ${getTroopHtml('cerberus',           [400, 300])}
-                ${getTroopHtml('fury',               [450, 300])}
-                ${getTroopHtml('griffin',            [500, 300])}
-                ${getTroopHtml('calydonian_boar',    [550, 300])}
-                ${getTroopHtml('satyr',              [600, 300])}
-                ${getTroopHtml('spartoi',            [650, 300])}
-                ${getTroopHtml('manticore',          [700, 300])}
-                ${getTroopHtml('ladon',              [750, 300])}
+                ${getTroopHtml('centaur',            [200,   0])}
+                ${getTroopHtml('minotaur',           [300, 300])}
+                ${getTroopHtml('zyklop',             [300, 400])}
+                ${getTroopHtml('cerberus',           [200,  50])}
+                ${getTroopHtml('fury',               [  0, 250])}
+                ${getTroopHtml('griffin',            [100, 250])}
+                ${getTroopHtml('calydonian_boar',    [100, 150])}
+                ${getTroopHtml('satyr',              [100, 350])}
+                ${getTroopHtml('spartoi',            [350, 350])}
+                ${getTroopHtml('manticore',          [  0, 300])}
+                ${getTroopHtml('ladon',              [300, 150])}
             </div>
         </div>`);
     };
