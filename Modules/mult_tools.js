@@ -34,6 +34,11 @@ class MultTools extends ModernUtil {
                         <p style="margin:0 0 6px;font-size:11px;color:#888;">Máximo de colonize_ship em todas.</p>
                         ${this.getButtonHtml('mult_naval_btn', '⚓ Aplicar', this.applyNavalPreset)}
                     </div>
+                    <div style="padding:5px;">
+                        <p style="margin:0 0 4px;font-size:11px;font-weight:bold;">Auto Pesquisa</p>
+                        <p style="margin:0 0 6px;font-size:11px;color:#888;">Liga a pesquisa automática em todas.</p>
+                        ${this.getButtonHtml('mult_research_btn', '🔬 Aplicar', this.applyResearchPreset)}
+                    </div>
                 </div>
                 <div style="padding:5px;">
                     <span id="mult_status" style="font-size:11px;color:#4ade80;"></span>
@@ -101,6 +106,37 @@ class MultTools extends ModernUtil {
             uw.modernBot.autoTrain.storage.save('troops', uw.modernBot.autoTrain.city_troops);
 
             const msg = `✓ Colonize ship configurado em ${count} cidade(s).`;
+            uw.$('#mult_status').text(msg).css('color','#4ade80');
+            this.console.log('[MultTools] ' + msg);
+        } catch (e) {
+            uw.$('#mult_status').text('Erro: ' + (e?.message ?? e)).css('color','#f87171');
+            this.console.log('[MultTools] Erro: ' + (e?.message ?? e));
+        }
+    };
+
+    /* Liga o Auto Pesquisa (AutoResearch) para todas as cidades de uma vez.
+       O módulo em si já roda automaticamente em todas as cidades do jogador
+       assim que ativo — aqui só garantimos que está ligado, sem precisar
+       abrir a aba Train pra clicar manualmente. */
+    applyResearchPreset = () => {
+        try {
+            const research = uw.modernBot.autoResearch;
+            if (!research) {
+                uw.$('#mult_status').text('Auto Pesquisa não encontrado.').css('color','#f87171');
+                return;
+            }
+
+            const townCount = Object.keys(uw.ITowns.towns).length;
+            if (townCount === 0) { uw.$('#mult_status').text('Nenhuma cidade encontrada.').css('color','#f87171'); return; }
+
+            if (!research._active) {
+                research.start();
+            } else {
+                // Já estava ativo — força uma varredura imediata em vez de esperar o próximo tick de 30s
+                research._tick();
+            }
+
+            const msg = `✓ Auto Pesquisa ativo em ${townCount} cidade(s).`;
             uw.$('#mult_status').text(msg).css('color','#4ade80');
             this.console.log('[MultTools] ' + msg);
         } catch (e) {
