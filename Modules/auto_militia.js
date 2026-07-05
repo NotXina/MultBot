@@ -27,7 +27,7 @@ class AutoMilitia extends ModernUtil {
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             ${this.getTitleHtml('auto_militia_title', 'Auto Milícia', this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
-                Ativa milícia nas cidades sob ataque automaticamente. Verifica a cada 15s, agenda ativação exata por ataque.
+                Ativa milícia ~8s antes do impacto em cidades sob ataque.
             </div>
             <div id="militia_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
@@ -54,7 +54,6 @@ class AutoMilitia extends ModernUtil {
         this.storage.save('militia_active', false);
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
 
-        // Cancela todos os timeouts agendados e pendentes
         for (const timeoutId of this._scheduled.values()) clearTimeout(timeoutId);
         this._scheduled.clear();
 
@@ -73,7 +72,6 @@ class AutoMilitia extends ModernUtil {
             const attacks = this._getIncomingAttacks();
             const now     = Math.floor(Date.now() / 1000);
 
-            // Cancela agendamentos de cidades que não têm mais ataque incoming
             const attackedTowns = new Set(attacks.map(a => String(a.target_town_id)));
             for (const townId of this._scheduled.keys()) {
                 if (!attackedTowns.has(townId)) {
@@ -86,14 +84,13 @@ class AutoMilitia extends ModernUtil {
 
             for (const atk of attacks) {
                 const townId = String(atk.target_town_id);
-                if (this._scheduled.has(townId)) continue; // já agendado
+                if (this._scheduled.has(townId)) continue;
                 if (!uw.ITowns?.towns?.[townId]) continue;
 
                 const arrival = atk.arrival_at ?? atk.time_of_arrival ?? 0;
-                if (!arrival) continue; // sem timestamp, pula
+                if (!arrival) continue;
 
                 const remaining = arrival - now;
-                // Dispara 8s antes do impacto. Se já passou desse ponto, dispara imediatamente.
                 const fireInMs = Math.max(0, (remaining - 8) * 1000);
 
                 const timeoutId = setTimeout(() => {
@@ -130,7 +127,6 @@ class AutoMilitia extends ModernUtil {
             const townName = uw.ITowns.towns[townId]?.getName?.() ?? '#' + townId;
             this.console.log(`[AutoMilícia] Ativando milícia em ${townName}...`);
 
-            // Payload exato do Noct AutoMilitia (Tf['ReiWs'] = 'request_militia')
             const data = { town_id: parseInt(townId), nl_init: true };
             uw.gpAjax.ajaxPost('building_farm', 'request_militia', data, true,
                 res => {
