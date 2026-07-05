@@ -1,7 +1,21 @@
 class AutoTrain extends ModernUtil {
     POWER_LIST = ['call_of_the_ocean', 'spartan_training', 'fertility_improvement'];
-    GROUND_ORDER = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot'];
-    NAVAL_ORDER = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship'];
+    GROUND_ORDER = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot', 'minotaur', 'manticore', 'medusa', 'cyclops', 'fury', 'harpy'];
+    NAVAL_ORDER = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship', 'sea_monster', 'siren'];
+
+    // Mapeamento: unidade mítica -> deus correspondente
+    // ⚠️ Verificar/ajustar após testar em jogo (ver log "[AutoTrain] Deus da cidade")
+    MYTHICAL_GOD = {
+        minotaur:    'zeus',
+        manticore:   'hera',
+        medusa:      'athena',
+        cyclops:     'poseidon',
+        fury:        'hades',
+        harpy:       'artemis',
+        sea_monster: 'poseidon',
+        siren:       'aphrodite',
+    };
+
     SHIFT_LEVELS = {
         catapult: [5, 5],
         sword: [200, 50],
@@ -17,6 +31,14 @@ class AutoTrain extends ModernUtil {
         big_transporter: [50, 10],
         demolition_ship: [50, 10],
         colonize_ship: [5, 1],
+        minotaur: [10, 5],
+        manticore: [10, 5],
+        medusa: [10, 5],
+        cyclops: [10, 5],
+        fury: [10, 5],
+        harpy: [10, 5],
+        sea_monster: [10, 5],
+        siren: [10, 5],
     };
 
     constructor(c, s) {
@@ -26,6 +48,7 @@ class AutoTrain extends ModernUtil {
         this.percentual = this.storage.load('at_per', 1);
         this.city_troops = this.storage.load('troops', {});
         this.shiftHeld = false;
+        this._godLogged = new Set(); // evita logar o mesmo deus repetidamente
 
         this.interval = setInterval(this.main.bind(this), this.getRandomDelay(1000, 10000));
     }
@@ -146,6 +169,38 @@ class AutoTrain extends ModernUtil {
             used += data[out].population * outher[out];
         }
         return town.getAvailablePopulation() + used;
+    };
+
+    /* Descobre qual deus a cidade está adorando (deus do templo).
+       Tenta múltiplos caminhos de API conhecidos, com fallback.
+       Loga uma vez por cidade para facilitar a verificação/ajuste. */
+    _getTownGod = (town_id) => {
+        try {
+            const town = uw.ITowns.towns[town_id];
+            const god =
+                town.attributes?.god ??
+                town.attributes?.main_god ??
+                town.getMainGod?.() ??
+                null;
+
+            if (!this._godLogged.has(town_id)) {
+                this._godLogged.add(town_id);
+                this.console.log(`[AutoTrain] Deus da cidade ${town.getName()} (#${town_id}): ${god ?? 'NÃO DETECTADO'}`);
+            }
+
+            return god;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    /* Retorna true se a unidade é mítica e NÃO corresponde ao deus da cidade */
+    _isWrongGodMythical = (troop, town_id) => {
+        const requiredGod = this.MYTHICAL_GOD[troop];
+        if (!requiredGod) return false; // não é unidade mítica, segue normal
+        const townGod = this._getTownGod(town_id);
+        if (!townGod) return false; // não detectou o deus, deixa passar (evita travar tudo)
+        return townGod !== requiredGod;
     };
 
     setPolisInSettings = town_id => {
@@ -294,7 +349,12 @@ class AutoTrain extends ModernUtil {
 
         const unitOrder = unitType === 'naval' ? this.NAVAL_ORDER : this.GROUND_ORDER;
         for (const unit of unitOrder) {
-            if (troops[unit] && this.getTroopCount(unit, town_id) !== 0) return unit;
+            if (!troops[unit]) continue;
+
+            // Pula unidade mítica que não pertence ao deus da cidade
+            if (this._isWrongGodMythical(unit, town_id)) continue;
+
+            if (this.getTroopCount(unit, town_id) !== 0) return unit;
         }
 
         return null;
@@ -375,18 +435,22 @@ class AutoTrain extends ModernUtil {
         return towns_list;
     };
 
-    /* Make build request to the server */
+    /* Make build request to the server.
+       Roteia automaticamente entre docks (naval) e barracks (terrestre)
+       usando a flag is_naval do próprio GameData. */
     buildPost = (town_id, unit, count) => {
+        const isNaval = !!uw.GameData.units[unit]?.is_naval;
+        const endpoint = isNaval ? 'building_docks' : 'building_barracks';
+
         let data = {
             unit_id: unit,
             amount: count,
             town_id: town_id,
         };
-    
-        // Add console log
-        this.console.log(`${uw.ITowns.towns[town_id].getName()}: training ${count} ${unit}`);
-    
-        uw.gpAjax.ajaxPost('building_barracks', 'build', data);
+
+        this.console.log(`${uw.ITowns.towns[town_id].getName()}: training ${count} ${unit} (${endpoint})`);
+
+        uw.gpAjax.ajaxPost(endpoint, 'build', data);
     };
 
     /* return the active towns */
