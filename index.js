@@ -34,6 +34,7 @@
         'auto_train.js',
         'status.js',
         'auto_militia.js',
+        'auto_dodge.js',
         'auto_research.js',
         'auto_send_resources.js',
         'colonize_ship_sender.js',
@@ -81,7 +82,7 @@
         if (attempt < MAX_RETRIES) {
             const nextAttempt = attempt + 1;
             console.warn(`[MultBot] ⚠ ${reason} ao baixar ${mod} — tentativa ${nextAttempt}/${MAX_RETRIES}`);
-            setTimeout(() => fetchModule(index, nextAttempt), 800 * nextAttempt); // backoff crescente
+            setTimeout(() => fetchModule(index, nextAttempt), 800 * nextAttempt);
         } else {
             codes[index] = `console.error('[MultBot] Falha definitiva ao carregar ${mod} após ${MAX_RETRIES} tentativas (${reason})');`;
             console.error(`[MultBot] ✗ Desistindo de ${mod} após ${MAX_RETRIES} tentativas: ${reason}`);
