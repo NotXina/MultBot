@@ -37,11 +37,8 @@ class AutoDodge extends ModernUtil {
             '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
             this.getTitleHtml('dodge_title', 'Auto Fuga (Dodge)', this.toggle, '', this._active) +
-            '<div style="padding:5px 10px;font-weight:bold;">' +
-            'Ao detectar um ataque chegando, agenda a evacuacao para ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto - envia terrestres e navais separadamente para uma cidade sua escolhida aleatoriamente na mesma ilha. Traz de volta automaticamente apos o impacto. Verifica a cada 15s.' +
-            '</div>' +
-            '<div style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;">' +
-            'Se nao houver outra cidade sua na mesma ilha, a evacuacao daquela cidade e pulada (sem enviar para longe).' +
+            '<div style="padding:5px 10px;font-weight:bold;" title="Se nao houver outra cidade sua na mesma ilha, a evacuacao daquela cidade e pulada.">' +
+            'Evacua tropas ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto para cidade aleatoria na mesma ilha, com retorno automatico.' +
             '</div>' +
             '<div id="dodge_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
             '</div>'
@@ -182,10 +179,8 @@ class AutoDodge extends ModernUtil {
 
     /* Escolhe aleatoriamente uma cidade PROPRIA na mesma ilha da cidade
        atacada (excluindo ela mesma). Retorna null se nao houver nenhuma.
-       IMPORTANTE: pula qualquer entrada em uw.ITowns.towns que nao tenha
-       .attributes valido, em vez de deixar isso quebrar o loop inteiro
-       (evita falso-negativo "sem cidade na mesma ilha" por causa de uma
-       unica entrada malformada). */
+       Pula qualquer entrada em uw.ITowns.towns que nao tenha .attributes
+       valido, em vez de deixar isso quebrar o loop inteiro. */
     _pickRandomTownOnSameIsland(attackedTownId) {
         try {
             const attackedTown = uw.ITowns.towns[attackedTownId];
@@ -200,7 +195,6 @@ class AutoDodge extends ModernUtil {
 
                 const town = uw.ITowns.towns[townId];
 
-                // Pula entradas invalidas/incompletas sem interromper o loop
                 if (!town || !town.attributes) {
                     this.console.log('[AutoDodge] Aviso: entrada invalida em ITowns.towns (id=' + townId + ') ignorada.');
                     continue;
