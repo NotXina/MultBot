@@ -782,3 +782,12 @@ class ModernStorage extends Compressor {
 /* Setup autofarm in the window object */
 
 window.__multbot_captcha_active = false;
+
+// ══════════════════════════════════════════════════════
+//  Carimbo de versão/build — ajuda a confirmar visualmente
+//  se o cache do GitHub/navegador já pegou a versão mais
+//  recente dos módulos. Atualize o BUILD_TAG manualmente
+//  sempre que fizer uma mudança importante.
+// ══════════════════════════════════════════════════════
+window.__multbot_build_tag = 'BUILD-2026-07-05-A';
+console.log(`%c[MultBot] Build carregado: ${window.__multbot_build_tag}`, 'color: #4ade80; font-weight: bold; font-size: 13px;');
