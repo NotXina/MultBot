@@ -1,220 +1,104 @@
-class ModernBot {
-    constructor() {
-        this.console = new BotConsole();
-        this.storage = new ModernStorage();
+// ==UserScript==
+// @name         MultBot
+// @author       NotXina
+// @description  ModernBot aprimorado com módulos adicionais para Grepolis
+// @version      1.0.0
+// @match        http://*.grepolis.com/game/*
+// @match        https://*.grepolis.com/game/*
+// @grant        GM_xmlhttpRequest
+// @connect      raw.githubusercontent.com
+// @require      http://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js
+// @run-at       document-end
+// @updateURL    https://raw.githubusercontent.com/NotXina/MultBot/main/index.js
+// @downloadURL  https://raw.githubusercontent.com/NotXina/MultBot/main/index.js
+// ==/UserScript==
 
-        this.$ui = uw.$("#ui_box");
-        // Create the quick menu and the divider element
-        this.$menu = this.createModernMenu();
-        const $divider = uw.$('<div class="divider"></div>');
+(function () {
+    'use strict';
 
-        // Add AutoFarm to the new menu
-        this.autoFarm = new AutoFarm(this.console, this.storage);
-        this.$menu.append(this.autoFarm.$activity)
-        this.$ui.append(this.autoFarm.$popup)
+    const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main/Modules';
+    const MAX_RETRIES = 2;
 
-        //const $farm = this.createActivity("url(https://gpit.innogamescdn.com/images/game/premium_features/feature_icons_2.08.png) no-repeat 0 -240px");
-        // this.$menu.append($farm, $divider.clone());
+    const MODULES = [
+        'core.js',
+        'anti_rage.js',
+        'auto_bootcamp.js',
+        'auto_build.js',
+        'auto_farm.js',
+        'auto_gratis.js',
+        'auto_hide.js',
+        'auto_party.js',
+        'auto_rural_level.js',
+        'auto_rural_trade.js',
+        'auto_trade.js',
+        'auto_train.js',
+        'status.js',
+        'auto_militia.js',
+        'auto_dodge.js',
+        'auto_research.js',
+        'auto_send_resources.js',
+        'colonize_ship_sender.js',
+        'mult_tools.js',
+        'multbot.js',
+    ];
 
-        this.autoGratis = new AutoGratis(this.console, this.storage);
-        this.autoRuralLevel = new AutoRuralLevel(this.console, this.storage);
-        this.autoBuild = new AutoBuild(this.console, this.storage);
-        this.autoRuralTrade = new AutoRuralTrade(this.console, this.storage);
-        this.autoBootcamp = new AutoBootcamp(this.console, this.storage);
-        this.autoParty = new AutoParty(this.console, this.storage);
-        this.autoTrain = new AutoTrain(this.console, this.storage);
-        this.autoHide = new AutoHide(this.console, this.storage);
-        this.antiRage = new AntiRage(this.console, this.storage);
-        this.autoTrade = new AutoTrade(this.console, this.storage);
-        this.colonizeShipSender = new ColonizeShipSender(this.console, this.storage);
-        this.multTools    = new MultTools(this.console, this.storage);
-        this.autoMilitia      = new AutoMilitia(this.console, this.storage);
-        this.autoResearch     = new AutoResearch(this.console, this.storage);
-        this.autoSendResources = new AutoSendResources(this.console, this.storage);
-        this.statusPanel  = new StatusPanel(this.console, this.storage);
+    const codes = new Array(MODULES.length).fill(null);
+    let completed = 0;
 
-        this.settingsFactory = new createGrepoWindow({
-            id: 'MODERN_BOT',
-            title: 'ModernBot (MultBot)',
-            size: [845, 380],
-            tabs: [
-                {
-                    title: 'Status',
-                    id: 'status',
-                    render: this.settingsStatus,
-                },
-                {
-                    title: 'Farm',
-                    id: 'farm',
-                    render: this.settingsFarm,
-                },
-                {
-                    title: 'Build',
-                    id: 'build',
-                    render: this.settingsBuild,
-                },
-                {
-                    title: 'Train',
-                    id: 'train',
-                    render: this.settingsTrain,
-                } /*
-				{
-					title: 'Trade',
-					id: 'trade',
-					render: this.settingsTrade,
-				},*/,
-                {
-                    title: 'Mix',
-                    id: 'mix',
-                    render: this.settingsMix,
-                },
-                {
-                    title: 'Mult',
-                    id: 'mult',
-                    render: this.settingsMult,
-                },
-                {
-                    title: 'Ships',
-                    id: 'ships',
-                    render: this.settingsShips,
-                },
-                {
-                    title: 'Console',
-                    id: 'console',
-                    render: this.console.renderSettings,
-                },
-            ],
-            start_tab: 0,
-        });
-
-        this.setup();
+    function injectAll() {
+        // Concatena tudo num único script tag — garante escopo compartilhado
+        const fullCode = codes.join('\n\n');
+        const script = document.createElement('script');
+        script.textContent = fullCode;
+        document.head.appendChild(script);
+        script.remove();
+        console.log('[MultBot] ✓ Todos os módulos injetados!');
     }
 
-    settingsStatus = () => {
-        return this.statusPanel.settings();
-    };
-
-    settingsFarm = () => {
-        let html = '';
-        // html += this.autoFarm.settings();
-        html += this.autoRuralLevel.settings();
-        html += this.autoRuralTrade.settings();
-        html += this.autoSendResources.settings();
-        return html;
-    };
-
-    settingsBuild = () => {
-        let html = '';
-        html += this.autoGratis.settings();
-        html += this.autoBuild.settings();
-        return html;
-    };
-
-    settingsMix = () => {
-        let html = '';
-        html += this.autoBootcamp.settings();
-        html += this.autoParty.settings();
-        html += this.autoHide.settings();
-        html += this.autoMilitia.settings();
-        return html;
-    };
-
-    settingsTrain = () => {
-        let html = '';
-        html += this.autoTrain.settings();
-        return html;
-    };
-
-    settingsMult = () => {
-        let html = '';
-        html += this.multTools.settings();
-        html += this.autoResearch.settings();
-        return html;
-    };
-
-    settingsShips = () => {
-        return this.colonizeShipSender.settings();
-    };
-
-    settingsTrade = () => {
-        let html = ``;
-        html += this.autoTrade.settings();
-        return html;
-    };
-
-    setup = () => {
-        /* Activate */
-        this.settingsFactory.activate();
-
-        /* Botão da engrenagem */
-        uw.$('.gods_area_buttons').append(`
-            <div class='circle_button modern_bot_settings' onclick='window.modernBot.settingsFactory.openWindow()'>
-                <div style='width: 27px; height: 27px; background: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/gear.png) no-repeat 6px 5px' class='icon js-caption'></div>
-            </div>
-        `);
-
-        /* Add event to polis list menu */
-        const editController = () => {
-            const townController = uw.layout_main_controller.sub_controllers.find(controller => controller.name === 'town_name_area');
-            if (!townController) {
-                setTimeout(editController, 2500);
-                return;
+    function fetchModule(index, attempt = 0) {
+        const mod = MODULES[index];
+        GM_xmlhttpRequest({
+            method:  'GET',
+            url:     `${BASE_URL}/${mod}?_=${Date.now()}`,
+            headers: { 'Cache-Control': 'no-cache' },
+            onload(r) {
+                if (r.status === 200) {
+                    codes[index] = r.responseText;
+                    console.log(`[MultBot] ✓ baixado: ${mod}`);
+                    completed++;
+                    if (completed === MODULES.length) injectAll();
+                } else {
+                    retryOrFail(index, attempt, `HTTP ${r.status}`);
+                }
+            },
+            onerror() {
+                retryOrFail(index, attempt, 'Falha de rede');
             }
-
-            const oldRender = townController.controller.town_groups_list_view.render;
-            townController.controller.town_groups_list_view.render = function () {
-                oldRender.call(this);
-                const both = `<div style='position: absolute; background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/hammer_wrench.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const build = `<div style='background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/hammer_only.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const troop = `<div style='background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/wrench.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const townIds = Object.keys(uw.modernBot.autoBuild.towns_buildings);
-                const troopsIds = uw.modernBot.autoTrain.getActiveList().map(entry => entry.toString());
-                uw.$('.town_group_town').each(function () {
-                    const townId = parseInt(uw.$(this).attr('data-townid'));
-                    const is_build = townIds.includes(townId.toString());
-                    const id_troop = troopsIds.includes(townId.toString());
-                    if (!id_troop && !is_build) return;
-                    if (id_troop && !is_build) uw.$(this).prepend(troop);
-                    else if (is_build && !id_troop) uw.$(this).prepend(build);
-                    else uw.$(this).prepend(both);
-                });
-            };
-        };
-
-        setTimeout(editController, 2500);
-    };
-
-    /* New quick menu */
-    // Create the html of an activity in the new quick menu
-    createModernMenu = () => {
-        const $menu = uw.$('<div id="modern_menu" class="toolbar_activities"></div>');
-        $menu.css({
-            'position': 'absolute',
-            'top': '3px',
-            'left': '400px',
-            'z-index': '1000',
         });
-
-        // Add left, middle, right
-        const $left = uw.$('<div class="left"></div>');
-        const $middle = uw.$('<div class="middle"></div>');
-        const $right = uw.$('<div class="right"></div>');
-
-        $menu.append($left, $middle, $right);
-        uw.$("#ui_box").prepend($menu);
-
-        return $middle
     }
 
-}
+    function retryOrFail(index, attempt, reason) {
+        const mod = MODULES[index];
+        if (attempt < MAX_RETRIES) {
+            const nextAttempt = attempt + 1;
+            console.warn(`[MultBot] ⚠ ${reason} ao baixar ${mod} — tentativa ${nextAttempt}/${MAX_RETRIES}`);
+            setTimeout(() => fetchModule(index, nextAttempt), 800 * nextAttempt);
+        } else {
+            codes[index] = `console.error('[MultBot] Falha definitiva ao carregar ${mod} após ${MAX_RETRIES} tentativas (${reason})');`;
+            console.error(`[MultBot] ✗ Desistindo de ${mod} após ${MAX_RETRIES} tentativas: ${reason}`);
+            completed++;
+            if (completed === MODULES.length) injectAll();
+        }
+    }
 
+    function waitForGame() {
+        if (typeof Game !== 'undefined' && Game.player_id) {
+            console.log('[MultBot] Game detectado, baixando módulos...');
+            MODULES.forEach((_, i) => fetchModule(i));
+        } else {
+            setTimeout(waitForGame, 500);
+        }
+    }
 
-// Load the bot when the loader is ready (guard against double injection)
-if (!window.__multbot_loaded__) {
-    window.__multbot_loaded__ = true;
-    var _multbot_loader = setInterval(() => {
-        if (uw.$("#loader").length > 0) return;
-        uw.modernBot = new ModernBot();
-        clearInterval(_multbot_loader);
-    }, 100);
-}
+    waitForGame();
+})();
