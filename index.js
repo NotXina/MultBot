@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  ModernBot aprimorado com módulos adicionais para Grepolis
-// @version      1.0.0
+// @version      1.1.0
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -51,7 +51,7 @@
         script.textContent = fullCode;
         document.head.appendChild(script);
         script.remove();
-        console.log('[MultBot] ✓ Todos os módulos injetados!');
+        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.1.0)');
     }
 
     async function fetchModule(index, attempt = 0) {
