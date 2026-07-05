@@ -2,13 +2,16 @@
 //  MODULE: AutoDodge
 //  Detecta ataques chegando e agenda a evacuacao das tropas
 //  para exatamente ~15s antes do impacto - enviando para
-//  QUALQUER cidade na MESMA ILHA (de qualquer jogador),
-//  terrestres e navais SEPARADAMENTE - e traz de volta
-//  automaticamente depois (cancelCommand).
+//  QUALQUER cidade na MESMA ILHA (cacheada em uw.ITowns.towns,
+//  que inclui vizinhos de outros jogadores) - terrestres e
+//  navais SEPARADAMENTE - e traz de volta automaticamente
+//  depois (cancelCommand).
 //
-//  A cidade de destino e sorteada NO MOMENTO DO AGENDAMENTO
-//  (nao na hora da evacuacao), aparece no log de agendamento,
-//  e fica travada ate a evacuacao de fato acontecer.
+//  BUGFIX: a fonte de candidatas era uw.MM.getOnlyCollectionByName('Town')
+//  (que so contem as proprias cidades) lendo .attributes.island_x
+//  (campo inexistente nesse objeto). Corrigido para usar
+//  uw.ITowns.towns com os metodos corretos getIslandCoordinateX()/Y(),
+//  ja confirmados como funcionais em outros modulos (auto_farm.js).
 //
 //  Captura do commandId: tenta primeiro extrair direto da
 //  resposta do servidor (json.actions -> MovementsUnitsCreate),
@@ -46,7 +49,7 @@ class AutoDodge extends ModernUtil {
             '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
             this.getTitleHtml('dodge_title', 'Auto Fuga (Dodge)', this.toggle, '', this._active) +
-            '<div style="padding:5px 10px;font-weight:bold;" title="Envia reforco para qualquer cidade da ilha. Se nenhuma existir, a evacuacao e pulada.">' +
+            '<div style="padding:5px 10px;font-weight:bold;" title="Envia reforco para qualquer cidade conhecida da ilha. Se nenhuma existir no cache, a evacuacao e pulada.">' +
             'Evacua tropas ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto para uma cidade aleatoria na mesma ilha, com retorno automatico.' +
             '</div>' +
             '<div id="dodge_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
@@ -179,7 +182,7 @@ class AutoDodge extends ModernUtil {
                     const safeTownLabel = this._getTownName(safeTownId);
                     this.console.log('[AutoDodge] Evacuacao agendada: ' + townLabel + ' -> ' + safeTownLabel + ' em ' + secLeft + 's (' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto).');
                 } else {
-                    this.console.log('[AutoDodge] Aviso: ' + townLabel + ' agendada em ' + secLeft + 's, mas SEM cidade na mesma ilha ainda. Sera pulada na hora da evacuacao a menos que uma cidade apareca.');
+                    this.console.log('[AutoDodge] Aviso: ' + townLabel + ' agendada em ' + secLeft + 's, mas SEM cidade conhecida na mesma ilha ainda. Sera pulada na hora da evacuacao a menos que uma cidade apareca no cache.');
                 }
             }
         } catch (e) {
@@ -209,33 +212,41 @@ class AutoDodge extends ModernUtil {
         }
     }
 
+    /* Escolhe aleatoriamente qualquer cidade conhecida na mesma ilha
+       da cidade atacada (excluindo ela mesma). CORRIGIDO: usa
+       uw.ITowns.towns (que ja contem cidades vizinhas cacheadas por
+       ataques/scouting) com os metodos getIslandCoordinateX()/Y(),
+       getId() e getName() — os mesmos ja usados com sucesso em
+       auto_farm.js — em vez de .attributes.island_x (que nao existe
+       nesse objeto e sempre retornava undefined). */
     _pickRandomTownOnSameIsland(attackedTownId) {
         try {
             const attackedTown = uw.ITowns.towns[attackedTownId];
-            if (!attackedTown || !attackedTown.attributes) return null;
+            if (!attackedTown || typeof attackedTown.getIslandCoordinateX !== 'function') return null;
 
-            const ix = attackedTown.attributes.island_x;
-            const iy = attackedTown.attributes.island_y;
+            const ix = attackedTown.getIslandCoordinateX();
+            const iy = attackedTown.getIslandCoordinateY();
 
-            const collection = uw.MM.getOnlyCollectionByName('Town');
-            const allTowns = collection && collection.models ? collection.models : [];
             const candidates = [];
+            const townsObj = uw.ITowns.towns;
 
-            for (const t of allTowns) {
-                if (!t || !t.attributes) continue;
+            for (const townId in townsObj) {
+                if (String(townId) === String(attackedTownId)) continue;
 
-                const tid = t.attributes.id !== undefined ? t.attributes.id : t.id;
-                if (tid === undefined || tid === null) continue;
-                if (String(tid) === String(attackedTownId)) continue;
+                const t = townsObj[townId];
+                if (!t || typeof t.getIslandCoordinateX !== 'function') continue;
 
-                if (t.attributes.island_x === ix && t.attributes.island_y === iy) {
-                    candidates.push({ id: tid, player_id: t.attributes.player_id });
+                const tix = t.getIslandCoordinateX();
+                const tiy = t.getIslandCoordinateY();
+
+                if (tix === ix && tiy === iy) {
+                    candidates.push(townId);
                 }
             }
 
             if (candidates.length === 0) return null;
             const randomIndex = Math.floor(Math.random() * candidates.length);
-            return candidates[randomIndex].id;
+            return candidates[randomIndex];
         } catch (e) {
             const msg = e && e.message ? e.message : e;
             this.console.log('[AutoDodge] Erro ao procurar cidade na mesma ilha: ' + msg);
@@ -267,10 +278,6 @@ class AutoDodge extends ModernUtil {
         return { landUnits: landUnits, navalUnits: navalUnits };
     }
 
-    /* Recebe o safeTownId já decidido no momento do agendamento.
-       Se por algum motivo vier null (nenhuma cidade na ilha na
-       época do agendamento), tenta sortear de novo agora, como
-       última chance antes de desistir. */
     async _evacuateTown(townId, attackArrival, safeTownId) {
         try {
             const town = uw.ITowns.towns[townId];
@@ -284,7 +291,7 @@ class AutoDodge extends ModernUtil {
 
             if (!safeTownId) {
                 this.console.log('[AutoDodge] Aviso: ' + townName + ' - nenhuma cidade conhecida na mesma ilha. Evacuacao pulada.');
-                uw.$('#dodge_log').text('Aviso: ' + townName + ' sem cidade na mesma ilha.').css('color', '#eab308');
+                uw.$('#dodge_log').text('Aviso: ' + townName + ' sem cidade conhecida na mesma ilha.').css('color', '#eab308');
                 return;
             }
 
@@ -495,18 +502,7 @@ class AutoDodge extends ModernUtil {
         try {
             const towns = uw.ITowns && uw.ITowns.towns ? uw.ITowns.towns : {};
             const t1 = towns[id] ? towns[id] : towns[ids];
-            if (t1) return t1.getName() + ' (#' + ids + ')';
-
-            const collection = uw.MM.getOnlyCollectionByName('Town');
-            const allTowns = collection && collection.models ? collection.models : [];
-
-            for (const t of allTowns) {
-                const tid = t.attributes && t.attributes.id ? t.attributes.id : t.id;
-                if (parseInt(tid) === id) {
-                    const name = t.attributes && t.attributes.name ? t.attributes.name : '?';
-                    return name + ' (#' + ids + ')';
-                }
-            }
+            if (t1 && typeof t1.getName === 'function') return t1.getName() + ' (#' + ids + ')';
 
             const wmapTowns = uw.WMap && uw.WMap.towns ? uw.WMap.towns : {};
             const wt = wmapTowns[id] ? wmapTowns[id] : wmapTowns[ids];
