@@ -5,78 +5,115 @@
 class StatusPanel extends ModernUtil {
     constructor(c, s) {
         super(c, s);
-        this._interval        = null;
-        this._refreshInterval = null;
+        this._interval = null;
+        this._refreshTimeoutId = null;
+        this._countdownInterval = null;
+        this._nextRefreshAt = null;
+        this._refreshMinutes = this.storage.load('refresh_minutes', 0);
     }
 
     settings = () => {
         requestAnimationFrame(() => this._startRefresh());
         return `
-        <div style="padding:6px 10px;border-bottom:1px solid rgba(0,0,0,0.12);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <span style="font-weight:bold;font-size:12px;">🔄 Auto Refresh:</span>
-            ${this.getButtonHtml('btn_refresh_off',  'Off',    this._setRefresh, 0)}
-            ${this.getButtonHtml('btn_refresh_5',    '5 min',  this._setRefresh, 5)}
-            ${this.getButtonHtml('btn_refresh_15',   '15 min', this._setRefresh, 15)}
-            ${this.getButtonHtml('btn_refresh_30',   '30 min', this._setRefresh, 30)}
-            ${this.getButtonHtml('btn_refresh_60',   '1h',     this._setRefresh, 60)}
-            <span id="refresh_status" style="font-size:11px;color:#5a3a0a;margin-left:4px;"></span>
+        <div style="padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.1);display:flex;align-items:center;gap:8px;">
+            <span style="font-weight:bold;font-size:12px;">Auto Refresh:</span>
+            <input id="refresh_minutes_input" type="number" min="0" max="999" value="${this._refreshMinutes}"
+                style="width:55px;padding:2px 5px;" placeholder="min" />
+            ${this.getButtonHtml('btn_set_refresh', 'Aplicar', this._applyRefresh)}
+            <span id="refresh_status" style="font-size:11px;color:#5a3a0a;"></span>
+            <span id="refresh_countdown" style="font-size:11px;color:#3a2a0a;font-weight:bold;margin-left:auto;"></span>
         </div>
         <div id="status_rows" style="padding:4px;"></div>`;
     };
+
+    _applyRefresh = () => {
+        const val = parseInt(uw.$('#refresh_minutes_input').val(), 10);
+
+        this._clearRefresh();
+
+        if (!val || val <= 0) {
+            this._refreshMinutes = 0;
+            this.storage.save('refresh_minutes', 0);
+            uw.$('#refresh_status').text('Desativado').css('color', '#8a2a2a');
+            uw.$('#refresh_countdown').text('');
+            return;
+        }
+
+        this._refreshMinutes = val;
+        this.storage.save('refresh_minutes', val);
+        this._scheduleRefresh();
+
+        this.console.log(`[StatusPanel] Auto Refresh: ${val} minuto(s) (± jitter).`);
+    };
+
+    /* Cancela qualquer timeout e countdown de refresh agendados */
+    _clearRefresh() {
+        if (this._refreshTimeoutId) {
+            clearTimeout(this._refreshTimeoutId);
+            this._refreshTimeoutId = null;
+        }
+        this._nextRefreshAt = null;
+    }
+
+    /* Agenda o próximo reload com jitter de ±30s, evitando cravar
+       sempre no mesmo segundo exato — padrão menos "robótico" */
+    _scheduleRefresh() {
+        this._clearRefresh();
+        if (this._refreshMinutes <= 0) return;
+
+        const base = this._refreshMinutes * 60 * 1000;
+        const jitter = (Math.random() * 60000) - 30000; // -30s a +30s
+        const ms = Math.max(base + jitter, 10000); // nunca menos que 10s
+
+        this._nextRefreshAt = Date.now() + ms;
+        this._refreshTimeoutId = setTimeout(() => location.reload(), ms);
+    }
 
     _startRefresh() {
         if (this._interval) clearInterval(this._interval);
         this._render();
         this._interval = setInterval(() => this._render(), 3000);
 
-        // Retoma o auto refresh salvo e atualiza visual dos botões
-        const saved = this.storage.load('refresh_minutes', 0);
-        setTimeout(() => this._setRefresh(saved, true), 500);
+        if (this._countdownInterval) clearInterval(this._countdownInterval);
+        this._countdownInterval = setInterval(() => this._updateCountdown(), 1000);
+
+        // Retoma o auto refresh salvo
+        if (this._refreshMinutes > 0) {
+            this._scheduleRefresh();
+            uw.$('#refresh_status').text(`✓ Recarrega a cada ${this._refreshMinutes} min (±30s)`).css('color', '#1a6b2a');
+        }
+        this._updateCountdown();
     }
 
-    _setRefresh = (minutes, silent = false) => {
-        if (this._refreshInterval) {
-            clearInterval(this._refreshInterval);
-            this._refreshInterval = null;
-        }
-
-        this.storage.save('refresh_minutes', minutes);
-
-        // Atualiza visual dos botões de seleção
-        ['btn_refresh_off', 'btn_refresh_5', 'btn_refresh_15', 'btn_refresh_30', 'btn_refresh_60'].forEach(id => {
-            uw.$(`#${id}`).removeClass('disabled').css('filter', '');
-        });
-
-        const activeMap = { 0: 'btn_refresh_off', 5: 'btn_refresh_5', 15: 'btn_refresh_15', 30: 'btn_refresh_30', 60: 'btn_refresh_60' };
-        if (activeMap[minutes]) {
-            uw.$(`#${activeMap[minutes]}`).css('filter', 'brightness(100%) saturate(186%) hue-rotate(241deg)');
-        }
-
-        if (minutes === 0) {
-            uw.$('#refresh_status').text('desativado');
+    _updateCountdown() {
+        if (!this._nextRefreshAt) {
+            uw.$('#refresh_countdown').text('');
             return;
         }
+        const remaining = Math.max(0, this._nextRefreshAt - Date.now());
+        const totalSec = Math.floor(remaining / 1000);
+        const mm = Math.floor(totalSec / 60).toString().padStart(2, '0');
+        const ss = (totalSec % 60).toString().padStart(2, '0');
+        uw.$('#refresh_countdown').text(`⏱ ${mm}:${ss}`);
+    }
 
-        const ms = minutes * 60 * 1000;
-        let nextReload = Date.now() + ms;
-
-        const tick = () => {
-            const remaining = Math.max(0, Math.round((nextReload - Date.now()) / 1000));
-            const m = Math.floor(remaining / 60);
-            const s = remaining % 60;
-            uw.$('#refresh_status').text(`próximo reload em ${m}:${String(s).padStart(2,'0')}`);
-
-            if (remaining <= 0) {
-                uw.$('#refresh_status').text('recarregando...');
-                clearInterval(this._refreshInterval);
-                location.reload();
-            }
-        };
-
-        tick();
-        this._refreshInterval = setInterval(tick, 1000);
-
-        if (!silent) this.console.log(`[Status] Auto Refresh: ${minutes} min`);
+    _openCaptcha = () => {
+        try {
+            window.__multbot_captcha_active = true;
+            uw.gpAjax.ajaxPost('frontend_bridge', 'execute', {
+                model_url: 'BuildingOrder', action_name: 'buildUp',
+                captcha: null, arguments: { building_id: 'main' }, town_id: uw.Game.townId
+            }, false, res => {
+                if (res?.captcha_required) {
+                    uw.$('#captcha_status').text('Aguarde — o jogo deve mostrar o captcha...');
+                } else {
+                    uw.$('#captcha_status').text('Captcha não apareceu. Tente recarregar a página (F5).');
+                }
+            });
+            uw.$('#captcha_status').text('Tentando acionar captcha...');
+        } catch(e) {
+            uw.$('#captcha_status').text('Erro: ' + e.message);
+        }
     };
 
     _render() {
@@ -93,25 +130,36 @@ class StatusPanel extends ModernUtil {
             const celStr      = [cel.party && `${cel.party} festa`, cel.theater && `${cel.theater} teatro`, cel.triumph && `${cel.triumph} triunfo`].filter(Boolean).join(' · ') || '—';
             const gratisActive = !!bot.autoGratis?.autogratis;
             const cssActive   = !!bot.colonizeShipSender?._running;
+            const asrActive   = !!bot.autoSendResources?._active;
+            const militiaActive = !!bot.autoMilitia?._active;
 
             rows.push(this._row('🌾 Fazenda',           farmActive,  farmActive  ? 'Ativo'               : 'Parado',             'autoFarm',           'toggle'));
-            rows.push(this._row('🏡 Aldeias Rurais',    ruralActive, ruralActive ? `Nível ${bot.autoRuralLevel?.rural_level ?? '?'}` : 'Parado', 'autoRuralLevel', 'toggle'));
+            rows.push(this._row('🏡 Aldeias Rurais',    ruralActive, ruralActive ? `Nível ${bot.autoRuralLevel.rural_level}` : 'Parado', 'autoRuralLevel', 'toggle'));
             rows.push(this._row('🏗 Construção',        buildCount > 0, buildCount > 0 ? `${buildCount} cidade(s)` : 'Nenhuma cidade', null, null));
             rows.push(this._row('⚔ Recrutamento',      trainCount > 0, trainCount > 0 ? `${trainCount} cidade(s)` : 'Nenhuma cidade', null, null));
             rows.push(this._row('🎉 Festividades',      partyActive, partyActive ? celStr : 'Parado',     'autoParty',          'toggle'));
             rows.push(this._row('⚡ Construção Grátis', gratisActive, gratisActive ? 'Ativo' : 'Parado', 'autoGratis',          'toggle'));
-            const asrActive    = !!bot.autoSendResources?._active;
-            rows.push(this._row('💰 Envio de Recursos', asrActive, asrActive ? 'Ativo' : 'Parado', 'autoSendResources', 'toggle'));
-
-            const militiaActive = !!bot.autoMilitia?._active;
-            rows.push(this._row('⚔️ Milícia Auto', militiaActive, militiaActive ? 'Ativo' : 'Parado', 'autoMilitia', militiaActive ? 'stop' : 'start'));
-
-            rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this._getTownName(bot.colonizeShipSender?.config?.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
+            rows.push(this._row('💰 Envio de Recursos', asrActive,   asrActive   ? 'Ativo' : 'Parado',   'autoSendResources',  'toggle'));
+            rows.push(this._row('⚔️ Milícia Auto',      militiaActive, militiaActive ? 'Ativo' : 'Parado', 'autoMilitia', militiaActive ? 'stop' : 'start'));
+            rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this._getTownName(bot.colonizeShipSender.config.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
 
             uw.$('#status_rows').html(rows.join(''));
+
+            // Badge no botão da engrenagem: verde se qualquer módulo estiver ativo
+            const anyActive = farmActive || ruralActive || buildCount > 0 || trainCount > 0
+                || partyActive || gratisActive || asrActive || militiaActive || cssActive;
+            this._updateBadge(anyActive);
         } catch(e) {
             uw.$('#status_rows').html(`<div style="padding:5px;color:red;">Erro: ${e.message}</div>`);
         }
+    }
+
+    /* Atualiza a bolinha de status no botão da engrenagem (fora do painel) */
+    _updateBadge(active) {
+        let $badge = uw.$('#modernbot_status_badge');
+        if (!$badge.length) return; // botão da engrenagem ainda não renderizado
+        $badge.css('background', active ? '#2ecc40' : '#888');
+        $badge.attr('title', active ? 'MultBot: módulos ativos' : 'MultBot: tudo parado');
     }
 
     _row(label, active, value, module, method) {
