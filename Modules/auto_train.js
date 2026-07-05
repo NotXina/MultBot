@@ -5,26 +5,6 @@ class AutoTrain extends ModernUtil {
     MYTHICAL_GROUND = ['minotaur', 'manticore', 'zyklop', 'harpy', 'medusa', 'centaur', 'cerberus', 'fury', 'griffin', 'calydonian_boar', 'satyr', 'spartoi', 'ladon', 'pegasus'];
     MYTHICAL_NAVAL  = ['sea_monster', 'siren'];
 
-    // Mapeamento oficial: unidade mítica -> deus correspondente (confirmado pela tabela do jogo)
-    MYTHICAL_GOD = {
-        minotaur:         'zeus',
-        manticore:        'zeus',
-        zyklop:           'poseidon',
-        sea_monster:      'poseidon',
-        centaur:          'athena',
-        pegasus:          'athena',
-        harpy:            'hera',
-        medusa:           'hera',
-        cerberus:         'hades',
-        fury:             'hades',
-        griffin:          'artemis',
-        calydonian_boar:  'artemis',
-        satyr:            'aphrodite',
-        siren:            'aphrodite',
-        ladon:            'ares',
-        spartoi:          'ares',
-    };
-
     SHIFT_LEVELS = {
         catapult:           [5,   5],
         sword:              [200, 50],
@@ -65,7 +45,6 @@ class AutoTrain extends ModernUtil {
         this.percentual = this.storage.load('at_per', 1);
         this.city_troops = this.storage.load('troops', {});
         this.shiftHeld = false;
-        this._godLogged = new Set(); // evita logar o mesmo deus repetidamente
 
         this.interval = setInterval(this.main.bind(this), this.getRandomDelay(1000, 10000));
     }
@@ -188,49 +167,19 @@ class AutoTrain extends ModernUtil {
         return town.getAvailablePopulation() + used;
     };
 
-    /* Favor disponível na cidade */
+    /* Favor disponível na cidade — vem de town.resources().favor.
+       O jogo só permite acumular favor para o deus atualmente escolhido
+       no templo, então isso naturalmente filtra "deus errado": uma
+       unidade mítica de outro deus sempre terá favor 0 e nunca recrutará,
+       sem precisarmos detectar qual deus está ativo. */
     _getFavor = (town_id) => {
         try {
-            const town = uw.ITowns.towns[town_id];
-            return town?.resources?.()?.favor ?? 0;
+            return uw.ITowns.towns[town_id]?.resources?.()?.favor ?? 0;
         } catch (e) { return 0; }
     };
 
     _isMythical = (troop) => {
         return this.MYTHICAL_GROUND.includes(troop) || this.MYTHICAL_NAVAL.includes(troop);
-    };
-
-    /* Descobre qual deus a cidade está adorando (deus do templo).
-       Tenta múltiplos caminhos de API conhecidos, com fallback.
-       Loga uma vez por cidade para facilitar a verificação/ajuste. */
-    _getTownGod = (town_id) => {
-        try {
-            const town = uw.ITowns.towns[town_id];
-            const god =
-                town.attributes?.god ??
-                town.attributes?.main_god ??
-                town.getMainGod?.() ??
-                null;
-
-            if (!this._godLogged.has(town_id)) {
-                this._godLogged.add(town_id);
-                this.console.log(`[AutoTrain] Deus da cidade ${town.getName()} (#${town_id}): ${god ?? 'NÃO DETECTADO'}`);
-            }
-
-            return god;
-        } catch (e) {
-            return null;
-        }
-    };
-
-    /* Retorna true se a unidade é mítica e NÃO corresponde ao deus da cidade.
-       Se o deus não puder ser detectado, deixa passar (o favor já limita naturalmente). */
-    _isWrongGodMythical = (troop, town_id) => {
-        const requiredGod = this.MYTHICAL_GOD[troop];
-        if (!requiredGod) return false; // não é unidade mítica
-        const townGod = this._getTownGod(town_id);
-        if (!townGod) return false; // não detectado, deixa o favor decidir
-        return townGod !== requiredGod;
     };
 
     setPolisInSettings = town_id => {
@@ -239,7 +188,7 @@ class AutoTrain extends ModernUtil {
         let buildings = town.buildings().attributes;
 
         const isGray = troop => {
-            // Míticas: disponibilidade real é controlada por deus + favor,
+            // Míticas: a disponibilidade real é controlada por favor,
             // checado em tempo de recrutamento — nunca cinza aqui
             if (this._isMythical(troop)) return false;
 
@@ -254,8 +203,8 @@ class AutoTrain extends ModernUtil {
         };
 
         /* Usa a classe NATIVA do jogo (unit_icon50x50 + nome da unidade) em vez de
-           background-position manual. Sempre correto, mesmo se o jogo trocar o
-           spritesheet numa atualização futura — zero manutenção de offsets. */
+           background-position manual. O CSS no core.js força o encaixe correto
+           dentro do nosso quadradinho auto_build_box. */
         const getTroopHtml = (troop) => {
             let gray = isGray(troop);
 
@@ -437,12 +386,13 @@ class AutoTrain extends ModernUtil {
         }
         if (byResources <= 0) return -1;
 
-        // Limite por favor (apenas míticas)
+        // Limite por favor (apenas míticas) — é aqui que "deus errado" é
+        // naturalmente filtrado: sem favor pra esse deus, retorna -1 sempre
         let byFavor = count;
         if (this._isMythical(troop) && unitData.favor > 0) {
             const favor = this._getFavor(town_id);
             byFavor = Math.floor(favor / unitData.favor);
-            if (byFavor <= 0) return -1; // sem favor suficiente agora
+            if (byFavor <= 0) return -1;
         }
 
         // Limite por população
@@ -464,8 +414,7 @@ class AutoTrain extends ModernUtil {
         return toRecruit > 0 ? toRecruit : -1;
     };
 
-    /* Check the given town, for ground or naval — sem risco de loop infinito.
-       Míticas de deus errado são puladas antes de gastar qualquer verificação. */
+    /* Check the given town, for ground or naval — sem risco de loop infinito */
     checkPolis = (type, town_id) => {
         const order_count = this.getUnitOrdersCount(type, town_id);
         if (order_count > 6) return 0;
@@ -479,10 +428,9 @@ class AutoTrain extends ModernUtil {
 
         for (const unit of unitOrder) {
             if (!troops[unit]) continue; // não configurada
-            if (this._isWrongGodMythical(unit, town_id)) continue; // deus errado, pula
             const count = this.getTroopCount(unit, town_id);
             if (count === 0) continue; // meta atingida
-            if (count < 0) continue;   // sem recursos/favor agora
+            if (count < 0) continue;   // sem recursos/favor agora (inclui deus errado)
             this.buildPost(town_id, unit, count);
             return true;
         }
