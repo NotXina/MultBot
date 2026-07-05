@@ -1,50 +1,45 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: AutoResearch
 //  Pesquisa automaticamente na academia seguindo
-//  uma ordem de prioridade configurável.
+//  uma ordem de prioridade configuravel.
 //  Endpoint: frontend_bridge/execute (ResearchOrder/research)
 // ══════════════════════════════════════════════════════
 class AutoResearch extends ModernUtil {
-    // Ordem de prioridade de pesquisa
     DEFAULT_ORDER = [
-        'town_guard',       // Guarda da Cidade
-        'meteorology',      // Meteorologia
-        'espionage',        // Espionagem
-        'booty',            // Lealdade dos Aldeões
-        'pottery',          // Cerâmica
-        'architecture',     // Arquitetura
-        'building_crane',   // Guindaste
-        'shipwright',       // Construtor Naval
-        'colonize_ship',    // Navios Colonizadores
-        'plow',             // Arado
+        'town_guard',
+        'meteorology',
+        'espionage',
+        'booty',
+        'pottery',
+        'architecture',
+        'building_crane',
+        'shipwright',
+        'colonize_ship',
+        'plow',
     ];
 
     constructor(c, s) {
         super(c, s);
         this._interval = null;
-        this._active   = false;
-
-        // Guarda cidades onde uma tecnologia específica falhou nesse ciclo,
-        // pra não ficar tentando a MESMA tech travada indefinidamente
-        this._failedThisCycle = new Map(); // townId -> Set(tech)
+        this._active = false;
+        this._failedThisCycle = new Map();
 
         if (this.storage.load('ares_active', false)) {
             setTimeout(() => this.start(), 2500);
         }
     }
 
-    // Nomes para exibição
     RESEARCH_NAMES = {
-        town_guard:      'Guarda da Cidade',
-        meteorology:     'Meteorologia',
-        espionage:       'Espionagem',
-        booty:           'Lealdade dos Aldeões',
-        pottery:         'Cerâmica',
-        architecture:    'Arquitetura',
-        building_crane:  'Guindaste',
-        shipwright:      'Const. Naval',
-        colonize_ship:   'Nav. Colonizador',
-        plow:            'Arado',
+        town_guard: 'Guarda da Cidade',
+        meteorology: 'Meteorologia',
+        espionage: 'Espionagem',
+        booty: 'Lealdade dos Aldeoes',
+        pottery: 'Ceramica',
+        architecture: 'Arquitetura',
+        building_crane: 'Guindaste',
+        shipwright: 'Const. Naval',
+        colonize_ship: 'Nav. Colonizador',
+        plow: 'Arado',
     };
 
     settings = () => {
@@ -60,7 +55,7 @@ class AutoResearch extends ModernUtil {
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             ${this.getTitleHtml('ares_title', 'Auto Pesquisa', this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
-                Pesquisa automaticamente as próximas tecnologias disponíveis em todas as cidades. Verifica a cada 30s.
+                Pesquisa automaticamente as proximas tecnologias disponiveis em todas as cidades. Verifica a cada 30s.
             </div>
             <div id="ares_status" style="padding:2px 10px;font-size:11px;color:#5a3a0a;"></div>
             <div id="ares_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
@@ -69,20 +64,20 @@ class AutoResearch extends ModernUtil {
 
     _renderStatus() {
         try {
-            const town       = uw.ITowns.getCurrentTown();
+            const town = uw.ITowns.getCurrentTown();
             const researches = town?.researches()?.attributes ?? {};
 
-            const done    = this.DEFAULT_ORDER.filter(t => researches[t] && uw.GameData.researches?.[t]);
+            const done = this.DEFAULT_ORDER.filter(t => researches[t] && uw.GameData.researches?.[t]);
             const pending = this.DEFAULT_ORDER.filter(t => !researches[t] && uw.GameData.researches?.[t]);
 
-            const doneNames    = done.map(t => this.RESEARCH_NAMES[t]).join(', ') || '—';
-            const pendingNames = pending.map(t => this.RESEARCH_NAMES[t]).join(' → ') || '—';
+            const doneNames = done.map(t => this.RESEARCH_NAMES[t]).join(', ') || '-';
+            const pendingNames = pending.map(t => this.RESEARCH_NAMES[t]).join(' -> ') || '-';
 
             uw.$('#ares_status').html(
-                `<span style="color:#1a6b2a;">✓ ${doneNames}</span><br>` +
-                `<span style="color:#5a3a0a;">⏳ ${pendingNames}</span>`
+                `<span style="color:#1a6b2a;">Concluidas: ${doneNames}</span><br>` +
+                `<span style="color:#5a3a0a;">Pendentes: ${pendingNames}</span>`
             );
-        } catch(e) {}
+        } catch (e) {}
     }
 
     toggle = () => {
@@ -96,7 +91,7 @@ class AutoResearch extends ModernUtil {
         this.storage.save('ares_active', true);
         this._updateTitle();
         this.console.log('[AutoPesquisa] Iniciado.');
-        this._tick(); // primeiro tick imediato
+        this._tick();
         this._interval = setInterval(() => this._tick(), 30000);
     }
 
@@ -118,7 +113,6 @@ class AutoResearch extends ModernUtil {
         const townIds = Object.keys(uw.ITowns.towns);
         let count = 0;
 
-        // Sequencial com delay — evita conflito de Game.townId com outros módulos
         for (const townId of townIds) {
             const done = await this._researchNext(townId);
             if (done) {
@@ -128,101 +122,69 @@ class AutoResearch extends ModernUtil {
         }
 
         if (count > 0) {
-            const msg = `✓ ${count} pesquisa(s) iniciada(s)`;
-            this.console.log('[AutoPesquisa] ' + msg);
-            uw.$('#ares_log').text(msg);
             this._renderStatus();
         }
     }
 
+    /* Retorna true SO quando uma pesquisa foi de fato iniciada com sucesso.
+       Nenhum log e emitido para os casos de "pulo" (falta de academia,
+       sem recursos, sem aldeia barbara, ja pesquisado, etc) - apenas o
+       sucesso real gera entrada no log, conforme solicitado. */
     async _researchNext(townId) {
         try {
-            const town       = uw.ITowns.towns[townId];
-            const buildings  = town.buildings().attributes;
+            const town = uw.ITowns.towns[townId];
+            const buildings = town.buildings().attributes;
             const researches = town.researches().attributes;
-            const townName   = town.getName();
+            const townName = town.getName();
 
-            // Precisa de academia nível >= 1 pra sequer abrir a tela
-            if (!buildings.academy || buildings.academy < 1) {
-                this.console.log(`[AutoPesquisa] ${townName}: sem academia`);
-                return false;
-            }
+            if (!buildings.academy || buildings.academy < 1) return false;
 
-            // Verifica se já há pesquisa em andamento
             const orders = uw.MM.getModels().ResearchOrder;
             if (orders) {
                 for (const key in orders) {
                     if (String(orders[key].attributes.town_id) === String(townId)) {
-                        this.console.log(`[AutoPesquisa] ${townName}: pesquisa em andamento`);
-                        return false;
+                        return false; // ja tem pesquisa em andamento
                     }
                 }
             }
 
-            // Set de techs que já falharam nesta cidade neste ciclo de vida do módulo
             const failedSet = this._failedThisCycle.get(townId) ?? new Set();
 
-            // Encontra a próxima pesquisa na ordem de prioridade
             for (const tech of this.DEFAULT_ORDER) {
                 const req = uw.GameData.researches?.[tech];
-                if (!req) continue; // não existe neste mundo
-                if (researches[tech]) continue; // já pesquisado
-                if (failedSet.has(tech)) continue; // já falhou nesta cidade — pula sem tentar de novo
+                if (!req) continue;
+                if (researches[tech]) continue;
+                if (failedSet.has(tech)) continue;
 
-                // Nível de academia exigido vem de building_dependencies.academy,
-                // NÃO de academy_level (esse campo não existe no GameData real —
-                // era a causa raiz do travamento: sempre assumíamos nível 1)
                 const requiredAcademy = req.building_dependencies?.academy ?? 1;
-                if (buildings.academy < requiredAcademy) {
-                    this.console.log(`[AutoPesquisa] ${townName}: ${tech} requer academia ${requiredAcademy}, tem ${buildings.academy}`);
-                    continue;
-                }
+                if (buildings.academy < requiredAcademy) continue;
 
-                // Checagem genérica de pré-requisitos de pesquisa (research_dependencies).
-                // Neste mundo vieram todos vazios, mas fica pronto pra qualquer
-                // pesquisa futura que dependa de outra já concluída.
                 const deps = req.research_dependencies ?? [];
                 const missingDep = deps.find(dep => !researches[dep]);
-                if (missingDep) {
-                    this.console.log(`[AutoPesquisa] ${townName}: ${tech} requer pesquisa "${missingDep}" antes`);
-                    continue;
-                }
+                if (missingDep) continue;
 
-                // Requer aldeias bárbaras na ilha (ex: booty)
-                if (req.requires_farming_villages && !this._islandHasFarmTowns(town)) {
-                    this.console.log(`[AutoPesquisa] ${townName}: ${tech} pulado (sem aldeias bárbaras na ilha)`);
-                    continue;
-                }
+                if (req.requires_farming_villages && !this._islandHasFarmTowns(town)) continue;
 
                 const { wood, stone, iron } = town.resources();
                 const cost = req?.resources ?? { wood: 0, stone: 0, iron: 0 };
-                if (wood < cost.wood || stone < cost.stone || iron < cost.iron) {
-                    this.console.log(`[AutoPesquisa] ${townName}: ${tech} sem recursos (precisa ${cost.wood}m ${cost.stone}p ${cost.iron}f)`);
-                    continue;
-                }
+                if (wood < cost.wood || stone < cost.stone || iron < cost.iron) continue;
 
-                // Tenta a pesquisa e CHECA o resultado real do servidor
                 const success = await this._doResearch(townId, tech, townName);
                 if (success) {
-                    return true; // pesquisa iniciada de verdade — encerra o loop desta cidade
+                    return true;
                 }
 
-                // Falhou no servidor mesmo com todas as checagens acima passando
-                // (situação inesperada). Marca como falha pra não tentar de novo
-                // e libera a cidade pra tentar a PRÓXIMA tech no mesmo tick.
                 failedSet.add(tech);
                 this._failedThisCycle.set(townId, failedSet);
-                this.console.log(`[AutoPesquisa] ${townName}: ${tech} rejeitado pelo servidor — tentando próxima`);
             }
 
             return false;
-        } catch(e) {
+        } catch (e) {
             this.console.log(`[AutoPesquisa] Erro: ${e?.message}`);
             return false;
         }
     }
 
-    // Verifica se a ilha da cidade tem aldeias bárbaras (FarmTown)
     _islandHasFarmTowns(town) {
         try {
             const ix = town.attributes.island_x;
@@ -232,33 +194,32 @@ class AutoResearch extends ModernUtil {
                 if (ft.attributes.island_x === ix && ft.attributes.island_y === iy) return true;
             }
             return false;
-        } catch(e) { return false; }
+        } catch (e) { return false; }
     }
 
+    /* Unico ponto de log neste modulo: dispara SOMENTE quando o servidor
+       confirma que a pesquisa foi iniciada com sucesso. */
     _doResearch(townId, tech, townName) {
         return new Promise(resolve => {
             const data = {
-                model_url:   'ResearchOrder',
+                model_url: 'ResearchOrder',
                 action_name: 'research',
-                captcha:     null,
-                arguments:   { id: tech },
-                town_id:     parseInt(townId),
+                captcha: null,
+                arguments: { id: tech },
+                town_id: parseInt(townId),
             };
-            this.console.log(`[AutoPesquisa] ${townName}: pesquisando ${tech}`);
             uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
                 res => {
                     if (res && !res.error) {
-                        this.console.log(`[AutoPesquisa] ✓ ${townName}: ${tech} iniciado`);
+                        const msg = `${townName}: ${this.RESEARCH_NAMES[tech] ?? tech} iniciado`;
+                        this.console.log(`[AutoPesquisa] ✓ ${msg}`);
+                        uw.$('#ares_log').text(`✓ ${msg}`).css('color', '#1a6b2a');
                         resolve(true);
                     } else {
-                        this.console.log(`[AutoPesquisa] ✗ ${townName}: ${tech} — ${JSON.stringify(res)}`);
                         resolve(false);
                     }
                 },
-                err => {
-                    this.console.log(`[AutoPesquisa] ✗ rede: ${err}`);
-                    resolve(false);
-                }
+                () => resolve(false)
             );
         });
     }
