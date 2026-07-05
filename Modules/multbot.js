@@ -190,8 +190,8 @@ class ModernBot {
         const moveBtn = () => {
             const btn = document.querySelector('.modern_bot_settings');
             if (btn) {
-                btn.style.setProperty('top', '95px', 'important');
-                btn.style.setProperty('right', '113px', 'important');
+                btn.style.setProperty('top', '93px', 'important');
+                btn.style.setProperty('right', '145px', 'important');
             }
         };
         const btnObserver = new MutationObserver(moveBtn);
