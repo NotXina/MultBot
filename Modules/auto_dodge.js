@@ -167,6 +167,7 @@ class AutoDodge extends ModernUtil {
             const attacks = [];
             for (const key in models) {
                 const mv = models[key].attributes;
+                if (!mv) continue;
                 const isAttack = mv.type === 'attack' || mv.type === 'attack_with_spy';
                 const targetExists = uw.ITowns && uw.ITowns.towns && uw.ITowns.towns[mv.target_town_id];
                 if (isAttack && targetExists) {
@@ -179,10 +180,16 @@ class AutoDodge extends ModernUtil {
         }
     }
 
+    /* Escolhe aleatoriamente uma cidade PROPRIA na mesma ilha da cidade
+       atacada (excluindo ela mesma). Retorna null se nao houver nenhuma.
+       IMPORTANTE: pula qualquer entrada em uw.ITowns.towns que nao tenha
+       .attributes valido, em vez de deixar isso quebrar o loop inteiro
+       (evita falso-negativo "sem cidade na mesma ilha" por causa de uma
+       unica entrada malformada). */
     _pickRandomTownOnSameIsland(attackedTownId) {
         try {
             const attackedTown = uw.ITowns.towns[attackedTownId];
-            if (!attackedTown) return null;
+            if (!attackedTown || !attackedTown.attributes) return null;
 
             const ix = attackedTown.attributes.island_x;
             const iy = attackedTown.attributes.island_y;
@@ -192,6 +199,13 @@ class AutoDodge extends ModernUtil {
                 if (String(townId) === String(attackedTownId)) continue;
 
                 const town = uw.ITowns.towns[townId];
+
+                // Pula entradas invalidas/incompletas sem interromper o loop
+                if (!town || !town.attributes) {
+                    this.console.log('[AutoDodge] Aviso: entrada invalida em ITowns.towns (id=' + townId + ') ignorada.');
+                    continue;
+                }
+
                 if (town.attributes.island_x === ix && town.attributes.island_y === iy) {
                     candidates.push(townId);
                 }
@@ -201,6 +215,8 @@ class AutoDodge extends ModernUtil {
             const randomIndex = Math.floor(Math.random() * candidates.length);
             return candidates[randomIndex];
         } catch (e) {
+            const msg = e && e.message ? e.message : e;
+            this.console.log('[AutoDodge] Erro ao procurar cidade na mesma ilha: ' + msg);
             return null;
         }
     }
@@ -320,6 +336,7 @@ class AutoDodge extends ModernUtil {
 
             for (const key in models) {
                 const mv = models[key].attributes;
+                if (!mv) continue;
                 if (mv.type !== 'support') continue;
                 if (String(mv.origin_town_id) !== String(fromTownId)) continue;
                 if (String(mv.target_town_id) !== String(toTownId)) continue;
