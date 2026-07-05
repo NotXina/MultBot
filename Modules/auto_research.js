@@ -25,7 +25,7 @@ class AutoResearch extends ModernUtil {
         this._active   = false;
 
         // Guarda cidades onde uma tecnologia específica falhou nesse ciclo,
-        // pra não ficar tentando a MESMA tech travada indefinidamente sem log
+        // pra não ficar tentando a MESMA tech travada indefinidamente
         this._failedThisCycle = new Map(); // townId -> Set(tech)
 
         if (this.storage.load('ares_active', false)) {
@@ -142,7 +142,7 @@ class AutoResearch extends ModernUtil {
             const researches = town.researches().attributes;
             const townName   = town.getName();
 
-            // Precisa de academia nível >= 1
+            // Precisa de academia nível >= 1 pra sequer abrir a tela
             if (!buildings.academy || buildings.academy < 1) {
                 this.console.log(`[AutoPesquisa] ${townName}: sem academia`);
                 return false;
@@ -168,11 +168,31 @@ class AutoResearch extends ModernUtil {
                 if (!req) continue; // não existe neste mundo
                 if (researches[tech]) continue; // já pesquisado
                 if (failedSet.has(tech)) continue; // já falhou nesta cidade — pula sem tentar de novo
-                if (tech === 'booty' && !this._islandHasFarmTowns(town)) {
-                    this.console.log(`[AutoPesquisa] ${townName}: booty pulado (sem aldeias bárbaras)`);
+
+                // Nível de academia exigido vem de building_dependencies.academy,
+                // NÃO de academy_level (esse campo não existe no GameData real —
+                // era a causa raiz do travamento: sempre assumíamos nível 1)
+                const requiredAcademy = req.building_dependencies?.academy ?? 1;
+                if (buildings.academy < requiredAcademy) {
+                    this.console.log(`[AutoPesquisa] ${townName}: ${tech} requer academia ${requiredAcademy}, tem ${buildings.academy}`);
                     continue;
                 }
-                if (buildings.academy < (req.academy_level ?? 1)) continue;
+
+                // Checagem genérica de pré-requisitos de pesquisa (research_dependencies).
+                // Neste mundo vieram todos vazios, mas fica pronto pra qualquer
+                // pesquisa futura que dependa de outra já concluída.
+                const deps = req.research_dependencies ?? [];
+                const missingDep = deps.find(dep => !researches[dep]);
+                if (missingDep) {
+                    this.console.log(`[AutoPesquisa] ${townName}: ${tech} requer pesquisa "${missingDep}" antes`);
+                    continue;
+                }
+
+                // Requer aldeias bárbaras na ilha (ex: booty)
+                if (req.requires_farming_villages && !this._islandHasFarmTowns(town)) {
+                    this.console.log(`[AutoPesquisa] ${townName}: ${tech} pulado (sem aldeias bárbaras na ilha)`);
+                    continue;
+                }
 
                 const { wood, stone, iron } = town.resources();
                 const cost = req?.resources ?? { wood: 0, stone: 0, iron: 0 };
@@ -187,10 +207,9 @@ class AutoResearch extends ModernUtil {
                     return true; // pesquisa iniciada de verdade — encerra o loop desta cidade
                 }
 
-                // Falhou no servidor (ex: pré-requisito que não checamos, tipo
-                // booty exigir espionagem concluída). Marca como falha e
-                // tenta a PRÓXIMA tech da lista no mesmo tick, em vez de
-                // ficar preso tentando essa mesma tech pra sempre.
+                // Falhou no servidor mesmo com todas as checagens acima passando
+                // (situação inesperada). Marca como falha pra não tentar de novo
+                // e libera a cidade pra tentar a PRÓXIMA tech no mesmo tick.
                 failedSet.add(tech);
                 this._failedThisCycle.set(townId, failedSet);
                 this.console.log(`[AutoPesquisa] ${townName}: ${tech} rejeitado pelo servidor — tentando próxima`);
