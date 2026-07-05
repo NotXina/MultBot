@@ -1,10 +1,10 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: AutoDodge
 //  Detecta ataques chegando e agenda a evacuacao das tropas
-//  para exatamente ~15s antes do impacto - enviando para uma
-//  cidade ALEATORIA sua na MESMA ILHA, terrestres e navais
-//  SEPARADAMENTE - e traz de volta automaticamente depois
-//  (cancelCommand).
+//  para exatamente ~15s antes do impacto - enviando para
+//  QUALQUER cidade na MESMA ILHA (de qualquer jogador),
+//  terrestres e navais SEPARADAMENTE - e traz de volta
+//  automaticamente depois (cancelCommand).
 // ══════════════════════════════════════════════════════
 class AutoDodge extends ModernUtil {
     EVACUATE_LEAD_SECONDS = 15;
@@ -37,8 +37,8 @@ class AutoDodge extends ModernUtil {
             '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
             this.getTitleHtml('dodge_title', 'Auto Fuga (Dodge)', this.toggle, '', this._active) +
-            '<div style="padding:5px 10px;font-weight:bold;" title="Se nao houver outra cidade sua na mesma ilha, a evacuacao daquela cidade e pulada.">' +
-            'Evacua tropas ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto para cidade aleatoria na mesma ilha, com retorno automatico.' +
+            '<div style="padding:5px 10px;font-weight:bold;" title="Envia reforco para qualquer cidade da ilha, de qualquer jogador. Se nenhuma cidade existir na mesma ilha, a evacuacao e pulada.">' +
+            'Evacua tropas ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto para uma cidade aleatoria na mesma ilha (qualquer jogador), com retorno automatico.' +
             '</div>' +
             '<div id="dodge_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
             '</div>'
@@ -177,10 +177,11 @@ class AutoDodge extends ModernUtil {
         }
     }
 
-    /* Escolhe aleatoriamente uma cidade PROPRIA na mesma ilha da cidade
-       atacada (excluindo ela mesma). Retorna null se nao houver nenhuma.
-       Pula qualquer entrada em uw.ITowns.towns que nao tenha .attributes
-       valido, em vez de deixar isso quebrar o loop inteiro. */
+    /* Escolhe aleatoriamente QUALQUER cidade na mesma ilha da cidade
+       atacada (de qualquer jogador, excluindo ela mesma). Usa a colecao
+       global "Town" (uw.MM.getOnlyCollectionByName('Town')), que cacheia
+       todas as cidades carregadas no cliente - nao apenas as suas.
+       Retorna null se nao houver nenhuma outra cidade conhecida na ilha. */
     _pickRandomTownOnSameIsland(attackedTownId) {
         try {
             const attackedTown = uw.ITowns.towns[attackedTownId];
@@ -188,20 +189,20 @@ class AutoDodge extends ModernUtil {
 
             const ix = attackedTown.attributes.island_x;
             const iy = attackedTown.attributes.island_y;
+
+            const collection = uw.MM.getOnlyCollectionByName('Town');
+            const allTowns = collection && collection.models ? collection.models : [];
             const candidates = [];
 
-            for (const townId in uw.ITowns.towns) {
-                if (String(townId) === String(attackedTownId)) continue;
+            for (const t of allTowns) {
+                if (!t || !t.attributes) continue;
 
-                const town = uw.ITowns.towns[townId];
+                const tid = t.attributes.id !== undefined ? t.attributes.id : t.id;
+                if (tid === undefined || tid === null) continue;
+                if (String(tid) === String(attackedTownId)) continue;
 
-                if (!town || !town.attributes) {
-                    this.console.log('[AutoDodge] Aviso: entrada invalida em ITowns.towns (id=' + townId + ') ignorada.');
-                    continue;
-                }
-
-                if (town.attributes.island_x === ix && town.attributes.island_y === iy) {
-                    candidates.push(townId);
+                if (t.attributes.island_x === ix && t.attributes.island_y === iy) {
+                    candidates.push(tid);
                 }
             }
 
@@ -248,7 +249,7 @@ class AutoDodge extends ModernUtil {
             const safeTownId = this._pickRandomTownOnSameIsland(townId);
 
             if (!safeTownId) {
-                this.console.log('[AutoDodge] Aviso: ' + townName + ' - nenhuma outra cidade sua na mesma ilha. Evacuacao pulada.');
+                this.console.log('[AutoDodge] Aviso: ' + townName + ' - nenhuma cidade conhecida na mesma ilha. Evacuacao pulada.');
                 uw.$('#dodge_log').text('Aviso: ' + townName + ' sem cidade na mesma ilha.').css('color', '#eab308');
                 return;
             }
