@@ -8,9 +8,9 @@ class AutoMilitia extends ModernUtil {
     constructor(c, s) {
         super(c, s);
 
-        this._active      = false;
-        this._intervalId  = null;
-        this._scheduled   = new Map(); // town_id → setTimeout id (ataques agendados)
+        this._active        = false;
+        this._intervalId    = null;
+        this._scheduled     = new Map(); // townId -> timeoutId, ataques já agendados
 
         if (this.storage.load('militia_active', false)) {
             setTimeout(() => this.start(), 2000);
@@ -27,7 +27,7 @@ class AutoMilitia extends ModernUtil {
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             ${this.getTitleHtml('auto_militia_title', 'Auto Milícia', this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
-                Ativa milícia nas cidades sob ataque automaticamente. Verifica a cada 15s.
+                Ativa milícia nas cidades sob ataque automaticamente. Verifica a cada 15s, agenda ativação exata por ataque.
             </div>
             <div id="militia_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
@@ -53,9 +53,11 @@ class AutoMilitia extends ModernUtil {
         this._active = false;
         this.storage.save('militia_active', false);
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
-        // Cancela todos os timeouts agendados
-        for (const tid of this._scheduled.values()) clearTimeout(tid);
+
+        // Cancela todos os timeouts agendados e pendentes
+        for (const timeoutId of this._scheduled.values()) clearTimeout(timeoutId);
         this._scheduled.clear();
+
         this._updateButtons();
         this.console.log('[AutoMilícia] Parado.');
     }
@@ -66,50 +68,41 @@ class AutoMilitia extends ModernUtil {
     }
 
     _tick() {
+        if (window.__multbot_captcha_active) return;
         try {
             const attacks = this._getIncomingAttacks();
-            const nowMs   = Date.now();
+            const now     = Math.floor(Date.now() / 1000);
 
-            // Cancela timeouts de ataques que sumiram (retirados ou cancelados)
+            // Cancela agendamentos de cidades que não têm mais ataque incoming
             const attackedTowns = new Set(attacks.map(a => String(a.target_town_id)));
-            for (const [tid, timeoutId] of this._scheduled) {
-                if (!attackedTowns.has(tid)) {
-                    clearTimeout(timeoutId);
-                    this._scheduled.delete(tid);
+            for (const townId of this._scheduled.keys()) {
+                if (!attackedTowns.has(townId)) {
+                    clearTimeout(this._scheduled.get(townId));
+                    this._scheduled.delete(townId);
                 }
             }
 
-            if (!attacks.length) return;
+            if (attacks.length === 0) return;
 
             for (const atk of attacks) {
                 const townId = String(atk.target_town_id);
-                if (this._scheduled.has(townId)) continue;  // já agendado
-                if (!uw.ITowns?.towns?.[townId]) continue;  // não é nossa cidade
+                if (this._scheduled.has(townId)) continue; // já agendado
+                if (!uw.ITowns?.towns?.[townId]) continue;
 
                 const arrival = atk.arrival_at ?? atk.time_of_arrival ?? 0;
-                if (!arrival) continue;
+                if (!arrival) continue; // sem timestamp, pula
 
-                const arrivalMs  = arrival * 1000;
-                const triggerMs  = arrivalMs - 10000; // 10s antes do impacto
-                const delayMs    = triggerMs - nowMs;
+                const remaining = arrival - now;
+                // Dispara 8s antes do impacto. Se já passou desse ponto, dispara imediatamente.
+                const fireInMs = Math.max(0, (remaining - 8) * 1000);
 
-                if (delayMs < 0) {
-                    // Ataque já passou ou está no impacto agora — ativa imediatamente
-                    this._scheduled.set(townId, -1);
+                const timeoutId = setTimeout(() => {
+                    this._scheduled.delete(townId);
                     this._activateMilitia(townId);
-                } else {
-                    // Agenda para exatamente 10s antes do impacto
-                    const townName = uw.ITowns.towns[townId]?.getName?.() ?? '#' + townId;
-                    const mins = Math.floor(delayMs / 60000);
-                    const secs = Math.floor((delayMs % 60000) / 1000);
-                    this.console.log(`[AutoMilícia] ${townName}: milícia agendada em ${mins}m${secs}s`);
+                }, fireInMs);
 
-                    const tid2 = setTimeout(() => {
-                        this._scheduled.delete(townId);
-                        this._activateMilitia(townId);
-                    }, delayMs);
-                    this._scheduled.set(townId, tid2);
-                }
+                this._scheduled.set(townId, timeoutId);
+                this.console.log(`[AutoMilícia] Agendado: ${uw.ITowns.towns[townId]?.getName?.() ?? townId} em ${Math.round(fireInMs / 1000)}s`);
             }
         } catch(e) {
             this.console.log('[AutoMilícia] Erro: ' + e?.message);
@@ -150,17 +143,14 @@ class AutoMilitia extends ModernUtil {
                         const msg = `✗ Falha em ${townName}`;
                         this.console.log('[AutoMilícia] ' + msg);
                         uw.$('#militia_log').text(msg).css('color', '#8a2a2a');
-                        this._processed.delete(String(townId));
                     }
                 },
                 err => {
                     this.console.log(`[AutoMilícia] ✗ Erro rede em ${townName}: ${err}`);
-                    this._processed.delete(String(townId)); // Permite retry
                 }
             );
         } catch(e) {
             this.console.log('[AutoMilícia] Exceção: ' + e?.message);
-            this._processed.delete(String(townId));
         }
     }
 }
