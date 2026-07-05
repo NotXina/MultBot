@@ -179,18 +179,6 @@ class ModernBot {
         };
 
         setTimeout(editController, 2500);
-
-        // Move o botão do ModernBot para posição customizada
-        const moveBtn = () => {
-            const btn = document.querySelector('.modern_bot_settings');
-            if (btn) {
-                btn.style.setProperty('top', '95px', 'important');
-                btn.style.setProperty('right', '113px', 'important');
-            }
-        };
-        const btnObserver = new MutationObserver(moveBtn);
-        btnObserver.observe(document.body, { childList: true, subtree: true });
-        setTimeout(() => btnObserver.disconnect(), 15000);
     };
 
     /* New quick menu */
