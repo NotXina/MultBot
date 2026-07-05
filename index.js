@@ -34,6 +34,7 @@
         'auto_train.js',
         'status.js',
         'auto_militia.js',
+        'auto_research.js',
         'auto_send_resources.js',
         'colonize_ship_sender.js',
         'mult_tools.js',
