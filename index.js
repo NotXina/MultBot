@@ -5,9 +5,7 @@
 // @version      1.0.0
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
-// @grant        GM_xmlhttpRequest
-// @connect      raw.githubusercontent.com
-// @require      http://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js
+// @grant        none
 // @run-at       document-end
 // @updateURL    https://raw.githubusercontent.com/NotXina/MultBot/main/index.js
 // @downloadURL  https://raw.githubusercontent.com/NotXina/MultBot/main/index.js
@@ -18,6 +16,7 @@
 
     const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main/Modules';
     const MAX_RETRIES = 2;
+    const FETCH_TIMEOUT_MS = 15000;
 
     const MODULES = [
         'core.js',
@@ -55,26 +54,36 @@
         console.log('[MultBot] ✓ Todos os módulos injetados!');
     }
 
-    function fetchModule(index, attempt = 0) {
+    async function fetchModule(index, attempt = 0) {
         const mod = MODULES[index];
-        GM_xmlhttpRequest({
-            method:  'GET',
-            url:     `${BASE_URL}/${mod}?_=${Date.now()}`,
-            headers: { 'Cache-Control': 'no-cache' },
-            onload(r) {
-                if (r.status === 200) {
-                    codes[index] = r.responseText;
-                    console.log(`[MultBot] ✓ baixado: ${mod}`);
-                    completed++;
-                    if (completed === MODULES.length) injectAll();
-                } else {
-                    retryOrFail(index, attempt, `HTTP ${r.status}`);
-                }
-            },
-            onerror() {
-                retryOrFail(index, attempt, 'Falha de rede');
+        const url = `${BASE_URL}/${mod}?_=${Date.now()}`;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                cache: 'no-store',
+                signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                retryOrFail(index, attempt, `HTTP ${response.status}`);
+                return;
             }
-        });
+
+            const text = await response.text();
+            codes[index] = text;
+            console.log(`[MultBot] ✓ baixado: ${mod}`);
+            completed++;
+            if (completed === MODULES.length) injectAll();
+        } catch (err) {
+            clearTimeout(timeoutId);
+            const reason = err?.name === 'AbortError' ? 'Timeout' : (err?.message ?? 'Falha de rede');
+            retryOrFail(index, attempt, reason);
+        }
     }
 
     function retryOrFail(index, attempt, reason) {
@@ -82,7 +91,7 @@
         if (attempt < MAX_RETRIES) {
             const nextAttempt = attempt + 1;
             console.warn(`[MultBot] ⚠ ${reason} ao baixar ${mod} — tentativa ${nextAttempt}/${MAX_RETRIES}`);
-            setTimeout(() => fetchModule(index, nextAttempt), 800 * nextAttempt);
+            setTimeout(() => fetchModule(index, nextAttempt), 800 * nextAttempt); // backoff crescente
         } else {
             codes[index] = `console.error('[MultBot] Falha definitiva ao carregar ${mod} após ${MAX_RETRIES} tentativas (${reason})');`;
             console.error(`[MultBot] ✗ Desistindo de ${mod} após ${MAX_RETRIES} tentativas: ${reason}`);
