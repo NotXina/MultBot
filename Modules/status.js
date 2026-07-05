@@ -10,10 +10,18 @@ class StatusPanel extends ModernUtil {
         this._countdownInterval = null;
         this._nextRefreshAt = null;
         this._refreshMinutes = this.storage.load('refresh_minutes', 0);
+
+        // O agendamento do refresh acontece AQUI, uma única vez, assim que
+        // o bot carrega — independente de o painel Status ser aberto ou não.
+        // Isso garante que o reload acontece no tempo certo mesmo que você
+        // nunca abra o painel, ou entre/saia dele várias vezes.
+        if (this._refreshMinutes > 0) {
+            this._scheduleRefresh();
+        }
     }
 
     settings = () => {
-        requestAnimationFrame(() => this._startRefresh());
+        requestAnimationFrame(() => this._startVisuals());
         return `
         <div style="padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.1);display:flex;align-items:center;gap:8px;">
             <span style="font-weight:bold;font-size:12px;">Auto Refresh:</span>
@@ -26,6 +34,8 @@ class StatusPanel extends ModernUtil {
         <div id="status_rows" style="padding:4px;"></div>`;
     };
 
+    /* Chamado só quando o usuário explicitamente muda e aplica o valor —
+       aqui SIM queremos reiniciar o agendamento do zero */
     _applyRefresh = () => {
         const val = parseInt(uw.$('#refresh_minutes_input').val(), 10);
 
@@ -42,11 +52,12 @@ class StatusPanel extends ModernUtil {
         this._refreshMinutes = val;
         this.storage.save('refresh_minutes', val);
         this._scheduleRefresh();
+        uw.$('#refresh_status').text(`✓ Recarrega a cada ${val} min (±30s)`).css('color', '#1a6b2a');
 
         this.console.log(`[StatusPanel] Auto Refresh: ${val} minuto(s) (± jitter).`);
     };
 
-    /* Cancela qualquer timeout e countdown de refresh agendados */
+    /* Cancela o timeout de refresh agendado (usado só ao trocar a config) */
     _clearRefresh() {
         if (this._refreshTimeoutId) {
             clearTimeout(this._refreshTimeoutId);
@@ -55,8 +66,10 @@ class StatusPanel extends ModernUtil {
         this._nextRefreshAt = null;
     }
 
-    /* Agenda o próximo reload com jitter de ±30s, evitando cravar
-       sempre no mesmo segundo exato — padrão menos "robótico" */
+    /* Agenda o próximo reload com jitter de ±30s. Só é chamado:
+       1) uma vez no constructor (quando o bot carrega), ou
+       2) quando o usuário muda manualmente a configuração via _applyRefresh.
+       NUNCA é chamado apenas por abrir/fechar o painel. */
     _scheduleRefresh() {
         this._clearRefresh();
         if (this._refreshMinutes <= 0) return;
@@ -69,7 +82,10 @@ class StatusPanel extends ModernUtil {
         this._refreshTimeoutId = setTimeout(() => location.reload(), ms);
     }
 
-    _startRefresh() {
+    /* Chamado toda vez que o painel Status é aberto/reaberto.
+       Cuida SÓ da parte visual (render de status + contador),
+       nunca mexe no agendamento real do refresh. */
+    _startVisuals() {
         if (this._interval) clearInterval(this._interval);
         this._render();
         this._interval = setInterval(() => this._render(), 3000);
@@ -77,8 +93,11 @@ class StatusPanel extends ModernUtil {
         if (this._countdownInterval) clearInterval(this._countdownInterval);
         this._countdownInterval = setInterval(() => this._updateCountdown(), 1000);
 
-        // Retoma o auto refresh salvo
-        if (this._refreshMinutes > 0) {
+        // Reflete o status atual do refresh na tela, sem reagendar nada
+        if (this._refreshMinutes > 0 && this._nextRefreshAt) {
+            uw.$('#refresh_status').text(`✓ Recarrega a cada ${this._refreshMinutes} min (±30s)`).css('color', '#1a6b2a');
+        } else if (this._refreshMinutes > 0) {
+            // Segurança: se por algum motivo não há timer ativo mas deveria haver, cria um
             this._scheduleRefresh();
             uw.$('#refresh_status').text(`✓ Recarrega a cada ${this._refreshMinutes} min (±30s)`).css('color', '#1a6b2a');
         }
