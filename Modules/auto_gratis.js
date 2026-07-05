@@ -3,6 +3,7 @@ class AutoGratis extends ModernUtil {
         super(c, s);
 
         this.onlyActiveTown = this.storage.load('autogratis_only_active_town', false);
+        this._fired = new Set(); // ordens já disparadas, evita chamada duplicada
 
         if (this.storage.load('enable_autogratis', false)) this.toggle();
     }
@@ -73,6 +74,8 @@ class AutoGratis extends ModernUtil {
         if (!completedAt) return false;
         const remaining = completedAt - now;
         if (remaining > 0 && remaining < 300) {
+            if (this._fired.has(order.id)) return false;
+            this._fired.add(order.id);
             this.callGratis(town.id, order.id);
             return true;
         }
@@ -84,7 +87,10 @@ class AutoGratis extends ModernUtil {
        town currently focused via getCurrentTown — same scope as the
        pre-PR-#75 behaviour, opt-in for users who prefer that cadence. */
     main = () => {
-        const now         = Math.floor(Date.now() / 1000);
+        const now = Math.floor(Date.now() / 1000);
+
+        // Safety net contra crescimento indefinido do Set
+        if (this._fired.size > 50) this._fired.clear();
 
         if (this.onlyActiveTown) {
             this.tryTown(uw.ITowns.getCurrentTown(), now);
