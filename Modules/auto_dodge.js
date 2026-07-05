@@ -167,4 +167,244 @@ class AutoDodge extends ModernUtil {
     _pickRandomTownOnSameIsland(attackedTownId) {
         try {
             const attackedTown = uw.ITowns.towns[attackedTownId];
-            if
+            if (!attackedTown) return null;
+
+            const ix = attackedTown.attributes.island_x;
+            const iy = attackedTown.attributes.island_y;
+
+            const candidates = [];
+            for (const townId in uw.ITowns.towns) {
+                if (String(townId) === String(attackedTownId)) continue;
+                const town = uw.ITowns.towns[townId];
+                if (town.attributes.island_x === ix && town.attributes.island_y === iy) {
+                    candidates.push(townId);
+                }
+            }
+
+            if (candidates.length === 0) return null;
+            return candidates[Math.floor(Math.random() * candidates.length)];
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /* Separa as tropas de uma cidade em dois grupos: terrestres e navais,
+       usando a flag is_naval do próprio GameData (mesma fonte usada no
+       AutoTrain), garantindo consistência entre módulos. */
+    _splitUnitsByType(town) {
+        const all = { ...town.units() };
+        delete all.militia; // milícia nunca é enviada como reforço
+
+        const landUnits  = {};
+        const navalUnits = {};
+
+        for (const unit of Object.keys(all)) {
+            const count = all[unit];
+            if (!count || count <= 0) continue;
+
+            const isNaval = !!uw.GameData.units[unit]?.is_naval;
+            if (isNaval) navalUnits[unit] = count;
+            else         landUnits[unit] = count;
+        }
+
+        return { landUnits, navalUnits };
+    }
+
+    async _evacuateTown(townId, attackArrival) {
+        try {
+            const town = uw.ITowns.towns[townId];
+            if (!town) return;
+            const townName = town.getName?.() ?? '#' + townId;
+
+            const safeTownId = this._pickRandomTownOnSameIsland(townId);
+            if (!safeTownId) {
+                this.console.log(`[AutoDodge] ⚠ ${townName}: nenhuma outra cidade sua na mesma ilha — evacuação pulada.`);
+                uw.$('#dodge_log').text(`⚠ ${townName}: sem cidade na mesma ilha para evacuar.`).css('color', '#eab308');
+                return;
+            }
+            const safeTownName = this._getTownName(safeTownId);
+
+            const { landUnits, navalUnits } = this._splitUnitsByType(town);
+            const hasLand  = Object.keys(landUnits).length  > 0;
+            const hasNaval = Object.keys(navalUnits).length > 0;
+
+            if (!hasLand && !hasNaval) {
+                this.console.log(`[AutoDodge] ${townName}: sem tropas para evacuar.`);
+                return;
+            }
+
+            this.console.log(`[AutoDodge] ⚠ Evacuando ${townName} → ${safeTownName} (mesma ilha, terrestre e naval separados)...`);
+
+            const excludeIds = new Set();
+
+            // ── Envia terrestres primeiro ──
+            if (hasLand) {
+                try {
+                    await this._sendUnits(townId, safeTownId, landUnits);
+                    await this.sleep(this.CAPTURE_DELAY_MS);
+                    const landCommandId = this._findSupportCommandId(townId, safeTownId, excludeIds);
+                    if (landCommandId) {
+                        excludeIds.add(String(landCommandId));
+                        this._scheduleRecall(townId, townName, attackArrival, landCommandId, 'terrestre');
+                    } else {
+                        this.console.log(`[AutoDodge] ⚠ ${townName}: ID do comando terrestre não encontrado — recall manual necessário.`);
+                    }
+                } catch (e) {
+                    this.console.log(`[AutoDodge] ✗ ${townName}: falha ao enviar terrestres — ${e?.message}`);
+                }
+            } else {
+                this.console.log(`[AutoDodge] ${townName}: sem tropas terrestres, pulando esse grupo.`);
+            }
+
+            // ── Envia navais depois (independente do resultado do terrestre) ──
+            if (hasNaval) {
+                try {
+                    await this._sendUnits(townId, safeTownId, navalUnits);
+                    await this.sleep(this.CAPTURE_DELAY_MS);
+                    const navalCommandId = this._findSupportCommandId(townId, safeTownId, excludeIds);
+                    if (navalCommandId) {
+                        excludeIds.add(String(navalCommandId));
+                        this._scheduleRecall(townId, townName, attackArrival, navalCommandId, 'naval');
+                    } else {
+                        this.console.log(`[AutoDodge] ⚠ ${townName}: ID do comando naval não encontrado — recall manual necessário.`);
+                    }
+                } catch (e) {
+                    this.console.log(`[AutoDodge] ✗ ${townName}: falha ao enviar navais — ${e?.message}`);
+                }
+            } else {
+                this.console.log(`[AutoDodge] ${townName}: sem tropas navais, pulando esse grupo.`);
+            }
+
+            const msg = `✓ ${townName} evacuada para ${safeTownName}!`;
+            this.console.log('[AutoDodge] ' + msg);
+            uw.$('#dodge_log').text(msg).css('color', '#1a6b2a');
+            if (uw.HumanMessage) uw.HumanMessage.success(`MultBot: ${townName} → ${safeTownName}`);
+        } catch (e) {
+            this.console.log(`[AutoDodge] ✗ Erro ao evacuar #${townId}: ${e?.message}`);
+        }
+    }
+
+    /* Procura, entre os MovementsUnits atuais, o comando de apoio mais
+       recente que bate origem/destino, ignorando IDs já capturados
+       anteriormente (usado para diferenciar o comando terrestre do naval,
+       enviados em momentos separados para a mesma rota). */
+    _findSupportCommandId(fromTownId, toTownId, excludeIds = new Set()) {
+        try {
+            const models = uw.MM.getModels().MovementsUnits;
+            if (!models) return null;
+            for (const key in models) {
+                const mv = models[key].attributes;
+                if (mv.type !== 'support') continue;
+                if (String(mv.origin_town_id) !== String(fromTownId)) continue;
+                if (String(mv.target_town_id) !== String(toTownId)) continue;
+
+                const id = mv.id ?? mv.command_id ?? key;
+                if (excludeIds.has(String(id))) continue;
+
+                return id;
+            }
+            return null;
+        } catch (e) { return null; }
+    }
+
+    /* Agenda a tentativa de trazer as tropas de volta, um pouco depois do
+       horário em que o ataque deveria ter chegado (dá tempo do servidor
+       processar o combate antes de tentarmos o recall). */
+    _scheduleRecall(townId, townName, attackArrival, commandId, label) {
+        const now       = Math.floor(Date.now() / 1000);
+        const fireInSec = Math.max(this.RECALL_BUFFER_SECONDS, (attackArrival - now) + this.RECALL_BUFFER_SECONDS);
+        const fireInMs  = fireInSec * 1000;
+        const recallKey = `${townId}:${label}`;
+
+        this.console.log(`[AutoDodge] ${townName} (${label}): retorno agendado para daqui a ${fireInSec}s (comando #${commandId}).`);
+
+        const timeoutId = setTimeout(() => {
+            this._pendingRecalls.delete(recallKey);
+            this._recallSupport(townId, townName, commandId, label);
+        }, fireInMs);
+
+        this._pendingRecalls.set(recallKey, { timeoutId, commandId });
+    }
+
+    /* Cancela o comando de apoio no servidor — confirmado via captura real
+       do jogo: model_url 'Commands', action_name 'cancelCommand'. */
+    _recallSupport(townId, townName, commandId, label) {
+        const data = {
+            model_url:   'Commands',
+            action_name: 'cancelCommand',
+            captcha:     null,
+            arguments:   { id: commandId },
+        };
+
+        this.console.log(`[AutoDodge] ⏳ ${townName} (${label}): chamando as tropas de volta (comando #${commandId})...`);
+
+        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
+            res => {
+                if (res && !res.error) {
+                    const msg = `✓ ${townName} (${label}): tropas retornando!`;
+                    this.console.log('[AutoDodge] ' + msg);
+                    uw.$('#dodge_log').text(msg).css('color', '#1a6b2a');
+                    if (uw.HumanMessage) uw.HumanMessage.success(`MultBot: ${townName} (${label}) — retornando!`);
+                } else {
+                    this.console.log(`[AutoDodge] ✗ ${townName} (${label}): falha ao chamar de volta — ${JSON.stringify(res)}`);
+                    uw.$('#dodge_log').text(`✗ ${townName} (${label}): falha no recall — traga manualmente.`).css('color', '#f87171');
+                }
+            },
+            err => {
+                this.console.log(`[AutoDodge] ✗ ${townName} (${label}): erro de rede no recall — ${err}`);
+            }
+        );
+    }
+
+    _sendUnits(fromTownId, toTownId, units) {
+        return this._withTownId(fromTownId, () => new Promise((resolve, reject) => {
+            const data = {
+                id:   parseInt(toTownId, 10),
+                type: 'support',
+                ...units,
+            };
+            uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
+                res => {
+                    if (res && res.success !== false) resolve(res);
+                    else reject(new Error(res?.error || 'Falha ao enviar tropas'));
+                },
+                (r, status, txt) => reject(new Error('Erro de rede: ' + txt))
+            );
+        }));
+    }
+
+    async _withTownId(townId, fn) {
+        const orig    = uw.Game.townId;
+        const origStr = uw.Game.town_id;
+        uw.Game.townId  = parseInt(townId, 10);
+        uw.Game.town_id = parseInt(townId, 10);
+        try {
+            return await fn();
+        } finally {
+            uw.Game.townId  = orig;
+            uw.Game.town_id = origStr;
+        }
+    }
+
+    _getTownName(townId) {
+        if (!townId) return String(townId);
+        const id  = parseInt(townId);
+        const ids = String(townId);
+        try {
+            const t1 = uw.ITowns?.towns?.[id] ?? uw.ITowns?.towns?.[ids];
+            if (t1) return t1.getName() + ' (#' + ids + ')';
+
+            const allTowns = uw.MM.getOnlyCollectionByName('Town')?.models ?? [];
+            for (const t of allTowns) {
+                const tid = t.attributes?.id ?? t.id;
+                if (parseInt(tid) === id) {
+                    return (t.attributes?.name ?? '?') + ' (#' + ids + ')';
+                }
+            }
+
+            const wt = uw.WMap?.towns?.[id] ?? uw.WMap?.towns?.[ids];
+            if (wt?.name) return wt.name + ' (#' + ids + ')';
+        } catch (e) {}
+        return '#' + ids;
+    }
+}
