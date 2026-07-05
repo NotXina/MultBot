@@ -190,7 +190,7 @@ class ModernBot {
         const moveBtn = () => {
             const btn = document.querySelector('.modern_bot_settings');
             if (btn) {
-                btn.style.setProperty('top', '93px', 'important');
+                btn.style.setProperty('top', '80px', 'important');
                 btn.style.setProperty('right', '145px', 'important');
             }
         };
