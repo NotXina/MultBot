@@ -7,16 +7,15 @@
 //  e navais SEPARADAMENTE - e traz de volta automaticamente
 //  depois (cancelCommand).
 //
-//  CONFIRMADO POR TESTE: a busca usa getIslandCoordinateX()/Y()
-//  (metodos corretos, ja usados com sucesso em auto_farm.js),
-//  em vez de .attributes.island_x (que nao existe nesse objeto
-//  e sempre retornava undefined - causa raiz do bug anterior).
-//  Nao ha filtro de player_id: qualquer cidade da ilha serve.
+//  BUGFIX (busca de cidade na ilha): usa getIslandCoordinateX()/Y()
+//  em vez de .attributes.island_x (inexistente). Confirmado por teste.
 //
-//  Captura do commandId: tenta primeiro extrair direto da
-//  resposta do servidor (json.actions -> MovementsUnitsCreate),
-//  com fallback para busca em MovementsUnits se a extracao
-//  direta nao retornar nada.
+//  BUGFIX (recall automatico): a resposta REAL do jogo usa
+//  "home_town_id" para a cidade de origem (nao "origin_town_id",
+//  que sempre vem undefined), e "command_id" para o ID que o
+//  cancelCommand realmente espera (nao "id", que e o ID do
+//  MOVIMENTO, um numero diferente). Confirmado via dump completo
+//  de MovementsUnits com apoios reais ativos.
 // ══════════════════════════════════════════════════════
 class AutoDodge extends ModernUtil {
     EVACUATE_LEAD_SECONDS = 15;
@@ -212,11 +211,6 @@ class AutoDodge extends ModernUtil {
         }
     }
 
-    /* Escolhe aleatoriamente qualquer cidade conhecida na mesma ilha
-       da cidade atacada (excluindo ela mesma), independente de quem
-       for o dono - QUALQUER jogador serve. Usa getIslandCoordinateX()/Y()
-       (mesmos metodos ja validados no auto_farm.js) em vez de
-       .attributes.island_x. CONFIRMADO POR TESTE ISOLADO no console. */
     _pickRandomTownOnSameIsland(attackedTownId) {
         try {
             const attackedTown = uw.ITowns.towns[attackedTownId];
@@ -334,28 +328,26 @@ class AutoDodge extends ModernUtil {
         }
     }
 
+    /* Envia o grupo. O commandId agora e capturado SEMPRE via fallback
+       (busca em MovementsUnits), ja que a resposta direta do send_units
+       nesse jogo nao traz "actions" (confirmado: retorna apenas
+       {success, id (=town destino), data}). A busca usa os campos
+       corretos: home_town_id (origem) e command_id (id para cancelar). */
     async _evacuateGroup(fromTownId, toTownId, units, label, townName, attackArrival, excludeIds) {
         try {
             const result = await this._sendUnits(fromTownId, toTownId, units);
             this.console.log('[AutoDodge] Resposta do servidor (' + label + '): ' + JSON.stringify(result?.res ?? result));
 
-            let commandId = this._extractCommandIdFromResponse(result?.res);
+            // Da um tempo para o MovementsUnits atualizar no cliente
+            await this.sleep(this.CAPTURE_DELAY_MS);
+            const commandId = this._findSupportCommandId(fromTownId, toTownId, excludeIds);
 
             if (commandId) {
-                this.console.log('[AutoDodge] ' + townName + ' (' + label + '): commandId extraido direto da resposta: #' + commandId);
-            } else {
-                await this.sleep(this.CAPTURE_DELAY_MS);
-                commandId = this._findSupportCommandId(fromTownId, toTownId, excludeIds);
-                if (commandId) {
-                    this.console.log('[AutoDodge] ' + townName + ' (' + label + '): commandId encontrado via fallback (MovementsUnits): #' + commandId);
-                }
-            }
-
-            if (commandId) {
+                this.console.log('[AutoDodge] ' + townName + ' (' + label + '): commandId encontrado: #' + commandId);
                 excludeIds.add(String(commandId));
                 this._scheduleRecall(fromTownId, townName, attackArrival, commandId, label);
             } else {
-                this.console.log('[AutoDodge] Aviso: ' + townName + ' (' + label + ') - id do comando nao encontrado por nenhum metodo. Recall manual necessario.');
+                this.console.log('[AutoDodge] Aviso: ' + townName + ' (' + label + ') - id do comando nao encontrado. Recall manual necessario.');
                 uw.$('#dodge_log').text('Aviso: ' + townName + ' (' + label + ') - recall automatico indisponivel.').css('color', '#eab308');
             }
         } catch (e) {
@@ -364,24 +356,11 @@ class AutoDodge extends ModernUtil {
         }
     }
 
-    _extractCommandIdFromResponse(res) {
-        try {
-            const actions = res?.json?.actions ?? res?.actions;
-            if (!Array.isArray(actions)) return null;
-
-            for (const action of actions) {
-                if (action.subject === 'MovementsUnitsCreate' && action.param_str) {
-                    const parsed = JSON.parse(action.param_str);
-                    const info = parsed?.MovementsUnitsCreate;
-                    if (info && info.id) return info.id;
-                }
-            }
-            return null;
-        } catch (e) {
-            return null;
-        }
-    }
-
+    /* BUGFIX CONFIRMADO POR DUMP REAL: a cidade de origem do movimento
+       vem em "home_town_id", NAO em "origin_town_id" (que sempre e
+       undefined nesse jogo). E o ID que o cancelCommand espera e
+       "command_id", NAO "id" (que e o ID do movimento em si, um
+       numero diferente do command_id). */
     _findSupportCommandId(fromTownId, toTownId, excludeIds) {
         const excluded = excludeIds ? excludeIds : new Set();
         try {
@@ -392,13 +371,14 @@ class AutoDodge extends ModernUtil {
                 const mv = models[key].attributes;
                 if (!mv) continue;
                 if (mv.type !== 'support') continue;
-                if (String(mv.origin_town_id) !== String(fromTownId)) continue;
+                if (String(mv.home_town_id) !== String(fromTownId)) continue;
                 if (String(mv.target_town_id) !== String(toTownId)) continue;
 
-                const id = mv.id ? mv.id : (mv.command_id ? mv.command_id : key);
-                if (excluded.has(String(id))) continue;
+                const cmdId = mv.command_id;
+                if (!cmdId) continue;
+                if (excluded.has(String(cmdId))) continue;
 
-                return id;
+                return cmdId;
             }
             return null;
         } catch (e) {
