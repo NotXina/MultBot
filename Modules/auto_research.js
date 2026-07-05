@@ -24,6 +24,10 @@ class AutoResearch extends ModernUtil {
         this._interval = null;
         this._active   = false;
 
+        // Guarda cidades onde uma tecnologia específica falhou nesse ciclo,
+        // pra não ficar tentando a MESMA tech travada indefinidamente sem log
+        this._failedThisCycle = new Map(); // townId -> Set(tech)
+
         if (this.storage.load('ares_active', false)) {
             setTimeout(() => this.start(), 2500);
         }
@@ -93,7 +97,7 @@ class AutoResearch extends ModernUtil {
         this._updateTitle();
         this.console.log('[AutoPesquisa] Iniciado.');
         this._tick(); // primeiro tick imediato
-        this._interval = null; // controlado pelo orquestrador
+        this._interval = setInterval(() => this._tick(), 30000);
     }
 
     stop() {
@@ -110,6 +114,7 @@ class AutoResearch extends ModernUtil {
     }
 
     async _tick() {
+        if (window.__multbot_captcha_active) return;
         const townIds = Object.keys(uw.ITowns.towns);
         let count = 0;
 
@@ -154,13 +159,20 @@ class AutoResearch extends ModernUtil {
                 }
             }
 
+            // Set de techs que já falharam nesta cidade neste ciclo de vida do módulo
+            const failedSet = this._failedThisCycle.get(townId) ?? new Set();
+
             // Encontra a próxima pesquisa na ordem de prioridade
             for (const tech of this.DEFAULT_ORDER) {
                 const req = uw.GameData.researches?.[tech];
-                if (!req) { this.console.log(`[AutoPesquisa] ${townName}: ${tech} não existe neste mundo`); continue; }
+                if (!req) continue; // não existe neste mundo
                 if (researches[tech]) continue; // já pesquisado
-                if (tech === 'booty' && !this._islandHasFarmTowns(town)) { this.console.log(`[AutoPesquisa] ${townName}: booty pulado (sem aldeias bárbaras)`); continue; }
-                if (buildings.academy < (req.academy_level ?? 1)) { this.console.log(`[AutoPesquisa] ${townName}: ${tech} requer academia ${req.academy_level}, tem ${buildings.academy}`); continue; }
+                if (failedSet.has(tech)) continue; // já falhou nesta cidade — pula sem tentar de novo
+                if (tech === 'booty' && !this._islandHasFarmTowns(town)) {
+                    this.console.log(`[AutoPesquisa] ${townName}: booty pulado (sem aldeias bárbaras)`);
+                    continue;
+                }
+                if (buildings.academy < (req.academy_level ?? 1)) continue;
 
                 const { wood, stone, iron } = town.resources();
                 const cost = req?.resources ?? { wood: 0, stone: 0, iron: 0 };
@@ -169,10 +181,21 @@ class AutoResearch extends ModernUtil {
                     continue;
                 }
 
-                await this._doResearch(townId, tech, townName);
-                return true;
+                // Tenta a pesquisa e CHECA o resultado real do servidor
+                const success = await this._doResearch(townId, tech, townName);
+                if (success) {
+                    return true; // pesquisa iniciada de verdade — encerra o loop desta cidade
+                }
+
+                // Falhou no servidor (ex: pré-requisito que não checamos, tipo
+                // booty exigir espionagem concluída). Marca como falha e
+                // tenta a PRÓXIMA tech da lista no mesmo tick, em vez de
+                // ficar preso tentando essa mesma tech pra sempre.
+                failedSet.add(tech);
+                this._failedThisCycle.set(townId, failedSet);
+                this.console.log(`[AutoPesquisa] ${townName}: ${tech} rejeitado pelo servidor — tentando próxima`);
             }
-            this.console.log(`[AutoPesquisa] ${townName}: nada a pesquisar`);
+
             return false;
         } catch(e) {
             this.console.log(`[AutoPesquisa] Erro: ${e?.message}`);
