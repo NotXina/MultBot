@@ -75,6 +75,7 @@ class AutoRuralLevel extends ModernUtil {
     };
 
     main = async () => {
+        if (window.__multbot_captcha_active) return;
         let player_relation_models = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation').models;
         let farm_town_models = uw.MM.getOnlyCollectionByName('FarmTown').models;
         let killpoints = uw.MM.getModelByNameAndPlayerId('PlayerKillpoints').attributes;
