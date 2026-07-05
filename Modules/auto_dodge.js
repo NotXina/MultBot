@@ -40,10 +40,9 @@ class AutoDodge extends ModernUtil {
             '<div class="game_border_left"></div><div class="game_border_right"></div>' +
             '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
-            this.getTitleHtml('dodge_title', 'Auto Fuga (Dodge)', this.toggle, '', this._active) +
+            this.getTitleHtml('dodge_title', 'Auto Dodge', this.toggle, '', this._active) +
             '<div style="padding:5px 10px;font-weight:bold;" title="Envia reforco para qualquer cidade da ilha. Se nenhuma existir, a evacuacao e pulada.">' +
             'Evacua tropas ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto para uma cidade aleatoria na mesma ilha, com retorno automatico.' +
-            '</div>' +
             '<div id="dodge_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
             '</div>'
         );
