@@ -306,6 +306,8 @@ class About {
 }
 
 class BotConsole {
+	MAX_ENTRIES = 200;
+
 	constructor() {
 		this.string = [];
 		this.updateSettings();
@@ -326,6 +328,11 @@ class BotConsole {
 		const date = new Date();
 		const time = date.toLocaleTimeString();
 		this.string.push(`[${time}] ${string}`);
+
+		// Corta o mais antigo quando passa do limite — evita crescimento infinito do DOM
+		if (this.string.length > this.MAX_ENTRIES) {
+			this.string.splice(0, this.string.length - this.MAX_ENTRIES);
+		}
 	};
 
 	updateSettings = () => {
@@ -333,6 +340,12 @@ class BotConsole {
 		this.string.forEach((e, i) => {
 			if (uw.$(`#log_id_${i}`).length) return;
 			console.prepend(`<p id="log_id_${i}">${e}</p>`);
+		});
+
+		// Remove do DOM as entradas que já saíram do array (via splice acima)
+		const validIds = new Set(this.string.map((_, i) => `log_id_${i}`));
+		console.find('p').each(function () {
+			if (!validIds.has(this.id)) uw.$(this).remove();
 		});
 	};
 }
