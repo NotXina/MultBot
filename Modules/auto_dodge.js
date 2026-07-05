@@ -2,16 +2,16 @@
 //  MODULE: AutoDodge
 //  Detecta ataques chegando e agenda a evacuacao das tropas
 //  para exatamente ~15s antes do impacto - enviando para
-//  QUALQUER cidade na MESMA ILHA (cacheada em uw.ITowns.towns,
-//  que inclui vizinhos de outros jogadores) - terrestres e
-//  navais SEPARADAMENTE - e traz de volta automaticamente
+//  QUALQUER cidade na MESMA ILHA (de QUALQUER jogador,
+//  sem restricao) cacheada em uw.ITowns.towns - terrestres
+//  e navais SEPARADAMENTE - e traz de volta automaticamente
 //  depois (cancelCommand).
 //
-//  BUGFIX: a fonte de candidatas era uw.MM.getOnlyCollectionByName('Town')
-//  (que so contem as proprias cidades) lendo .attributes.island_x
-//  (campo inexistente nesse objeto). Corrigido para usar
-//  uw.ITowns.towns com os metodos corretos getIslandCoordinateX()/Y(),
-//  ja confirmados como funcionais em outros modulos (auto_farm.js).
+//  CONFIRMADO POR TESTE: a busca usa getIslandCoordinateX()/Y()
+//  (metodos corretos, ja usados com sucesso em auto_farm.js),
+//  em vez de .attributes.island_x (que nao existe nesse objeto
+//  e sempre retornava undefined - causa raiz do bug anterior).
+//  Nao ha filtro de player_id: qualquer cidade da ilha serve.
 //
 //  Captura do commandId: tenta primeiro extrair direto da
 //  resposta do servidor (json.actions -> MovementsUnitsCreate),
@@ -49,8 +49,8 @@ class AutoDodge extends ModernUtil {
             '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
             this.getTitleHtml('dodge_title', 'Auto Fuga (Dodge)', this.toggle, '', this._active) +
-            '<div style="padding:5px 10px;font-weight:bold;" title="Envia reforco para qualquer cidade conhecida da ilha. Se nenhuma existir no cache, a evacuacao e pulada.">' +
-            'Evacua tropas ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto para uma cidade aleatoria na mesma ilha, com retorno automatico.' +
+            '<div style="padding:5px 10px;font-weight:bold;" title="Envia reforco para qualquer cidade conhecida da ilha, de qualquer jogador. Se nenhuma existir no cache, a evacuacao e pulada.">' +
+            'Evacua tropas ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto para uma cidade aleatoria na mesma ilha (qualquer jogador), com retorno automatico.' +
             '</div>' +
             '<div id="dodge_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
             '</div>'
@@ -213,12 +213,10 @@ class AutoDodge extends ModernUtil {
     }
 
     /* Escolhe aleatoriamente qualquer cidade conhecida na mesma ilha
-       da cidade atacada (excluindo ela mesma). CORRIGIDO: usa
-       uw.ITowns.towns (que ja contem cidades vizinhas cacheadas por
-       ataques/scouting) com os metodos getIslandCoordinateX()/Y(),
-       getId() e getName() — os mesmos ja usados com sucesso em
-       auto_farm.js — em vez de .attributes.island_x (que nao existe
-       nesse objeto e sempre retornava undefined). */
+       da cidade atacada (excluindo ela mesma), independente de quem
+       for o dono - QUALQUER jogador serve. Usa getIslandCoordinateX()/Y()
+       (mesmos metodos ja validados no auto_farm.js) em vez de
+       .attributes.island_x. CONFIRMADO POR TESTE ISOLADO no console. */
     _pickRandomTownOnSameIsland(attackedTownId) {
         try {
             const attackedTown = uw.ITowns.towns[attackedTownId];
