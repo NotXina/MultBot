@@ -145,44 +145,45 @@ class ColonizeShipSender extends ModernUtil {
     }
 
     _tick = async () => {
-        this._log('Verificando colonize_ships em todas as cidades...', 'info');
-        try {
-            const townIds = Object.keys(uw.ITowns.towns);
-            if (townIds.length === 0) { this._log('Nenhuma cidade encontrada.', 'warning'); return; }
+    if (window.__multbot_captcha_active) return;
+    this._log('Verificando colonize_ships em todas as cidades...', 'info');
+    try {
+        const townIds = Object.keys(uw.ITowns.towns);
+        if (townIds.length === 0) { this._log('Nenhuma cidade encontrada.', 'warning'); return; }
 
-            // Filtra cidades com colonize_ship disponível
-            const eligible = townIds.filter(townId =>
-                String(townId) !== String(this.config.targetTownId) &&
-                this._getColonizeShipCount(townId) > 0
-            );
+        // Filtra cidades com colonize_ship disponível
+        const eligible = townIds.filter(townId =>
+            String(townId) !== String(this.config.targetTownId) &&
+            this._getColonizeShipCount(townId) > 0
+        );
 
-            if (eligible.length === 0) { this._log('Nenhum colonize_ship disponível.', 'info'); return; }
+        if (eligible.length === 0) { this._log('Nenhum colonize_ship disponível.', 'info'); return; }
 
-            // Envia em paralelo com pequeno delay entre cada um para não sobrecarregar
-            let totalSent = 0;
-            const results = await Promise.allSettled(
-                eligible.map(async (townId, i) => {
-                    await this.sleep(i * 400); // escalonado: 0ms, 400ms, 800ms...
-                    if (this._stop) return 0;
-                    const count    = this._getColonizeShipCount(townId);
-                    const townName = uw.ITowns.towns[townId]?.getName?.() || townId;
-                    await this._sendSupport(townId, this.config.targetTownId, count);
-                    this._log('✓ ' + townName + ': ' + count + ' navio(s) enviado(s).', 'success');
-                    return count;
-                })
-            );
+        // Envio SEQUENCIAL — evita corrida no swap de Game.townId
+        let totalSent = 0;
+        for (const townId of eligible) {
+            if (this._stop) break;
 
-            for (const r of results) {
-                if (r.status === 'fulfilled') totalSent += r.value || 0;
-                else this._log('✗ Erro: ' + r.reason?.message, 'error');
+            const count    = this._getColonizeShipCount(townId);
+            const townName = uw.ITowns.towns[townId]?.getName?.() || townId;
+
+            try {
+                await this._sendSupport(townId, this.config.targetTownId, count);
+                this._log('✓ ' + townName + ': ' + count + ' navio(s) enviado(s).', 'success');
+                totalSent += count;
+            } catch (e) {
+                this._log('✗ Erro em ' + townName + ': ' + (e?.message ?? e), 'error');
             }
 
-            if (totalSent > 0) this._log('Ciclo completo. Total: ' + totalSent + ' navio(s).', 'success');
-        } catch (e) {
-            this._log('Erro no ciclo: ' + (e?.message ?? e), 'error');
+            // Delay entre cada envio para não sobrecarregar e dar tempo do restore terminar
+            await this.sleep(400 + Math.random() * 300);
         }
-    };
 
+        if (totalSent > 0) this._log('Ciclo completo. Total: ' + totalSent + ' navio(s).', 'success');
+    } catch (e) {
+        this._log('Erro no ciclo: ' + (e?.message ?? e), 'error');
+    }
+};
     _getColonizeShipCount(townId) {
         try { return uw.ITowns.towns[townId].units()?.colonize_ship ?? 0; } catch { return 0; }
     }
