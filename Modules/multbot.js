@@ -122,12 +122,14 @@ class ModernBot {
     settingsTrain = () => {
         let html = '';
         html += this.autoTrain.settings();
-        html += this.autoResearch.settings();
         return html;
     };
 
     settingsMult = () => {
-        return this.multTools.settings();
+        let html = '';
+        html += this.multTools.settings();
+        html += this.autoResearch.settings();
+        return html;
     };
 
     settingsShips = () => {
@@ -180,7 +182,6 @@ class ModernBot {
         };
 
         setTimeout(editController, 2500);
-
     };
 
     /* New quick menu */
