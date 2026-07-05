@@ -6,11 +6,14 @@
 //  terrestres e navais SEPARADAMENTE - e traz de volta
 //  automaticamente depois (cancelCommand).
 //
+//  A cidade de destino e sorteada NO MOMENTO DO AGENDAMENTO
+//  (nao na hora da evacuacao), aparece no log de agendamento,
+//  e fica travada ate a evacuacao de fato acontecer.
+//
 //  Captura do commandId: tenta primeiro extrair direto da
-//  resposta do servidor (json.actions -> MovementsUnitsCreate,
-//  tecnica encontrada em modulos Noct de referencia), com
-//  fallback para busca em MovementsUnits se a extracao direta
-//  nao retornar nada.
+//  resposta do servidor (json.actions -> MovementsUnitsCreate),
+//  com fallback para busca em MovementsUnits se a extracao
+//  direta nao retornar nada.
 // ══════════════════════════════════════════════════════
 class AutoDodge extends ModernUtil {
     EVACUATE_LEAD_SECONDS = 15;
@@ -21,7 +24,7 @@ class AutoDodge extends ModernUtil {
         super(c, s);
         this._active = false;
         this._intervalId = null;
-        this._scheduledEvac = new Map();
+        this._scheduledEvac = new Map(); // townId -> { timeoutId, safeTownId }
         this._evacuated = new Set();
         this._pendingRecalls = new Map();
 
@@ -80,8 +83,8 @@ class AutoDodge extends ModernUtil {
             this._intervalId = null;
         }
 
-        for (const timeoutId of this._scheduledEvac.values()) {
-            clearTimeout(timeoutId);
+        for (const entry of this._scheduledEvac.values()) {
+            clearTimeout(entry.timeoutId);
         }
         this._scheduledEvac.clear();
 
@@ -122,7 +125,7 @@ class AutoDodge extends ModernUtil {
 
             for (const townId of this._scheduledEvac.keys()) {
                 if (!attackedTowns.has(townId)) {
-                    clearTimeout(this._scheduledEvac.get(townId));
+                    clearTimeout(this._scheduledEvac.get(townId).timeoutId);
                     this._scheduledEvac.delete(townId);
                 }
             }
@@ -140,35 +143,44 @@ class AutoDodge extends ModernUtil {
                 if (this._evacuated.has(townId)) continue;
 
                 const remaining = arrival - now;
+                const townLabel = this._getTownName(townId);
 
                 // Rede de seguranca: se ja esta dentro da janela critica, evacua AGORA
                 if (remaining <= this.EVACUATE_LEAD_SECONDS) {
                     if (this._scheduledEvac.has(townId)) {
-                        clearTimeout(this._scheduledEvac.get(townId));
+                        clearTimeout(this._scheduledEvac.get(townId).timeoutId);
                         this._scheduledEvac.delete(townId);
                     }
                     this._evacuated.add(townId);
-                    this.console.log('[AutoDodge] Rede de seguranca: ' + this._getTownName(townId) + ' esta a ' + remaining + 's do impacto - evacuando imediatamente.');
-                    this._evacuateTown(townId, arrival);
+
+                    const safeTownId = this._pickRandomTownOnSameIsland(townId);
+                    this.console.log('[AutoDodge] Rede de seguranca: ' + townLabel + ' esta a ' + remaining + 's do impacto - evacuando imediatamente.');
+                    this._evacuateTown(townId, arrival, safeTownId);
                     continue;
                 }
 
                 if (this._scheduledEvac.has(townId)) continue;
 
+                // Sorteia a cidade de destino JA no momento do agendamento
+                const safeTownId = this._pickRandomTownOnSameIsland(townId);
                 const fireInMs = (remaining - this.EVACUATE_LEAD_SECONDS) * 1000;
 
                 const timeoutId = setTimeout(() => {
                     this._scheduledEvac.delete(townId);
                     if (this._evacuated.has(townId)) return;
                     this._evacuated.add(townId);
-                    this._evacuateTown(townId, arrival);
+                    this._evacuateTown(townId, arrival, safeTownId);
                 }, fireInMs);
 
-                this._scheduledEvac.set(townId, timeoutId);
+                this._scheduledEvac.set(townId, { timeoutId: timeoutId, safeTownId: safeTownId });
 
-                const townLabel = this._getTownName(townId);
                 const secLeft = Math.round(fireInMs / 1000);
-                this.console.log('[AutoDodge] Evacuacao agendada: ' + townLabel + ' em ' + secLeft + 's (' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto).');
+                if (safeTownId) {
+                    const safeTownLabel = this._getTownName(safeTownId);
+                    this.console.log('[AutoDodge] Evacuacao agendada: ' + townLabel + ' -> ' + safeTownLabel + ' em ' + secLeft + 's (' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto).');
+                } else {
+                    this.console.log('[AutoDodge] Aviso: ' + townLabel + ' agendada em ' + secLeft + 's, mas SEM cidade na mesma ilha ainda. Sera pulada na hora da evacuacao a menos que uma cidade apareca.');
+                }
             }
         } catch (e) {
             const msg = e && e.message ? e.message : e;
@@ -223,11 +235,7 @@ class AutoDodge extends ModernUtil {
 
             if (candidates.length === 0) return null;
             const randomIndex = Math.floor(Math.random() * candidates.length);
-            const chosen = candidates[randomIndex];
-
-            this.console.log('[AutoDodge] Candidatas na mesma ilha: ' + candidates.length + '. Escolhida: #' + chosen.id + ' (player_id: ' + chosen.player_id + ').');
-
-            return chosen.id;
+            return candidates[randomIndex].id;
         } catch (e) {
             const msg = e && e.message ? e.message : e;
             this.console.log('[AutoDodge] Erro ao procurar cidade na mesma ilha: ' + msg);
@@ -259,13 +267,20 @@ class AutoDodge extends ModernUtil {
         return { landUnits: landUnits, navalUnits: navalUnits };
     }
 
-    async _evacuateTown(townId, attackArrival) {
+    /* Recebe o safeTownId já decidido no momento do agendamento.
+       Se por algum motivo vier null (nenhuma cidade na ilha na
+       época do agendamento), tenta sortear de novo agora, como
+       última chance antes de desistir. */
+    async _evacuateTown(townId, attackArrival, safeTownId) {
         try {
             const town = uw.ITowns.towns[townId];
             if (!town) return;
 
             const townName = town.getName ? town.getName() : ('#' + townId);
-            const safeTownId = this._pickRandomTownOnSameIsland(townId);
+
+            if (!safeTownId) {
+                safeTownId = this._pickRandomTownOnSameIsland(townId);
+            }
 
             if (!safeTownId) {
                 this.console.log('[AutoDodge] Aviso: ' + townName + ' - nenhuma cidade conhecida na mesma ilha. Evacuacao pulada.');
@@ -314,21 +329,16 @@ class AutoDodge extends ModernUtil {
         }
     }
 
-    /* Envia um grupo (terrestre ou naval), tenta extrair o commandId
-       direto da resposta do servidor e, se não conseguir, cai no
-       fallback de busca em MovementsUnits. Agenda o recall em seguida. */
     async _evacuateGroup(fromTownId, toTownId, units, label, townName, attackArrival, excludeIds) {
         try {
             const result = await this._sendUnits(fromTownId, toTownId, units);
             this.console.log('[AutoDodge] Resposta do servidor (' + label + '): ' + JSON.stringify(result?.res ?? result));
 
-            // Tentativa 1: extrair direto da resposta (mais confiável)
             let commandId = this._extractCommandIdFromResponse(result?.res);
 
             if (commandId) {
                 this.console.log('[AutoDodge] ' + townName + ' (' + label + '): commandId extraido direto da resposta: #' + commandId);
             } else {
-                // Tentativa 2 (fallback): busca em MovementsUnits após um pequeno delay
                 await this.sleep(this.CAPTURE_DELAY_MS);
                 commandId = this._findSupportCommandId(fromTownId, toTownId, excludeIds);
                 if (commandId) {
@@ -349,12 +359,6 @@ class AutoDodge extends ModernUtil {
         }
     }
 
-    /* Extrai o ID do movimento recém-criado direto da resposta do
-       servidor ao send_units, procurando por uma ação do tipo
-       "MovementsUnitsCreate" — técnica identificada em módulos de
-       referência que interceptam a resposta bruta do jogo. Retorna
-       null se a estrutura não vier no formato esperado (nesse caso
-       o fallback de busca em MovementsUnits assume). */
     _extractCommandIdFromResponse(res) {
         try {
             const actions = res?.json?.actions ?? res?.actions;
