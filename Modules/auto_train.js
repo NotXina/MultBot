@@ -253,23 +253,25 @@ class AutoTrain extends ModernUtil {
             return false;
         };
 
-        const getTroopHtml = (troop, bg) => {
-            let gray = isGray(troop, researches, buildings);
-            let color = 'red';
+        /* Usa a classe NATIVA do jogo (unit_icon50x50 + nome da unidade) em vez de
+           background-position manual. Sempre correto, mesmo se o jogo trocar o
+           spritesheet numa atualização futura — zero manutenção de offsets. */
+        const getTroopHtml = (troop) => {
+            let gray = isGray(troop);
 
             if (gray) {
                 return `
                 <div class="auto_build_box">
-                    <div class="item_icon auto_trade_troop" style="background-position: -${bg[0]}px -${bg[1]}px; filter: grayscale(1);"></div>
+                    <div class="item_icon unit_icon50x50 ${troop}" style="filter: grayscale(1);"></div>
                 </div>
                 `;
             }
             return `
                 <div class="auto_build_box">
-                <div class="item_icon auto_trade_troop" onclick="window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 0)" style="background-position: -${bg[0]}px -${bg[1]}px; cursor: pointer">
+                <div class="item_icon unit_icon50x50 ${troop}" onclick="window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 0)" style="cursor: pointer">
                     <div class="auto_build_up_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 1)" ></div>
                     <div class="auto_build_down_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', -1)"></div>
-                    <p style="color: ${color}" id="troop_lvl_${troop}" class="auto_build_lvl"> 0 <p>
+                    <p style="color: red" id="troop_lvl_${troop}" class="auto_build_lvl"> 0 <p>
                 </div>
             </div>`;
         };
@@ -285,39 +287,39 @@ class AutoTrain extends ModernUtil {
             </div>
             </div>
             <div style="width: 831px; display: inline-flex; gap: 1px;">
-            ${getTroopHtml('sword', [400, 0])}
-            ${getTroopHtml('archer', [50, 100])}
-            ${getTroopHtml('hoplite', [300, 50])}
-            ${getTroopHtml('slinger', [250, 350])}
-            ${getTroopHtml('rider', [50, 350])}
-            ${getTroopHtml('chariot', [200, 100])}
-            ${getTroopHtml('catapult', [150, 150])}
+            ${getTroopHtml('sword')}
+            ${getTroopHtml('archer')}
+            ${getTroopHtml('hoplite')}
+            ${getTroopHtml('slinger')}
+            ${getTroopHtml('rider')}
+            ${getTroopHtml('chariot')}
+            ${getTroopHtml('catapult')}
 
-            ${getTroopHtml('big_transporter', [0, 150])}
-            ${getTroopHtml('small_transporter', [300, 350])}
-            ${getTroopHtml('bireme', [50, 150])}
-            ${getTroopHtml('demolition_ship', [250, 0])}
-            ${getTroopHtml('attack_ship', [150, 100])}
-            ${getTroopHtml('trireme', [400, 250])}
-            ${getTroopHtml('colonize_ship', [50, 200])}
+            ${getTroopHtml('big_transporter')}
+            ${getTroopHtml('small_transporter')}
+            ${getTroopHtml('bireme')}
+            ${getTroopHtml('demolition_ship')}
+            ${getTroopHtml('attack_ship')}
+            ${getTroopHtml('trireme')}
+            ${getTroopHtml('colonize_ship')}
             </div>
             <div style="width: 831px; display: inline-flex; gap: 1px; margin-top: 4px; border-top: 1px solid rgba(0,0,0,0.15); padding-top: 4px;">
-            ${getTroopHtml('minotaur', [300, 300])}
-            ${getTroopHtml('manticore', [0, 300])}
-            ${getTroopHtml('zyklop', [300, 400])}
-            ${getTroopHtml('harpy', [150, 250])}
-            ${getTroopHtml('medusa', [100, 300])}
-            ${getTroopHtml('centaur', [200, 0])}
-            ${getTroopHtml('pegasus', [350, 150])}
-            ${getTroopHtml('cerberus', [200, 50])}
-            ${getTroopHtml('fury', [0, 250])}
-            ${getTroopHtml('griffin', [100, 250])}
-            ${getTroopHtml('calydonian_boar', [100, 150])}
-            ${getTroopHtml('satyr', [100, 350])}
-            ${getTroopHtml('spartoi', [350, 350])}
-            ${getTroopHtml('ladon', [300, 150])}
-            ${getTroopHtml('sea_monster', [150, 350])}
-            ${getTroopHtml('siren', [200, 350])}
+            ${getTroopHtml('minotaur')}
+            ${getTroopHtml('manticore')}
+            ${getTroopHtml('zyklop')}
+            ${getTroopHtml('harpy')}
+            ${getTroopHtml('medusa')}
+            ${getTroopHtml('centaur')}
+            ${getTroopHtml('pegasus')}
+            ${getTroopHtml('cerberus')}
+            ${getTroopHtml('fury')}
+            ${getTroopHtml('griffin')}
+            ${getTroopHtml('calydonian_boar')}
+            ${getTroopHtml('satyr')}
+            ${getTroopHtml('spartoi')}
+            ${getTroopHtml('ladon')}
+            ${getTroopHtml('sea_monster')}
+            ${getTroopHtml('siren')}
             </div>
         </div>`);
     };
