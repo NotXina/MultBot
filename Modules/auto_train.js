@@ -170,8 +170,7 @@ class AutoTrain extends ModernUtil {
     /* Favor disponível na cidade — vem de town.resources().favor.
        O jogo só permite acumular favor para o deus atualmente escolhido
        no templo, então isso naturalmente filtra "deus errado": uma
-       unidade mítica de outro deus sempre terá favor 0 e nunca recrutará,
-       sem precisarmos detectar qual deus está ativo. */
+       unidade mítica de outro deus sempre terá favor 0 e nunca recrutará. */
     _getFavor = (town_id) => {
         try {
             return uw.ITowns.towns[town_id]?.resources?.()?.favor ?? 0;
@@ -202,22 +201,24 @@ class AutoTrain extends ModernUtil {
             return false;
         };
 
-        /* Usa a classe NATIVA do jogo (unit_icon50x50 + nome da unidade) em vez de
-           background-position manual. O CSS no core.js força o encaixe correto
-           dentro do nosso quadradinho auto_build_box. */
+        /* IMPORTANTE: usar SOMENTE "unit_icon50x50 {troop}" — sem a classe
+           "item_icon", que é usada pelo próprio jogo pra itens premium/loja
+           e tem seu próprio background-image nativo, sobrescrevendo o sprite
+           correto da unidade. O CSS do core.js já cuida do encaixe (tamanho
+           e posição) via ".auto_build_box .unit_icon50x50". */
         const getTroopHtml = (troop) => {
             let gray = isGray(troop);
 
             if (gray) {
                 return `
                 <div class="auto_build_box">
-                    <div class="item_icon unit_icon50x50 ${troop}" style="filter: grayscale(1);"></div>
+                    <div class="unit_icon50x50 ${troop}" style="filter: grayscale(1);"></div>
                 </div>
                 `;
             }
             return `
                 <div class="auto_build_box">
-                <div class="item_icon unit_icon50x50 ${troop}" onclick="window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 0)" style="cursor: pointer">
+                <div class="unit_icon50x50 ${troop}" onclick="window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 0)" style="cursor: pointer">
                     <div class="auto_build_up_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 1)" ></div>
                     <div class="auto_build_down_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', -1)"></div>
                     <p style="color: red" id="troop_lvl_${troop}" class="auto_build_lvl"> 0 <p>
