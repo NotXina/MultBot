@@ -4,7 +4,6 @@ class AutoParty extends ModernUtil {
 
         this.active_types = this.storage.load('ap_types', { festival: false, procession: false, theater: false });
         this.single = this.storage.load('ap_single', true);
-        this.randomInterval = null;
 
         if (this.storage.load('ap_enable', false)) {
             this.startInterval();
@@ -202,6 +201,7 @@ class AutoParty extends ModernUtil {
     };
 
     main = async () => {
+        if (window.__multbot_captcha_active) return;
         if (this.active_types['procession']) await this.checkTriumph();
         if (this.active_types['festival']) await this.checkParty();
         if (this.active_types['theater']) await this.checkTheater();
