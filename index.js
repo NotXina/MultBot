@@ -17,6 +17,7 @@
     'use strict';
 
     const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main/Modules';
+    const MAX_RETRIES = 2;
 
     const MODULES = [
         'core.js',
@@ -52,7 +53,7 @@
         console.log('[MultBot] ✓ Todos os módulos injetados!');
     }
 
-    function fetchModule(index) {
+    function fetchModule(index, attempt = 0) {
         const mod = MODULES[index];
         GM_xmlhttpRequest({
             method:  'GET',
@@ -62,20 +63,30 @@
                 if (r.status === 200) {
                     codes[index] = r.responseText;
                     console.log(`[MultBot] ✓ baixado: ${mod}`);
+                    completed++;
+                    if (completed === MODULES.length) injectAll();
                 } else {
-                    codes[index] = `console.error('[MultBot] HTTP ${r.status}: ${mod}');`;
-                    console.error(`[MultBot] ✗ HTTP ${r.status}: ${mod}`);
+                    retryOrFail(index, attempt, `HTTP ${r.status}`);
                 }
-                completed++;
-                if (completed === MODULES.length) injectAll();
             },
             onerror() {
-                codes[index] = `console.error('[MultBot] Falha de rede: ${mod}');`;
-                console.error(`[MultBot] ✗ Falha de rede: ${mod}`);
-                completed++;
-                if (completed === MODULES.length) injectAll();
+                retryOrFail(index, attempt, 'Falha de rede');
             }
         });
+    }
+
+    function retryOrFail(index, attempt, reason) {
+        const mod = MODULES[index];
+        if (attempt < MAX_RETRIES) {
+            const nextAttempt = attempt + 1;
+            console.warn(`[MultBot] ⚠ ${reason} ao baixar ${mod} — tentativa ${nextAttempt}/${MAX_RETRIES}`);
+            setTimeout(() => fetchModule(index, nextAttempt), 800 * nextAttempt); // backoff crescente
+        } else {
+            codes[index] = `console.error('[MultBot] Falha definitiva ao carregar ${mod} após ${MAX_RETRIES} tentativas (${reason})');`;
+            console.error(`[MultBot] ✗ Desistindo de ${mod} após ${MAX_RETRIES} tentativas: ${reason}`);
+            completed++;
+            if (completed === MODULES.length) injectAll();
+        }
     }
 
     function waitForGame() {
