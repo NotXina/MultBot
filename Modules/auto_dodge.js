@@ -1,14 +1,16 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: AutoDodge
-//  Detecta ataques chegando. Duas camadas de seguranca:
-//  1) Agenda setTimeout preciso para ~15s antes do impacto.
-//  2) A cada tick (15s), tambem checa diretamente se algum
-//     ataque ja esta dentro da janela critica - protege
-//     contra o setTimeout ter sido perdido por um reload
-//     de pagina (ex: Auto Refresh) no meio do caminho.
-//  Envia para QUALQUER cidade na MESMA ILHA, terrestres e
-//  navais SEPARADAMENTE, e traz de volta automaticamente
-//  depois (cancelCommand). Logs verbosos em toda tentativa.
+//  Detecta ataques chegando e agenda a evacuacao das tropas
+//  para exatamente ~15s antes do impacto - enviando para
+//  QUALQUER cidade na MESMA ILHA (de qualquer jogador),
+//  terrestres e navais SEPARADAMENTE - e traz de volta
+//  automaticamente depois (cancelCommand).
+//
+//  Captura do commandId: tenta primeiro extrair direto da
+//  resposta do servidor (json.actions -> MovementsUnitsCreate,
+//  tecnica encontrada em modulos Noct de referencia), com
+//  fallback para busca em MovementsUnits se a extracao direta
+//  nao retornar nada.
 // ══════════════════════════════════════════════════════
 class AutoDodge extends ModernUtil {
     EVACUATE_LEAD_SECONDS = 15;
@@ -40,9 +42,10 @@ class AutoDodge extends ModernUtil {
             '<div class="game_border_left"></div><div class="game_border_right"></div>' +
             '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
-            this.getTitleHtml('dodge_title', 'Auto Dodge', this.toggle, '', this._active) +
+            this.getTitleHtml('dodge_title', 'Auto Fuga (Dodge)', this.toggle, '', this._active) +
             '<div style="padding:5px 10px;font-weight:bold;" title="Envia reforco para qualquer cidade da ilha. Se nenhuma existir, a evacuacao e pulada.">' +
             'Evacua tropas ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto para uma cidade aleatoria na mesma ilha, com retorno automatico.' +
+            '</div>' +
             '<div id="dodge_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
             '</div>'
         );
@@ -97,14 +100,6 @@ class AutoDodge extends ModernUtil {
         uw.$('#dodge_title').css('filter', filter);
     }
 
-    /* Roda a cada 15s. Faz DUAS coisas:
-       1) Para ataques novos com muito tempo pela frente, agenda um
-          setTimeout preciso para EVACUATE_LEAD_SECONDS antes do impacto.
-       2) Para QUALQUER ataque (novo ou ja agendado antes) cujo tempo
-          restante ja esteja dentro da janela critica, evacua NA HORA
-          - isso funciona como rede de seguranca caso o setTimeout
-          agendado tenha sido perdido (ex: reload de pagina pelo
-          Auto Refresh no meio do caminho). */
     _tick() {
         if (window.__multbot_captcha_active) return;
 
@@ -146,28 +141,25 @@ class AutoDodge extends ModernUtil {
 
                 const remaining = arrival - now;
 
-                // ── REDE DE SEGURANCA: se ja esta dentro da janela critica,
-                //    evacua AGORA, nao importa se ja havia um timer agendado
-                //    ou nao (protege contra reload que apagou o setTimeout) ──
+                // Rede de seguranca: se ja esta dentro da janela critica, evacua AGORA
                 if (remaining <= this.EVACUATE_LEAD_SECONDS) {
                     if (this._scheduledEvac.has(townId)) {
                         clearTimeout(this._scheduledEvac.get(townId));
                         this._scheduledEvac.delete(townId);
                     }
                     this._evacuated.add(townId);
-                    this.console.log('[AutoDodge] REDE DE SEGURANCA: ' + this._getTownName(townId) + ' esta a ' + remaining + 's do impacto - evacuando imediatamente (tick).');
+                    this.console.log('[AutoDodge] Rede de seguranca: ' + this._getTownName(townId) + ' esta a ' + remaining + 's do impacto - evacuando imediatamente.');
                     this._evacuateTown(townId, arrival);
                     continue;
                 }
 
-                // ── Caso normal: ainda ha tempo, agenda o timer preciso ──
                 if (this._scheduledEvac.has(townId)) continue;
 
                 const fireInMs = (remaining - this.EVACUATE_LEAD_SECONDS) * 1000;
 
                 const timeoutId = setTimeout(() => {
                     this._scheduledEvac.delete(townId);
-                    if (this._evacuated.has(townId)) return; // ja evacuada pela rede de seguranca de algum tick anterior
+                    if (this._evacuated.has(townId)) return;
                     this._evacuated.add(townId);
                     this._evacuateTown(townId, arrival);
                 }, fireInMs);
@@ -205,12 +197,6 @@ class AutoDodge extends ModernUtil {
         }
     }
 
-    /* Escolhe aleatoriamente QUALQUER cidade na mesma ilha da cidade
-       atacada, de qualquer jogador (usa a colecao global "Town", que
-       cacheia todas as cidades carregadas no cliente - nao apenas as
-       suas). Retorna null se nao houver nenhuma cidade conhecida na
-       mesma ilha. Loga o "dono" (player_id) da cidade escolhida, para
-       ajudar a diagnosticar se o envio falha por regra de alianca. */
     _pickRandomTownOnSameIsland(attackedTownId) {
         try {
             const attackedTown = uw.ITowns.towns[attackedTownId];
@@ -276,10 +262,7 @@ class AutoDodge extends ModernUtil {
     async _evacuateTown(townId, attackArrival) {
         try {
             const town = uw.ITowns.towns[townId];
-            if (!town) {
-                this.console.log('[AutoDodge] Aviso: cidade #' + townId + ' nao encontrada em ITowns.towns no momento da evacuacao.');
-                return;
-            }
+            if (!town) return;
 
             const townName = town.getName ? town.getName() : ('#' + townId);
             const safeTownId = this._pickRandomTownOnSameIsland(townId);
@@ -297,8 +280,6 @@ class AutoDodge extends ModernUtil {
             const hasLand = Object.keys(landUnits).length > 0;
             const hasNaval = Object.keys(navalUnits).length > 0;
 
-            this.console.log('[AutoDodge] Tropas em ' + townName + ' - terrestres: ' + JSON.stringify(landUnits) + ' | navais: ' + JSON.stringify(navalUnits));
-
             if (!hasLand && !hasNaval) {
                 this.console.log('[AutoDodge] ' + townName + ': sem tropas para evacuar.');
                 return;
@@ -309,45 +290,13 @@ class AutoDodge extends ModernUtil {
             const excludeIds = new Set();
 
             if (hasLand) {
-                try {
-                    const landRes = await this._sendUnits(townId, safeTownId, landUnits, 'terrestre');
-                    this.console.log('[AutoDodge] Resposta do servidor (terrestre): ' + JSON.stringify(landRes));
-
-                    await this.sleep(this.CAPTURE_DELAY_MS);
-                    const landCommandId = this._findSupportCommandId(townId, safeTownId, excludeIds);
-
-                    if (landCommandId) {
-                        excludeIds.add(String(landCommandId));
-                        this._scheduleRecall(townId, townName, attackArrival, landCommandId, 'terrestre');
-                    } else {
-                        this.console.log('[AutoDodge] Aviso: ' + townName + ' - id do comando terrestre nao encontrado. Recall manual necessario.');
-                    }
-                } catch (e) {
-                    const msg = e && e.message ? e.message : e;
-                    this.console.log('[AutoDodge] FALHA ao enviar terrestres de ' + townName + ': ' + msg);
-                }
+                await this._evacuateGroup(townId, safeTownId, landUnits, 'terrestre', townName, attackArrival, excludeIds);
             } else {
                 this.console.log('[AutoDodge] ' + townName + ': sem tropas terrestres, pulando esse grupo.');
             }
 
             if (hasNaval) {
-                try {
-                    const navalRes = await this._sendUnits(townId, safeTownId, navalUnits, 'naval');
-                    this.console.log('[AutoDodge] Resposta do servidor (naval): ' + JSON.stringify(navalRes));
-
-                    await this.sleep(this.CAPTURE_DELAY_MS);
-                    const navalCommandId = this._findSupportCommandId(townId, safeTownId, excludeIds);
-
-                    if (navalCommandId) {
-                        excludeIds.add(String(navalCommandId));
-                        this._scheduleRecall(townId, townName, attackArrival, navalCommandId, 'naval');
-                    } else {
-                        this.console.log('[AutoDodge] Aviso: ' + townName + ' - id do comando naval nao encontrado. Recall manual necessario.');
-                    }
-                } catch (e) {
-                    const msg = e && e.message ? e.message : e;
-                    this.console.log('[AutoDodge] FALHA ao enviar navais de ' + townName + ': ' + msg);
-                }
+                await this._evacuateGroup(townId, safeTownId, navalUnits, 'naval', townName, attackArrival, excludeIds);
             } else {
                 this.console.log('[AutoDodge] ' + townName + ': sem tropas navais, pulando esse grupo.');
             }
@@ -362,6 +311,65 @@ class AutoDodge extends ModernUtil {
         } catch (e) {
             const msg = e && e.message ? e.message : e;
             this.console.log('[AutoDodge] Erro geral ao evacuar #' + townId + ': ' + msg);
+        }
+    }
+
+    /* Envia um grupo (terrestre ou naval), tenta extrair o commandId
+       direto da resposta do servidor e, se não conseguir, cai no
+       fallback de busca em MovementsUnits. Agenda o recall em seguida. */
+    async _evacuateGroup(fromTownId, toTownId, units, label, townName, attackArrival, excludeIds) {
+        try {
+            const result = await this._sendUnits(fromTownId, toTownId, units);
+            this.console.log('[AutoDodge] Resposta do servidor (' + label + '): ' + JSON.stringify(result?.res ?? result));
+
+            // Tentativa 1: extrair direto da resposta (mais confiável)
+            let commandId = this._extractCommandIdFromResponse(result?.res);
+
+            if (commandId) {
+                this.console.log('[AutoDodge] ' + townName + ' (' + label + '): commandId extraido direto da resposta: #' + commandId);
+            } else {
+                // Tentativa 2 (fallback): busca em MovementsUnits após um pequeno delay
+                await this.sleep(this.CAPTURE_DELAY_MS);
+                commandId = this._findSupportCommandId(fromTownId, toTownId, excludeIds);
+                if (commandId) {
+                    this.console.log('[AutoDodge] ' + townName + ' (' + label + '): commandId encontrado via fallback (MovementsUnits): #' + commandId);
+                }
+            }
+
+            if (commandId) {
+                excludeIds.add(String(commandId));
+                this._scheduleRecall(fromTownId, townName, attackArrival, commandId, label);
+            } else {
+                this.console.log('[AutoDodge] Aviso: ' + townName + ' (' + label + ') - id do comando nao encontrado por nenhum metodo. Recall manual necessario.');
+                uw.$('#dodge_log').text('Aviso: ' + townName + ' (' + label + ') - recall automatico indisponivel.').css('color', '#eab308');
+            }
+        } catch (e) {
+            const msg = e && e.message ? e.message : e;
+            this.console.log('[AutoDodge] FALHA ao enviar ' + label + ' de ' + townName + ': ' + msg);
+        }
+    }
+
+    /* Extrai o ID do movimento recém-criado direto da resposta do
+       servidor ao send_units, procurando por uma ação do tipo
+       "MovementsUnitsCreate" — técnica identificada em módulos de
+       referência que interceptam a resposta bruta do jogo. Retorna
+       null se a estrutura não vier no formato esperado (nesse caso
+       o fallback de busca em MovementsUnits assume). */
+    _extractCommandIdFromResponse(res) {
+        try {
+            const actions = res?.json?.actions ?? res?.actions;
+            if (!Array.isArray(actions)) return null;
+
+            for (const action of actions) {
+                if (action.subject === 'MovementsUnitsCreate' && action.param_str) {
+                    const parsed = JSON.parse(action.param_str);
+                    const info = parsed?.MovementsUnitsCreate;
+                    if (info && info.id) return info.id;
+                }
+            }
+            return null;
+        } catch (e) {
+            return null;
         }
     }
 
@@ -417,7 +425,7 @@ class AutoDodge extends ModernUtil {
         this.console.log('[AutoDodge] ' + townName + ' (' + label + '): chamando as tropas de volta (comando #' + commandId + ')...');
 
         uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
-            function (res) {
+            res => {
                 this.console.log('[AutoDodge] Resposta do recall (' + label + '): ' + JSON.stringify(res));
                 if (res && !res.error) {
                     const msg = townName + ' (' + label + '): tropas retornando!';
@@ -430,37 +438,33 @@ class AutoDodge extends ModernUtil {
                     this.console.log('[AutoDodge] Falha ao chamar de volta ' + townName + ' (' + label + '): ' + JSON.stringify(res));
                     uw.$('#dodge_log').text('Falha no recall de ' + townName + ' (' + label + '). Traga manualmente.').css('color', '#f87171');
                 }
-            }.bind(this),
-            function (err) {
+            },
+            err => {
                 this.console.log('[AutoDodge] Erro de rede no recall de ' + townName + ' (' + label + '): ' + err);
-            }.bind(this)
+            }
         );
     }
 
-    _sendUnits(fromTownId, toTownId, units, label) {
-        return this._withTownId(fromTownId, () => {
-            return new Promise((resolve, reject) => {
-                const data = Object.assign(
-                    { id: parseInt(toTownId, 10), type: 'support' },
-                    units
-                );
+    _sendUnits(fromTownId, toTownId, units) {
+        return this._withTownId(fromTownId, () => new Promise((resolve, reject) => {
+            const data = Object.assign(
+                { id: parseInt(toTownId, 10), type: 'support' },
+                units
+            );
 
-                this.console.log('[AutoDodge] Enviando (' + label + ') - payload: ' + JSON.stringify(data));
-
-                uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
-                    function (res) {
-                        if (res && res.success !== false) {
-                            resolve(res);
-                        } else {
-                            reject(new Error('Servidor recusou: ' + JSON.stringify(res)));
-                        }
-                    },
-                    function (r, status, txt) {
-                        reject(new Error('Erro de rede: ' + txt));
+            uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
+                res => {
+                    if (res && res.success !== false) {
+                        resolve({ res: res });
+                    } else {
+                        reject(new Error('Servidor recusou: ' + JSON.stringify(res)));
                     }
-                );
-            });
-        });
+                },
+                (r, status, txt) => {
+                    reject(new Error('Erro de rede: ' + txt));
+                }
+            );
+        }));
     }
 
     async _withTownId(townId, fn) {
