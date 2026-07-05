@@ -1,9 +1,9 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: AutoDodge
 //  Detecta ataques chegando e evacua as tropas da cidade
-//  atacada como reforço para uma cidade segura configurada,
-//  antes do impacto — e traz de volta automaticamente
-//  depois que o ataque passa (cancelCommand).
+//  atacada como reforço para uma cidade ALEATÓRIA sua na
+//  MESMA ILHA — antes do impacto — e traz de volta
+//  automaticamente depois (cancelCommand).
 // ══════════════════════════════════════════════════════
 class AutoDodge extends ModernUtil {
     MIN_LEAD_SECONDS = 20;
@@ -21,20 +21,14 @@ class AutoDodge extends ModernUtil {
         this._evacuated  = new Set();     // townIds já evacuados nesta onda de ataque
         this._pendingRecalls = new Map(); // townId -> { timeoutId, commandId }
 
-        this.config = this.storage.load('dodge_config', {
-            safeTownId: '',
-        });
-
         if (this.storage.load('dodge_active', false)) {
             setTimeout(() => this.start(), 2000);
         }
     }
 
     settings = () => {
-        const cfg = this.config;
         requestAnimationFrame(() => {
             this._updateTitle();
-            uw.$('#dodge_safe_town').off('keydown').on('keydown', e => { if (e.key === 'Enter') this._saveSafeTown(); });
         });
         return `
         <div class="game_border" style="margin-bottom:20px;">
@@ -44,34 +38,16 @@ class AutoDodge extends ModernUtil {
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             ${this.getTitleHtml('dodge_title', 'Auto Fuga (Dodge)', this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
-                Ao detectar um ataque chegando, evacua as tropas para a cidade
-                segura e as traz de volta automaticamente após o impacto.
-                Verifica a cada 15s.
+                Ao detectar um ataque chegando, evacua as tropas para uma cidade
+                sua escolhida aleatoriamente na MESMA ILHA, e as traz de volta
+                automaticamente após o impacto. Verifica a cada 15s.
             </div>
-            <div style="padding:5px 10px;">
-                <label style="font-weight:bold;font-size:11px;">Cidade Segura (ID ou [town]...[/town])</label><br>
-                <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
-                    <input id="dodge_safe_town" type="text" placeholder="ID da cidade"
-                        value="${cfg.safeTownId || ''}"
-                        style="width:120px;padding:2px 5px;" />
-                    ${this.getButtonHtml('dodge_save_target', 'Salvar', this._saveSafeTown)}
-                </div>
-                <div id="dodge_target_status" style="font-size:11px;color:#5a3a0a;margin-top:3px;">
-                    ${cfg.safeTownId ? '✓ ' + this._getTownName(cfg.safeTownId) : 'Nenhuma cidade segura configurada'}
-                </div>
+            <div style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;">
+                Se não houver outra cidade sua na mesma ilha, a evacuação daquela
+                cidade é pulada (sem enviar para longe).
             </div>
             <div id="dodge_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
-    };
-
-    _saveSafeTown = () => {
-        const raw = (uw.$('#dodge_safe_town').val() || '').trim();
-        const id  = this._parseTownId(raw);
-        if (!id) { uw.$('#dodge_target_status').text('ID inválido.').css('color', '#f87171'); return; }
-        this.config.safeTownId = id;
-        this.storage.save('dodge_config', this.config);
-        uw.$('#dodge_target_status').text('✓ Destino: ' + this._getTownName(id)).css('color', '#4ade80');
-        this.console.log('[AutoDodge] Cidade segura salva: #' + id);
     };
 
     toggle = () => {
@@ -112,7 +88,6 @@ class AutoDodge extends ModernUtil {
 
     _tick() {
         if (window.__multbot_captcha_active) return;
-        if (!this.config.safeTownId) return;
 
         try {
             const attacks = this._getIncomingAttacks();
@@ -134,7 +109,6 @@ class AutoDodge extends ModernUtil {
 
             for (const [townId, arrival] of byTown) {
                 if (this._evacuated.has(townId)) continue;
-                if (String(townId) === String(this.config.safeTownId)) continue;
 
                 const remaining = arrival - now;
                 if (remaining < this.MIN_LEAD_SECONDS) {
@@ -165,11 +139,45 @@ class AutoDodge extends ModernUtil {
         } catch (e) { return []; }
     }
 
+    /* Escolhe aleatoriamente uma cidade PRÓPRIA na mesma ilha da cidade
+       atacada (excluindo ela mesma). Retorna null se não houver nenhuma. */
+    _pickRandomTownOnSameIsland(attackedTownId) {
+        try {
+            const attackedTown = uw.ITowns.towns[attackedTownId];
+            if (!attackedTown) return null;
+
+            const ix = attackedTown.attributes.island_x;
+            const iy = attackedTown.attributes.island_y;
+
+            const candidates = [];
+            for (const townId in uw.ITowns.towns) {
+                if (String(townId) === String(attackedTownId)) continue;
+                const town = uw.ITowns.towns[townId];
+                if (town.attributes.island_x === ix && town.attributes.island_y === iy) {
+                    candidates.push(townId);
+                }
+            }
+
+            if (candidates.length === 0) return null;
+            return candidates[Math.floor(Math.random() * candidates.length)];
+        } catch (e) {
+            return null;
+        }
+    }
+
     async _evacuateTown(townId, attackArrival) {
         try {
             const town = uw.ITowns.towns[townId];
             if (!town) return;
             const townName = town.getName?.() ?? '#' + townId;
+
+            const safeTownId = this._pickRandomTownOnSameIsland(townId);
+            if (!safeTownId) {
+                this.console.log(`[AutoDodge] ⚠ ${townName}: nenhuma outra cidade sua na mesma ilha — evacuação pulada.`);
+                uw.$('#dodge_log').text(`⚠ ${townName}: sem cidade na mesma ilha para evacuar.`).css('color', '#eab308');
+                return;
+            }
+            const safeTownName = this._getTownName(safeTownId);
 
             const units = { ...town.units() };
             delete units.militia;
@@ -182,18 +190,18 @@ class AutoDodge extends ModernUtil {
                 return;
             }
 
-            this.console.log(`[AutoDodge] ⚠ Evacuando ${townName} para a cidade segura...`);
-            await this._sendUnits(townId, this.config.safeTownId, units);
+            this.console.log(`[AutoDodge] ⚠ Evacuando ${townName} → ${safeTownName} (mesma ilha)...`);
+            await this._sendUnits(townId, safeTownId, units);
 
-            const msg = `✓ ${townName}: tropas evacuadas com sucesso!`;
+            const msg = `✓ ${townName} evacuada para ${safeTownName}!`;
             this.console.log('[AutoDodge] ' + msg);
             uw.$('#dodge_log').text(msg).css('color', '#1a6b2a');
-            if (uw.HumanMessage) uw.HumanMessage.success(`MultBot: ${townName} evacuada!`);
+            if (uw.HumanMessage) uw.HumanMessage.success(`MultBot: ${townName} → ${safeTownName}`);
 
             // Espera um pouco para o MovementsUnits atualizar, depois captura
             // o ID do comando de apoio recém-criado
             await this.sleep(this.CAPTURE_DELAY_MS);
-            const commandId = this._findSupportCommandId(townId, this.config.safeTownId);
+            const commandId = this._findSupportCommandId(townId, safeTownId);
 
             if (!commandId) {
                 this.console.log(`[AutoDodge] ⚠ ${townName}: não encontrei o ID do comando de apoio. Recall automático não será possível — traga manualmente depois do ataque.`);
@@ -208,7 +216,7 @@ class AutoDodge extends ModernUtil {
     }
 
     /* Procura, entre os MovementsUnits atuais, o comando de apoio que criamos
-       (origem = cidade evacuada, destino = cidade segura). Retorna o ID
+       (origem = cidade evacuada, destino = cidade escolhida). Retorna o ID
        usado pelo endpoint cancelCommand. */
     _findSupportCommandId(fromTownId, toTownId) {
         try {
@@ -324,17 +332,5 @@ class AutoDodge extends ModernUtil {
             if (wt?.name) return wt.name + ' (#' + ids + ')';
         } catch (e) {}
         return '#' + ids;
-    }
-
-    _parseTownId(input) {
-        if (!input) return null;
-        const bb = input.match(/\[town[^\]]*\](\d+)\[\/town\]/i);
-        if (bb) return bb[1];
-        for (const m of [...input.matchAll(/#([A-Za-z0-9+\/=]{8,})/g)]) {
-            try { const o = JSON.parse(atob(m[1])); if (o?.id) return String(o.id); } catch {}
-        }
-        const n = input.trim().match(/^\d{3,}$/);
-        if (n) return input.trim();
-        return null;
     }
 }
