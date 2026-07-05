@@ -13,8 +13,6 @@ class StatusPanel extends ModernUtil {
 
         // O agendamento do refresh acontece AQUI, uma única vez, assim que
         // o bot carrega — independente de o painel Status ser aberto ou não.
-        // Isso garante que o reload acontece no tempo certo mesmo que você
-        // nunca abra o painel, ou entre/saia dele várias vezes.
         if (this._refreshMinutes > 0) {
             this._scheduleRefresh();
         }
@@ -163,22 +161,9 @@ class StatusPanel extends ModernUtil {
             rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this._getTownName(bot.colonizeShipSender.config.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
 
             uw.$('#status_rows').html(rows.join(''));
-
-            // Badge no botão da engrenagem: verde se qualquer módulo estiver ativo
-            const anyActive = farmActive || ruralActive || buildCount > 0 || trainCount > 0
-                || partyActive || gratisActive || asrActive || militiaActive || cssActive;
-            this._updateBadge(anyActive);
         } catch(e) {
             uw.$('#status_rows').html(`<div style="padding:5px;color:red;">Erro: ${e.message}</div>`);
         }
-    }
-
-    /* Atualiza a bolinha de status no botão da engrenagem (fora do painel) */
-    _updateBadge(active) {
-        let $badge = uw.$('#modernbot_status_badge');
-        if (!$badge.length) return; // botão da engrenagem ainda não renderizado
-        $badge.css('background', active ? '#2ecc40' : '#888');
-        $badge.attr('title', active ? 'MultBot: módulos ativos' : 'MultBot: tudo parado');
     }
 
     _row(label, active, value, module, method) {
