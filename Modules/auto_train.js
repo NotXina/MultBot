@@ -1,44 +1,61 @@
 class AutoTrain extends ModernUtil {
     POWER_LIST = ['call_of_the_ocean', 'spartan_training', 'fertility_improvement'];
-    GROUND_ORDER = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot', 'minotaur', 'manticore', 'medusa', 'cyclops', 'fury', 'harpy'];
-    NAVAL_ORDER = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship', 'sea_monster', 'siren'];
+    GROUND_ORDER    = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot'];
+    NAVAL_ORDER     = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship'];
+    MYTHICAL_GROUND = ['minotaur', 'manticore', 'zyklop', 'harpy', 'medusa', 'centaur', 'cerberus', 'fury', 'griffin', 'calydonian_boar', 'satyr', 'spartoi', 'ladon', 'pegasus'];
+    MYTHICAL_NAVAL  = ['sea_monster', 'siren'];
 
-    // Mapeamento: unidade mítica -> deus correspondente
-    // ⚠️ Verificar/ajustar após testar em jogo (ver log "[AutoTrain] Deus da cidade")
+    // Mapeamento oficial: unidade mítica -> deus correspondente (confirmado pela tabela do jogo)
     MYTHICAL_GOD = {
-        minotaur:    'zeus',
-        manticore:   'hera',
-        medusa:      'athena',
-        cyclops:     'poseidon',
-        fury:        'hades',
-        harpy:       'artemis',
-        sea_monster: 'poseidon',
-        siren:       'aphrodite',
+        minotaur:         'zeus',
+        manticore:        'zeus',
+        zyklop:           'poseidon',
+        sea_monster:      'poseidon',
+        centaur:          'athena',
+        pegasus:          'athena',
+        harpy:            'hera',
+        medusa:           'hera',
+        cerberus:         'hades',
+        fury:             'hades',
+        griffin:          'artemis',
+        calydonian_boar:  'artemis',
+        satyr:            'aphrodite',
+        siren:            'aphrodite',
+        ladon:            'ares',
+        spartoi:          'ares',
     };
 
     SHIFT_LEVELS = {
-        catapult: [5, 5],
-        sword: [200, 50],
-        archer: [200, 50],
-        hoplite: [200, 50],
-        slinger: [200, 50],
-        rider: [100, 25],
-        chariot: [100, 25],
-        small_transporter: [10, 5],
-        bireme: [50, 10],
-        trireme: [50, 10],
-        attack_ship: [50, 10],
-        big_transporter: [50, 10],
-        demolition_ship: [50, 10],
-        colonize_ship: [5, 1],
-        minotaur: [10, 5],
-        manticore: [10, 5],
-        medusa: [10, 5],
-        cyclops: [10, 5],
-        fury: [10, 5],
-        harpy: [10, 5],
-        sea_monster: [10, 5],
-        siren: [10, 5],
+        catapult:           [5,   5],
+        sword:              [200, 50],
+        archer:             [200, 50],
+        hoplite:            [200, 50],
+        slinger:            [200, 50],
+        rider:              [100, 25],
+        chariot:            [100, 25],
+        small_transporter:  [10,  5],
+        bireme:             [50,  10],
+        trireme:            [50,  10],
+        attack_ship:        [50,  10],
+        big_transporter:    [50,  10],
+        demolition_ship:    [50,  10],
+        colonize_ship:      [5,   1],
+        minotaur:           [5,   1],
+        manticore:          [5,   1],
+        zyklop:             [5,   1],
+        harpy:              [10,  2],
+        medusa:             [10,  2],
+        centaur:            [10,  2],
+        cerberus:           [5,   1],
+        fury:               [5,   1],
+        griffin:            [5,   1],
+        calydonian_boar:    [10,  2],
+        satyr:              [10,  2],
+        spartoi:            [20,  5],
+        ladon:              [2,   1],
+        pegasus:            [10,  2],
+        sea_monster:        [2,   1],
+        siren:              [10,  2],
     };
 
     constructor(c, s) {
@@ -171,6 +188,18 @@ class AutoTrain extends ModernUtil {
         return town.getAvailablePopulation() + used;
     };
 
+    /* Favor disponível na cidade */
+    _getFavor = (town_id) => {
+        try {
+            const town = uw.ITowns.towns[town_id];
+            return town?.resources?.()?.favor ?? 0;
+        } catch (e) { return 0; }
+    };
+
+    _isMythical = (troop) => {
+        return this.MYTHICAL_GROUND.includes(troop) || this.MYTHICAL_NAVAL.includes(troop);
+    };
+
     /* Descobre qual deus a cidade está adorando (deus do templo).
        Tenta múltiplos caminhos de API conhecidos, com fallback.
        Loga uma vez por cidade para facilitar a verificação/ajuste. */
@@ -194,12 +223,13 @@ class AutoTrain extends ModernUtil {
         }
     };
 
-    /* Retorna true se a unidade é mítica e NÃO corresponde ao deus da cidade */
+    /* Retorna true se a unidade é mítica e NÃO corresponde ao deus da cidade.
+       Se o deus não puder ser detectado, deixa passar (o favor já limita naturalmente). */
     _isWrongGodMythical = (troop, town_id) => {
         const requiredGod = this.MYTHICAL_GOD[troop];
-        if (!requiredGod) return false; // não é unidade mítica, segue normal
+        if (!requiredGod) return false; // não é unidade mítica
         const townGod = this._getTownGod(town_id);
-        if (!townGod) return false; // não detectou o deus, deixa passar (evita travar tudo)
+        if (!townGod) return false; // não detectado, deixa o favor decidir
         return townGod !== requiredGod;
     };
 
@@ -209,6 +239,10 @@ class AutoTrain extends ModernUtil {
         let buildings = town.buildings().attributes;
 
         const isGray = troop => {
+            // Míticas: disponibilidade real é controlada por deus + favor,
+            // checado em tempo de recrutamento — nunca cinza aqui
+            if (this._isMythical(troop)) return false;
+
             if (!this.REQUIREMENTS.hasOwnProperty(troop)) {
                 return true; // Troop type not recognized
             }
@@ -267,13 +301,31 @@ class AutoTrain extends ModernUtil {
             ${getTroopHtml('trireme', [400, 250])}
             ${getTroopHtml('colonize_ship', [50, 200])}
             </div>
+            <div style="width: 831px; display: inline-flex; gap: 1px; margin-top: 4px; border-top: 1px solid rgba(0,0,0,0.15); padding-top: 4px;">
+            ${getTroopHtml('pegasus', [0, 300])}
+            ${getTroopHtml('harpy', [50, 300])}
+            ${getTroopHtml('medusa', [100, 300])}
+            ${getTroopHtml('centaur', [150, 300])}
+            ${getTroopHtml('minotaur', [200, 300])}
+            ${getTroopHtml('zyklop', [250, 300])}
+            ${getTroopHtml('cerberus', [400, 300])}
+            ${getTroopHtml('fury', [450, 300])}
+            ${getTroopHtml('griffin', [500, 300])}
+            ${getTroopHtml('calydonian_boar', [550, 300])}
+            ${getTroopHtml('satyr', [600, 300])}
+            ${getTroopHtml('spartoi', [650, 300])}
+            ${getTroopHtml('manticore', [700, 300])}
+            ${getTroopHtml('ladon', [750, 300])}
+            ${getTroopHtml('sea_monster', [150, 350])}
+            ${getTroopHtml('siren', [200, 350])}
+            </div>
         </div>`);
     };
 
     editTroopCount = (town_id, troop, count) => {
         /* restart the interval to prevent spam*/
         clearInterval(this.interval);
-        this.interval = setInterval(this.main, 2345);
+        this.interval = setInterval(this.main.bind(this), 2345);
 
         const { units } = uw.GameData;
         const { city_troops } = this;
@@ -284,7 +336,8 @@ class AutoTrain extends ModernUtil {
         if (count) {
             // Modify count based on whether the shift key is held down
             const index = count > 0 ? 0 : 1;
-            count = this.shiftHeld ? count * this.SHIFT_LEVELS[troop][index] : count;
+            const levels = this.SHIFT_LEVELS[troop] ?? [10, 5];
+            count = this.shiftHeld ? count * levels[index] : count;
         } else {
             count = 10000;
         }
@@ -292,7 +345,7 @@ class AutoTrain extends ModernUtil {
         // Check if the troop count can be increased without exceeding population capacity
         const total_pop = this.getTotalPopulation(town_id);
         const used_pop = this.countPopulation(this.city_troops[town_id]);
-        const unit_pop = units[troop].population;
+        const unit_pop = units[troop]?.population ?? 1;
         if (total_pop - used_pop < unit_pop * count) count = parseInt((total_pop - used_pop) / unit_pop);
 
         // Update the troop count for the specified town and troop type
@@ -328,7 +381,7 @@ class AutoTrain extends ModernUtil {
         const town_id = town.getId();
         if (this.city_troops[town_id]) {
             delete this.city_troops[town_id];
-            [...this.NAVAL_ORDER, ...this.GROUND_ORDER].forEach(troop => {
+            [...this.NAVAL_ORDER, ...this.GROUND_ORDER, ...this.MYTHICAL_GROUND, ...this.MYTHICAL_NAVAL].forEach(troop => {
                 const selector = `#troops_settings_${town_id} #troop_lvl_${troop}`;
                 uw.$(selector).css('color', '').text('-');
             });
@@ -343,79 +396,95 @@ class AutoTrain extends ModernUtil {
         return town.getUnitOrdersCollection().where({ kind: type }).length;
     };
 
-    getNextInList = (unitType, town_id) => {
-        const troops = this.city_troops[town_id];
-        if (!troops) return null;
-
-        const unitOrder = unitType === 'naval' ? this.NAVAL_ORDER : this.GROUND_ORDER;
-        for (const unit of unitOrder) {
-            if (!troops[unit]) continue;
-
-            // Pula unidade mítica que não pertence ao deus da cidade
-            if (this._isWrongGodMythical(unit, town_id)) continue;
-
-            if (this.getTroopCount(unit, town_id) !== 0) return unit;
-        }
-
-        return null;
-    };
-
+    /* Quanto de uma tropa ainda falta recrutar, e o quanto é possível agora.
+       0   = meta já atingida
+       -1  = sem recursos/favor/população suficiente agora (tenta a próxima tropa)
+       N>0 = quantidade a recrutar agora */
     getTroopCount = (troop, town_id) => {
         const town = uw.ITowns.getTown(town_id);
-        if (!this.city_troops[town_id] || !this.city_troops[town_id][troop]) return 0;
+        if (!this.city_troops[town_id]?.[troop]) return 0;
+
+        const unitData = uw.GameData.units[troop];
+        if (!unitData) return 0; // unidade não existe neste mundo/servidor
+
+        // Quanto falta recrutar (meta - já existentes - em fila)
         let count = this.city_troops[town_id][troop];
         for (let order of town.getUnitOrdersCollection().models) {
             if (order.attributes.unit_type === troop) count -= order.attributes.count;
         }
-        let townUnits = town.units();
-        if (townUnits.hasOwnProperty(troop)) count -= townUnits[troop];
-        let outerUnits = town.unitsOuter();
-        if (outerUnits.hasOwnProperty(troop)) count -= outerUnits[troop];
-        //TODO: in viaggio
-        if (count < 0) return 0;
+        const townUnits  = town.units();
+        const outerUnits = town.unitsOuter();
+        if (townUnits[troop])  count -= townUnits[troop];
+        if (outerUnits[troop]) count -= outerUnits[troop];
+        if (count <= 0) return 0; // meta já atingida
 
-        /* Get the duable ammount with the current resouces of the polis */
-        let resources = town.resources();
-        let discount = uw.GeneralModifications.getUnitBuildResourcesModification(town_id, uw.GameData.units[troop]);
-        let { wood, stone, iron } = uw.GameData.units[troop].resources;
-        let w = resources.wood / Math.round(wood * discount);
-        let s = resources.stone / Math.round(stone * discount);
-        let i = resources.iron / Math.round(iron * discount);
-        let current = parseInt(Math.min(w, s, i));
+        const resources = town.resources();
+        const discount  = uw.GeneralModifications.getUnitBuildResourcesModification(town_id, unitData);
+        const { wood, stone, iron } = unitData.resources;
 
-        /* Check for free population */
-        let duable_with_pop = parseInt(resources.population / uw.GameData.units[troop].population); // for each troop
-
-        /* Get the max duable */
-        let w_max = resources.storage / (wood * discount);
-        let s_max = resources.storage / (stone * discount);
-        let i_max = resources.storage / (iron * discount);
-        let max = parseInt(Math.min(w_max, s_max, i_max) * 0.85); // 0.8 it's the full percentual -> 80%
-        max = max > duable_with_pop ? duable_with_pop : max;
-
-        if (max > count) {
-            return count > current ? -1 : count;
+        // Limite por recursos normais
+        let byResources;
+        if (wood === 0 && stone === 0 && iron === 0) {
+            byResources = count;
         } else {
-            if (current >= max && current < duable_with_pop) return current;
-            if (current >= max && current > duable_with_pop) return duable_with_pop;
-            return -1;
+            byResources = parseInt(Math.min(
+                resources.wood  / Math.round(wood  * discount),
+                resources.stone / Math.round(stone * discount),
+                resources.iron  / Math.round(iron  * discount)
+            ));
         }
+        if (byResources <= 0) return -1;
+
+        // Limite por favor (apenas míticas)
+        let byFavor = count;
+        if (this._isMythical(troop) && unitData.favor > 0) {
+            const favor = this._getFavor(town_id);
+            byFavor = Math.floor(favor / unitData.favor);
+            if (byFavor <= 0) return -1; // sem favor suficiente agora
+        }
+
+        // Limite por população
+        const byPop = parseInt(resources.population / unitData.population);
+        if (byPop <= 0) return -1;
+
+        // Limite máximo por storage e percentual configurado (1=80%, 2=90%, 3=100%)
+        const pct = [0.8, 0.9, 1.0][(this.percentual ?? 1) - 1] ?? 0.85;
+        let byStorage = count;
+        if (wood > 0 || stone > 0 || iron > 0) {
+            byStorage = parseInt(Math.min(
+                resources.storage / (wood  * discount),
+                resources.storage / (stone * discount),
+                resources.storage / (iron  * discount)
+            ) * pct);
+        }
+
+        const toRecruit = Math.min(count, byResources, byFavor, byPop, byStorage);
+        return toRecruit > 0 ? toRecruit : -1;
     };
 
-    /* Check the given town, for ground or land */
+    /* Check the given town, for ground or naval — sem risco de loop infinito.
+       Míticas de deus errado são puladas antes de gastar qualquer verificação. */
     checkPolis = (type, town_id) => {
-        let order_count = this.getUnitOrdersCount(type, town_id);
+        const order_count = this.getUnitOrdersCount(type, town_id);
         if (order_count > 6) return 0;
-        let count = 1;
-        while (count >= 0) {
-            let next = this.getNextInList(type, town_id);
-            if (!next) return 0;
-            count = this.getTroopCount(next, town_id);
-            if (count < 0) return 0;
-            if (count === 0) continue;
-            this.buildPost(town_id, next, count);
+
+        const troops = this.city_troops[town_id];
+        if (!troops) return 0;
+
+        const normalOrder   = type === 'naval' ? this.NAVAL_ORDER : this.GROUND_ORDER;
+        const mythicalOrder = type === 'naval' ? this.MYTHICAL_NAVAL : this.MYTHICAL_GROUND;
+        const unitOrder = [...normalOrder, ...mythicalOrder];
+
+        for (const unit of unitOrder) {
+            if (!troops[unit]) continue; // não configurada
+            if (this._isWrongGodMythical(unit, town_id)) continue; // deus errado, pula
+            const count = this.getTroopCount(unit, town_id);
+            if (count === 0) continue; // meta atingida
+            if (count < 0) continue;   // sem recursos/favor agora
+            this.buildPost(town_id, unit, count);
             return true;
         }
+        return 0;
     };
 
     /* Return list of town that have power active */
@@ -436,19 +505,19 @@ class AutoTrain extends ModernUtil {
     };
 
     /* Make build request to the server.
-       Roteia automaticamente entre docks (naval) e barracks (terrestre)
-       usando a flag is_naval do próprio GameData. */
+       Roteia entre docks (naval) e barracks (terrestre), cobrindo
+       unidades normais e míticas navais (sea_monster, siren). */
     buildPost = (town_id, unit, count) => {
-        const isNaval = !!uw.GameData.units[unit]?.is_naval;
+        const isNaval = this.NAVAL_ORDER.includes(unit) || this.MYTHICAL_NAVAL.includes(unit);
         const endpoint = isNaval ? 'building_docks' : 'building_barracks';
 
-        let data = {
+        const data = {
             unit_id: unit,
             amount: count,
             town_id: town_id,
         };
 
-        this.console.log(`${uw.ITowns.towns[town_id].getName()}: training ${count} ${unit} (${endpoint})`);
+        this.console.log(`${uw.ITowns.towns[town_id].getName()}: recrutando ${count}x ${unit} (${endpoint})`);
 
         uw.gpAjax.ajaxPost(endpoint, 'build', data);
     };
@@ -459,16 +528,18 @@ class AutoTrain extends ModernUtil {
         return this.getPowerActive();
     };
 
-    /* Main function — treina ground + naval em todas as cidades em paralelo */
+    /* Main function — treina ground + naval em todas as cidades */
     main = () => {
         if (window.__multbot_captcha_active) return;
         const town_list = this.getActiveList();
+        if (!town_list.length) return;
         town_list.forEach(town_id => {
             if (town_id in uw.ITowns.towns) {
                 this.checkPolis('naval', town_id);
                 this.checkPolis('ground', town_id);
             } else {
                 delete this.city_troops[town_id];
+                this.storage.save('troops', this.city_troops);
             }
         });
     };
