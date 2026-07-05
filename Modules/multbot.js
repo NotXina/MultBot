@@ -179,6 +179,24 @@ class ModernBot {
         };
 
         setTimeout(editController, 2500);
+
+        /* ══════════════════════════════════════════════════════════════
+           ÚNICA fonte de verdade para a posição do botão do ModernBot.
+           Não duplicar essa lógica em index.js nem em nenhum outro
+           arquivo — se precisar ajustar a posição no futuro, mexe só aqui.
+           Valores testados e confirmados: top 95px, right 113px
+           (encaixa ao lado dos ícones circulares: engrenagem/relógio/W/energia)
+           ══════════════════════════════════════════════════════════════ */
+        const moveBtn = () => {
+            const btn = document.querySelector('.modern_bot_settings');
+            if (btn) {
+                btn.style.setProperty('top', '95px', 'important');
+                btn.style.setProperty('right', '113px', 'important');
+            }
+        };
+        const btnObserver = new MutationObserver(moveBtn);
+        btnObserver.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => btnObserver.disconnect(), 15000);
     };
 
     /* New quick menu */
