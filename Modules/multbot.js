@@ -4,17 +4,12 @@ class ModernBot {
         this.storage = new ModernStorage();
 
         this.$ui = uw.$("#ui_box");
-        // Create the quick menu and the divider element
         this.$menu = this.createModernMenu();
         const $divider = uw.$('<div class="divider"></div>');
 
-        // Add AutoFarm to the new menu
         this.autoFarm = new AutoFarm(this.console, this.storage);
         this.$menu.append(this.autoFarm.$activity)
         this.$ui.append(this.autoFarm.$popup)
-
-        //const $farm = this.createActivity("url(https://gpit.innogamescdn.com/images/game/premium_features/feature_icons_2.08.png) no-repeat 0 -240px");
-        // this.$menu.append($farm, $divider.clone());
 
         this.autoGratis = new AutoGratis(this.console, this.storage);
         this.autoRuralLevel = new AutoRuralLevel(this.console, this.storage);
@@ -30,6 +25,7 @@ class ModernBot {
         this.multTools    = new MultTools(this.console, this.storage);
         this.autoMilitia      = new AutoMilitia(this.console, this.storage);
         this.autoDodge        = new AutoDodge(this.console, this.storage);
+        this.autoAttack       = new AutoAttack(this.console, this.storage);
         this.autoResearch     = new AutoResearch(this.console, this.storage);
         this.autoSendResources = new AutoSendResources(this.console, this.storage);
         this.statusPanel  = new StatusPanel(this.console, this.storage);
@@ -37,7 +33,7 @@ class ModernBot {
         this.settingsFactory = new createGrepoWindow({
             id: 'MODERN_BOT',
             title: 'ModernBot (MultBot)',
-            size: [845, 380],
+            size: [845, 460],
             tabs: [
                 {
                     title: 'Status',
@@ -58,12 +54,7 @@ class ModernBot {
                     title: 'Train',
                     id: 'train',
                     render: this.settingsTrain,
-                } /*
-				{
-					title: 'Trade',
-					id: 'trade',
-					render: this.settingsTrade,
-				},*/,
+                },
                 {
                     title: 'Mix',
                     id: 'mix',
@@ -97,7 +88,6 @@ class ModernBot {
 
     settingsFarm = () => {
         let html = '';
-        // html += this.autoFarm.settings();
         html += this.autoRuralLevel.settings();
         html += this.autoRuralTrade.settings();
         html += this.autoSendResources.settings();
@@ -118,6 +108,7 @@ class ModernBot {
         html += this.autoHide.settings();
         html += this.autoMilitia.settings();
         html += this.autoDodge.settings();
+        html += this.autoAttack.settings();
         return html;
     };
 
@@ -145,17 +136,14 @@ class ModernBot {
     };
 
     setup = () => {
-        /* Activate */
         this.settingsFactory.activate();
 
-        /* Botão da engrenagem */
         uw.$('.gods_area_buttons').append(`
             <div class='circle_button modern_bot_settings' onclick='window.modernBot.settingsFactory.openWindow()'>
                 <div style='width: 27px; height: 27px; background: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/gear.png) no-repeat 6px 5px' class='icon js-caption'></div>
             </div>
         `);
 
-        /* Add event to polis list menu */
         const editController = () => {
             const townController = uw.layout_main_controller.sub_controllers.find(controller => controller.name === 'town_name_area');
             if (!townController) {
@@ -186,8 +174,6 @@ class ModernBot {
         setTimeout(editController, 2500);
     };
 
-    /* New quick menu */
-    // Create the html of an activity in the new quick menu
     createModernMenu = () => {
         const $menu = uw.$('<div id="modern_menu" class="toolbar_activities"></div>');
         $menu.css({
@@ -197,7 +183,6 @@ class ModernBot {
             'z-index': '1000',
         });
 
-        // Add left, middle, right
         const $left = uw.$('<div class="left"></div>');
         const $middle = uw.$('<div class="middle"></div>');
         const $right = uw.$('<div class="right"></div>');
@@ -210,8 +195,6 @@ class ModernBot {
 
 }
 
-
-// Load the bot when the loader is ready (guard against double injection)
 if (!window.__multbot_loaded__) {
     window.__multbot_loaded__ = true;
     var _multbot_loader = setInterval(() => {
