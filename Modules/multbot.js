@@ -61,6 +61,11 @@ class ModernBot {
                     render: this.settingsMix,
                 },
                 {
+                    title: 'Attack',
+                    id: 'attack',
+                    render: this.settingsAttack,
+                },
+                {
                     title: 'Mult',
                     id: 'mult',
                     render: this.settingsMult,
@@ -108,6 +113,11 @@ class ModernBot {
         html += this.autoHide.settings();
         html += this.autoMilitia.settings();
         html += this.autoDodge.settings();
+        return html;
+    };
+
+    settingsAttack = () => {
+        let html = '';
         html += this.autoAttack.settings();
         return html;
     };
