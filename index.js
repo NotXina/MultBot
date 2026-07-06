@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  ModernBot aprimorado com módulos adicionais para Grepolis
-// @version      1.1.0
+// @version      1.2.0
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -13,6 +13,12 @@
 
 (function () {
     'use strict';
+
+    if (window.__multbot_index_running__) {
+        console.warn('[MultBot] ⚠ index.js já está rodando nesta página — execução duplicada ignorada.');
+        return;
+    }
+    window.__multbot_index_running__ = true;
 
     const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main/Modules';
     const MAX_RETRIES = 2;
@@ -34,6 +40,7 @@
         'status.js',
         'auto_militia.js',
         'auto_dodge.js',
+        'auto_attack.js',
         'auto_research.js',
         'auto_send_resources.js',
         'colonize_ship_sender.js',
@@ -45,13 +52,12 @@
     let completed = 0;
 
     function injectAll() {
-        // Concatena tudo num único script tag — garante escopo compartilhado
         const fullCode = codes.join('\n\n');
         const script = document.createElement('script');
         script.textContent = fullCode;
         document.head.appendChild(script);
         script.remove();
-        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.1.0)');
+        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.2.0)');
     }
 
     async function fetchModule(index, attempt = 0) {
@@ -91,7 +97,7 @@
         if (attempt < MAX_RETRIES) {
             const nextAttempt = attempt + 1;
             console.warn(`[MultBot] ⚠ ${reason} ao baixar ${mod} — tentativa ${nextAttempt}/${MAX_RETRIES}`);
-            setTimeout(() => fetchModule(index, nextAttempt), 800 * nextAttempt); // backoff crescente
+            setTimeout(() => fetchModule(index, nextAttempt), 800 * nextAttempt);
         } else {
             codes[index] = `console.error('[MultBot] Falha definitiva ao carregar ${mod} após ${MAX_RETRIES} tentativas (${reason})');`;
             console.error(`[MultBot] ✗ Desistindo de ${mod} após ${MAX_RETRIES} tentativas: ${reason}`);
