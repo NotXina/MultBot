@@ -7,10 +7,20 @@
 //  em um unico envio. Reutiliza o mesmo padrao de envio
 //  (send_units) ja validado no AutoDodge.
 //
+//  Nomes de unidade exibidos na interface (dropdown, chips,
+//  lista de planos e logs) usam o nome traduzido do proprio
+//  GameData.units[id].name - mesmo campo que ja confirmamos
+//  existir nas pesquisas ("Espionagem", etc). Isso garante que
+//  o nome exibido sempre bate com o idioma configurado no jogo,
+//  sem precisar manter uma tabela de traducao manual. O ID
+//  interno (ingles, ex: "sword") continua sendo o valor real
+//  usado internamente e enviado ao servidor - so o TEXTO
+//  mostrado ao usuario muda.
+//
 //  Layout compacto: cidade atacante e descanso na mesma linha,
-//  unidade/quantidade/botao na mesma linha, area de alvos menor,
-//  e a lista de planos ativos SEMPRE visivel com borda/fundo
-//  proprio e altura maxima fixa (rolagem interna quando precisar).
+//  unidade/quantidade/botao na mesma linha, lista de planos
+//  ativos SEMPRE visivel com borda/fundo proprio e altura
+//  maxima fixa (rolagem interna quando precisar).
 //
 //  Periodo de descanso (cooldown) por alvo, com jitter
 //  aleatorio de +-10%. Descanso = 0 significa sem espera.
@@ -91,6 +101,18 @@ class AutoAttack extends ModernUtil {
         }
     }
 
+    /* Retorna o nome traduzido da unidade, direto do GameData do
+       proprio jogo (bate com o idioma configurado). Se por algum
+       motivo o campo nao existir, cai no ID interno como fallback
+       seguro (nunca quebra a interface). */
+    _getUnitLabel(unitId) {
+        try {
+            const unitData = uw.GameData.units[unitId];
+            if (unitData && unitData.name) return unitData.name;
+        } catch (e) {}
+        return unitId;
+    }
+
     settings = () => {
         const self = this;
         requestAnimationFrame(function () {
@@ -113,7 +135,6 @@ class AutoAttack extends ModernUtil {
 
         html += '<div style="padding:4px 10px;">';
 
-        // Linha 1: Cidade Atacante + Descanso lado a lado
         html += '<div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">';
         html += '<div style="flex:1; min-width:180px;">';
         html += '<label style="font-size:11px;font-weight:bold;">Cidade Atacante</label><br>';
@@ -127,7 +148,6 @@ class AutoAttack extends ModernUtil {
         html += '</div>';
         html += '</div>';
 
-        // Linha 2: Unidade + Quantidade + Botao, tudo junto
         html += '<div style="display:flex; gap:8px; align-items:flex-end; margin-top:6px; flex-wrap:wrap;">';
         html += '<div style="flex:1; min-width:130px;">';
         html += '<label style="font-size:11px;font-weight:bold;">Unidade</label><br>';
@@ -146,7 +166,6 @@ class AutoAttack extends ModernUtil {
 
         html += '<div id="attack_staging_list" style="font-size:11px; margin-top:4px;"></div>';
 
-        // Linha 3: Alvos (compacto, 1 linha visivel)
         html += '<div style="margin-top:6px;">';
         html += '<label style="font-size:11px;font-weight:bold;">Cidades-alvo (ID, separadas por virgula ou linha)</label>';
         html += '<textarea id="attack_targets" rows="1" style="width:100%;padding:4px;box-sizing:border-box;" placeholder="ex: 12345, 67890"></textarea>';
@@ -157,7 +176,6 @@ class AutoAttack extends ModernUtil {
         html += '</div>';
         html += '</div>';
 
-        // Lista de planos - SEMPRE com borda/fundo visivel, altura maxima fixa
         html += '<div style="padding:4px 10px 8px;border-top:1px solid rgba(0,0,0,0.15);">';
         html += '<div style="font-weight:bold;font-size:11px;margin:4px 0;">Planos ativos:</div>';
         html += '<div id="attack_plans_list" style="';
@@ -201,6 +219,10 @@ class AutoAttack extends ModernUtil {
         }
     }
 
+    /* Gera as opcoes do dropdown usando o nome TRADUZIDO da unidade
+       (uw.GameData.units[id].name), nao mais o ID interno em ingles.
+       Ordenado alfabeticamente pelo nome exibido, pra ficar facil de
+       achar. Militia fica de fora, pois nao pode ser enviada em ataque. */
     _getUnitOptionsHtml() {
         try {
             const units = uw.GameData.units;
@@ -208,11 +230,19 @@ class AutoAttack extends ModernUtil {
                 return u !== 'militia';
             });
 
+            const self = this;
+            const items = keys.map(function (key) {
+                return { id: key, label: self._getUnitLabel(key), isNaval: !!units[key].is_naval };
+            });
+
+            items.sort(function (a, b) {
+                return a.label.localeCompare(b.label);
+            });
+
             let html = '<option value="">Selecione...</option>';
-            for (const key of keys) {
-                const isNaval = units[key].is_naval ? true : false;
-                const label = key + (isNaval ? ' (naval)' : ' (terra)');
-                html += '<option value="' + key + '">' + label + '</option>';
+            for (const item of items) {
+                const typeTag = item.isNaval ? ' (naval)' : ' (terra)';
+                html += '<option value="' + item.id + '">' + item.label + typeTag + '</option>';
             }
             return html;
         } catch (e) {
@@ -256,7 +286,7 @@ class AutoAttack extends ModernUtil {
         uw.$('#attack_unit_select').val('');
 
         this._renderStagingUnits();
-        this.console.log('[AutoAttack] Unidade adicionada a composicao: ' + qty + 'x ' + unit);
+        this.console.log('[AutoAttack] Unidade adicionada a composicao: ' + qty + 'x ' + this._getUnitLabel(unit));
     };
 
     removeStagingUnit = (unit) => {
@@ -266,8 +296,6 @@ class AutoAttack extends ModernUtil {
         this._renderStagingUnits();
     };
 
-    /* Renderiza as unidades ja adicionadas como pequenos "chips" em
-       linha, em vez de uma linha por unidade - economiza espaco vertical. */
     _renderStagingUnits() {
         const container = uw.$('#attack_staging_list');
         if (!container.length) return;
@@ -280,7 +308,7 @@ class AutoAttack extends ModernUtil {
         let html = '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
         for (const u of this._stagingUnits) {
             html += '<span style="background:rgba(0,0,0,0.08);border-radius:3px;padding:2px 6px;display:inline-flex;align-items:center;gap:4px;">';
-            html += u.quantity + 'x ' + u.unit;
+            html += u.quantity + 'x ' + this._getUnitLabel(u.unit);
             html += '<span onclick="window.modernBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;">X</span>';
             html += '</span>';
         }
@@ -385,7 +413,7 @@ class AutoAttack extends ModernUtil {
         let unitsSummary = '';
         for (let i = 0; i < plan.units.length; i++) {
             if (i > 0) unitsSummary += ', ';
-            unitsSummary += plan.units[i].quantity + 'x ' + plan.units[i].unit;
+            unitsSummary += plan.units[i].quantity + 'x ' + this._getUnitLabel(plan.units[i].unit);
         }
 
         const restLabel = restMinutes > 0 ? (', descanso ' + restMinutes + 'min') : '';
@@ -402,9 +430,6 @@ class AutoAttack extends ModernUtil {
         this.console.log('[AutoAttack] Plano removido.');
     };
 
-    /* Linha de plano compacta: nome + composicao + alvos em UMA linha
-       de texto corrido (sem quebra forcada), botao Remover pequeno
-       ao lado direito, sempre visivel. */
     _renderPlans() {
         const container = uw.$('#attack_plans_list');
         if (!container.length) return;
@@ -424,7 +449,7 @@ class AutoAttack extends ModernUtil {
             let unitsLabel = '';
             for (let i = 0; i < plan.units.length; i++) {
                 if (i > 0) unitsLabel += ', ';
-                unitsLabel += plan.units[i].quantity + 'x ' + plan.units[i].unit;
+                unitsLabel += plan.units[i].quantity + 'x ' + this._getUnitLabel(plan.units[i].unit);
             }
 
             let targetsLabel = '';
@@ -514,7 +539,7 @@ class AutoAttack extends ModernUtil {
             let unitsSummary = '';
             for (let i = 0; i < plan.units.length; i++) {
                 if (i > 0) unitsSummary += ', ';
-                unitsSummary += plan.units[i].quantity + 'x ' + plan.units[i].unit;
+                unitsSummary += plan.units[i].quantity + 'x ' + this._getUnitLabel(plan.units[i].unit);
             }
 
             this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques em ' + readyTargets.length + ' alvo(s) prontos...');
