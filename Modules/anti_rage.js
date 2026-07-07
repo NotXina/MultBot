@@ -33,7 +33,11 @@ class AntiRage extends ModernUtil {
 					}
 					return;
 				}
-				uw.$(spellMenu).on('click', this.trigger);
+
+				// FIX: sem o .off() aqui, cada vez que a janela de ataque
+				// reabre o listener antigo continua vivo e se soma ao novo,
+				// fazendo o trigger() disparar 2x, 3x, 4x... na mesma sessão.
+				uw.$(spellMenu).off('click', this.trigger).on('click', this.trigger);
 
 				this.command_id = commandId;
 			};
@@ -94,6 +98,11 @@ class AntiRage extends ModernUtil {
 			this.handleGod('athena');
 			this.handleGod('zeus');
 			this.handleGod('artemis');
+
+			// FIX: remove o popup/ícone antigo antes de recriar, senão a cada
+			// reabertura da janela de ataque um novo #enchanted_rage é
+			// empilhado em cima do anterior (elementos duplicados na DOM).
+			uw.$('#enchanted_rage').remove();
 
 			uw.$('.js-god-box[data-god_id="zeus"]').find('.powers').append(`
             <div id="enchanted_rage" class="js-power-icon animated_power_icon animated_power_icon_45x45 power_icon45x45 power transformation" style="filter: brightness(70%) sepia(104%) hue-rotate(14deg) saturate(1642%) contrast(0.8)">
@@ -225,10 +234,16 @@ class AntiRage extends ModernUtil {
 	};
 
 	clicker = el => {
-		let check = uw.$('.js-power-icon.animated_power_icon.animated_power_icon_45x45.power_icon45x45.power').eq(0);
-		if (!check.length) {
+		// FIX: antes checava um seletor genérico em qualquer lugar da página
+		// (podia deixar o autoclick rodando pra sempre / clique fantasma).
+		// Agora verifica se o elemento ESPECÍFICO que estamos clicando
+		// ainda está conectado à DOM (janela de ataque ainda aberta).
+		if (!el || !el.length || !el.get(0) || !el.get(0).isConnected) {
 			clearInterval(this.loop_funct);
 			this.loop_funct = null;
+			if (this.active_god_el) {
+				this.setColor(this.active_god_el.get(0), false);
+			}
 			this.active_god_el = null;
 			return;
 		}
@@ -259,44 +274,3 @@ class AntiRage extends ModernUtil {
 		uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
 	};
 }
-
-/* 
-
-<div id="popup_div_curtain">
-    <table class="popup" id="popup_div" cellpadding="0" cellspacing="0" style="display: block; left: 243px; top: 461px; opacity: 1; position: absolute; z-index: 6001; width: auto; max-width: 400px;">
-        <tbody><tr class="popup_top">
-            <td class="popup_top_left"></td>
-            <td class="popup_top_middle"></td>
-            <td class="popup_top_right"></td>
-        </tr>
-        <tr>
-            <td class="popup_middle_left">&nbsp;</td>
-            <td class="popup_middle_middle" id="popup_content" style="width: auto;"><div>
-
-<div class="temple_power_popup ">
-	
-    <div class="temple_power_popup_image power_icon86x86 fair_wind"></div>
-
-    <div class="temple_power_popup_info">
-        <h4>Vento favorevole</h4>
-        <p>La voce di Zeus risuona nell'aria, il vento fa gonfiare le vele delle navi e frecce e dardi sibilanti vengono lanciati con precisione verso il nemico.</p>
-    	
-            <p><b>Le forze navali attaccanti ottengono un bonus del 10% alla loro forza durante il loro prossimo attacco.</b></p>
-                    <div class="favor_cost_info">
-                        <div class="resource_icon favor"></div>
-                        <span>250 favore</span>
-                    </div>
-    </div>
-</div>
-</div></td>
-            <td class="popup_middle_right">&nbsp;</td>
-        </tr>
-        <tr class="popup_bottom">
-            <td class="popup_bottom_left"></td>
-            <td class="popup_bottom_middle"></td>
-            <td class="popup_bottom_right"></td>
-        </tr>
-      </tbody></table>
-</div>
-
-*/
