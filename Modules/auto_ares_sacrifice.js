@@ -6,16 +6,17 @@
 //  na cidade escolhida (via dropdown), acumulando furia ate
 //  o limite de 5000. Para automaticamente ao atingir o limite.
 //
-//  Favor e rastreado POR DEUS, a nivel de conta - campos tipo
-//  ares_favor, zeus_favor, artemis_favor ficam em
-//  player_gods.attributes (confirmado no dump do PlayerGods e
-//  ja usado com sucesso no anti_rage.js).
+//  Nome do deus exibido tenta usar getGameName('god', 'ares'),
+//  que puxa direto de uw.GameData.gods (se essa fonte existir
+//  neste mundo) - com fallback seguro para o texto fixo "Ares"
+//  caso o dado nao esteja disponivel, sem quebrar a interface.
 //
 //  Endpoint confirmado via captura real:
 //  model_url: "CastedPowers", action_name: "cast",
 //  arguments: { power_id: "ares_sacrifice", target_id: <town_id> }
 // ══════════════════════════════════════════════════════
 class AutoAresSacrifice extends ModernUtil {
+    GOD_ID = 'ares';
     FAVOR_COST = 100;
     MAX_FURY = 5000;
     CHECK_INTERVAL_MS = 20000;
@@ -31,11 +32,20 @@ class AutoAresSacrifice extends ModernUtil {
         }
     }
 
+    /* Nome do deus para exibicao - tenta o nome nativo do jogo,
+       cai no texto fixo "Ares" se a fonte de dados nao existir. */
+    _getGodLabel() {
+        const name = this.getGameName('god', this.GOD_ID);
+        return (name && name !== this.GOD_ID) ? name : 'Ares';
+    }
+
     settings = () => {
         requestAnimationFrame(() => {
             this._updateTitle();
             this._renderStatus();
         });
+
+        const godLabel = this._getGodLabel();
 
         return (
             '<div class="game_border" style="margin-bottom:20px;">' +
@@ -43,9 +53,9 @@ class AutoAresSacrifice extends ModernUtil {
             '<div class="game_border_left"></div><div class="game_border_right"></div>' +
             '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
-            this.getTitleHtml('ares_sac_title', 'Auto Sacrificio de Ares', this.toggle, '', this._active) +
+            this.getTitleHtml('ares_sac_title', 'Auto Sacrificio de ' + godLabel, this.toggle, '', this._active) +
             '<div style="padding:5px 10px;font-weight:bold;">' +
-            'Lanca o Sacrificio a Ares assim que houver ' + this.FAVOR_COST + ' de favor de Ares acumulado, ate atingir ' + this.MAX_FURY + ' de furia. Verifica a cada 20s.' +
+            'Lanca o Sacrificio de ' + godLabel + ' assim que houver ' + this.FAVOR_COST + ' de favor acumulado, ate atingir ' + this.MAX_FURY + ' de furia. Verifica a cada 20s.' +
             '</div>' +
             '<div style="padding:8px 10px;display:flex;gap:8px;align-items:center;">' +
             '<label style="font-size:11px;font-weight:bold;">Cidade</label>' +
@@ -60,8 +70,6 @@ class AutoAresSacrifice extends ModernUtil {
         );
     };
 
-    /* Gera as opcoes do dropdown a partir de uw.ITowns.towns (suas
-       proprias cidades). Marca a cidade ja salva como selecionada. */
     _getTownOptionsHtml() {
         try {
             const towns = uw.ITowns.towns;
@@ -132,9 +140,6 @@ class AutoAresSacrifice extends ModernUtil {
             ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
 
-    /* Furia e um valor GLOBAL da conta, lido de
-       uw.ITowns.player_gods.attributes.fury - confirmado no dump
-       anterior de PlayerGods (fury: 0, max_fury: 5000). */
     _getCurrentFury() {
         try {
             return uw.ITowns.player_gods.attributes.fury || 0;
@@ -143,12 +148,9 @@ class AutoAresSacrifice extends ModernUtil {
         }
     }
 
-    /* Favor de Ares e rastreado POR CONTA, nao por cidade. O campo
-       correto e player_gods.attributes.ares_favor - mesmo padrao ja
-       usado no anti_rage.js para artemis_favor/zeus_favor. */
     _getAresFavor() {
         try {
-            return uw.ITowns.player_gods.attributes.ares_favor || 0;
+            return uw.ITowns.player_gods.attributes[this.GOD_ID + '_favor'] || 0;
         } catch (e) {
             return 0;
         }
@@ -157,12 +159,13 @@ class AutoAresSacrifice extends ModernUtil {
     _renderStatus() {
         try {
             const fury = this._getCurrentFury();
-            const aresFavor = this._getAresFavor();
+            const godFavor = this._getAresFavor();
+            const godLabel = this._getGodLabel();
             const town = this.townId ? uw.ITowns.towns[this.townId] : null;
             const townName = town && town.getName ? town.getName() : (this.townId ? '#' + this.townId + ' (nao encontrada)' : 'nenhuma selecionada');
 
             const html = 'Furia atual: <b>' + fury + ' / ' + this.MAX_FURY + '</b>' +
-                ' | Favor de Ares (conta): <b>' + aresFavor + '</b>' +
+                ' | Favor de ' + godLabel + ' (conta): <b>' + godFavor + '</b>' +
                 ' | Cidade: <b>' + townName + '</b>';
             uw.$('#ares_sac_status').html(html);
         } catch (e) {}
@@ -187,22 +190,23 @@ class AutoAresSacrifice extends ModernUtil {
                 return;
             }
 
-            const aresFavor = this._getAresFavor();
+            const godFavor = this._getAresFavor();
             this._renderStatus();
 
-            if (aresFavor < this.FAVOR_COST) return; // ainda nao tem favor de Ares suficiente
+            if (godFavor < this.FAVOR_COST) return;
 
             const townName = town.getName ? town.getName() : ('#' + this.townId);
-            this.console.log('[AutoAresSacrifice] ' + townName + ': ' + aresFavor + ' de favor de Ares disponivel. Lancando Sacrificio a Ares...');
+            const godLabel = this._getGodLabel();
+            this.console.log('[AutoAresSacrifice] ' + townName + ': ' + godFavor + ' de favor de ' + godLabel + ' disponivel. Lancando sacrificio...');
 
             const result = await this._castAresSacrifice(this.townId);
 
             if (result.success) {
                 const newFury = this._getCurrentFury();
-                const newAresFavor = this._getAresFavor();
-                this.console.log('[AutoAresSacrifice] ✓ Sacrificio lancado! Furia agora: ' + newFury + '/' + this.MAX_FURY + ' | Favor de Ares restante: ' + newAresFavor);
+                const newFavor = this._getAresFavor();
+                this.console.log('[AutoAresSacrifice] ✓ Sacrificio lancado! Furia agora: ' + newFury + '/' + this.MAX_FURY + ' | Favor restante: ' + newFavor);
                 uw.$('#ares_sac_log').text('✓ Sacrificio lancado! Furia: ' + newFury + '/' + this.MAX_FURY).css('color', '#1a6b2a');
-                if (uw.HumanMessage) uw.HumanMessage.success('MultBot: Sacrificio a Ares lancado (' + newFury + '/' + this.MAX_FURY + ')');
+                if (uw.HumanMessage) uw.HumanMessage.success('MultBot: Sacrificio de ' + godLabel + ' lancado (' + newFury + '/' + this.MAX_FURY + ')');
                 this._renderStatus();
             } else {
                 this.console.log('[AutoAresSacrifice] ✗ Falha ao lancar o sacrificio: ' + result.reason);
@@ -214,9 +218,6 @@ class AutoAresSacrifice extends ModernUtil {
         }
     }
 
-    /* Endpoint confirmado via captura real do jogo:
-       model_url "CastedPowers", action_name "cast",
-       arguments.target_id = ID da cidade (nao usa town_id separado). */
     _castAresSacrifice(townId) {
         return new Promise((resolve) => {
             const data = {
@@ -224,7 +225,7 @@ class AutoAresSacrifice extends ModernUtil {
                 action_name: 'cast',
                 captcha: null,
                 arguments: {
-                    power_id: 'ares_sacrifice',
+                    power_id: this.GOD_ID + '_sacrifice',
                     target_id: parseInt(townId, 10),
                 },
             };
