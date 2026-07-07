@@ -160,14 +160,22 @@ class AutoFarm extends ModernUtil {
             const { on_small_island, island_id, id } = town.attributes;
             if (on_small_island || islands_list.has(island_id)) continue;
 
-            // Check the min percent for each town
+            // Marca a ilha como já visitada ANTES de decidir se entra na
+            // lista, senão outra cidade da mesma ilha tentaria de novo.
+            islands_list.add(island_id);
+
+            // FIX: esse filtro estava comentado, então o percentual de
+            // storage configurado no menu (80/90/100%) nunca era usado —
+            // o bot sempre coletava de todas as ilhas, ignorando o ajuste.
+            // Além disso, antes o continue vinha DEPOIS do push, então
+            // mesmo descomentado não teria efeito nenhum.
             const { wood, stone, iron, storage } = uw.ITowns.getTown(id).resources();
             minResource = Math.min(wood, stone, iron);
-            min_percent = minResource / storage;
+            min_percent = storage > 0 ? minResource / storage : 0;
 
-            islands_list.add(island_id);
+            if (min_percent < this.percent) continue;
+
             polis_list.push(town.id);
-            // if (min_percent < this.percent) continue;
         }
 
         return polis_list;
