@@ -26,6 +26,7 @@ class ModernBot {
         this.autoMilitia      = new AutoMilitia(this.console, this.storage);
         this.autoDodge        = new AutoDodge(this.console, this.storage);
         this.autoAttack       = new AutoAttack(this.console, this.storage);
+        this.autoAresSacrifice = new AutoAresSacrifice(this.console, this.storage);
         this.autoResearch     = new AutoResearch(this.console, this.storage);
         this.autoSendResources = new AutoSendResources(this.console, this.storage);
         this.statusPanel  = new StatusPanel(this.console, this.storage);
@@ -132,6 +133,7 @@ class ModernBot {
         let html = '';
         html += this.multTools.settings();
         html += this.autoResearch.settings();
+        html += this.autoAresSacrifice.settings();
         return html;
     };
 
