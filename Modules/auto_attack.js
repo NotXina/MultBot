@@ -7,32 +7,23 @@
 //  em um unico envio. Reutiliza o mesmo padrao de envio
 //  (send_units) ja validado no AutoDodge.
 //
-//  A lista de planos ativos fica dentro de um container com
-//  altura MAXIMA fixa (max-height) e overflow-y:auto - isso
-//  garante que, independente de quantos planos existam (1 ou
-//  100), a area nunca cresce além do limite: surge uma barra
-//  de rolagem propria. A janela do bot nunca precisa aumentar
-//  por causa da quantidade de planos.
+//  Layout compacto: cidade atacante e descanso na mesma linha,
+//  unidade/quantidade/botao na mesma linha, area de alvos menor,
+//  e a lista de planos ativos SEMPRE visivel com borda/fundo
+//  proprio e altura maxima fixa (rolagem interna quando precisar).
 //
 //  Periodo de descanso (cooldown) por alvo, com jitter
-//  aleatorio de +-10%. Depois de atacar um alvo, ele fica
-//  "de molho" pelo tempo configurado antes de ser atacado de
-//  novo pelo mesmo plano - da tempo do armazem inimigo encher.
-//  Descanso = 0 significa sem espera (comportamento antigo).
+//  aleatorio de +-10%. Descanso = 0 significa sem espera.
 //
 //  Planos salvos ANTES da versao com multiplas unidades usavam
-//  o formato antigo (plan.unit + plan.quantity, no singular).
-//  Ao carregar, migramos automaticamente qualquer plano nesse
-//  formato para o novo (plan.units, array), e tambem garantimos
-//  que plan.restMinutes e plan.nextAllowedAt existam.
+//  o formato antigo (plan.unit + plan.quantity). Ao carregar,
+//  migramos automaticamente para o novo formato (plan.units).
 // ══════════════════════════════════════════════════════
 class AutoAttack extends ModernUtil {
     CHECK_INTERVAL_MS = 20000;
     SEND_DELAY_MS = 800;
     JITTER_PERCENT = 0.10;
-    // Altura maxima da lista de planos, em pixels. Nunca cresce
-    // além disso - o que passar vira rolagem interna.
-    PLANS_LIST_MAX_HEIGHT = 140;
+    PLANS_LIST_MAX_HEIGHT = 110;
 
     constructor(c, s) {
         super(c, s);
@@ -109,56 +100,56 @@ class AutoAttack extends ModernUtil {
         });
 
         let html = '';
-        html += '<div class="game_border" style="margin-bottom:20px;">';
+        html += '<div class="game_border" style="margin-bottom:14px;">';
         html += '<div class="game_border_top"></div><div class="game_border_bottom"></div>';
         html += '<div class="game_border_left"></div><div class="game_border_right"></div>';
         html += '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>';
         html += '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>';
         html += this.getTitleHtml('attack_title', 'Auto Ataque', this.toggle, '', this._active);
-        html += '<div style="padding:5px 10px;font-weight:bold;">';
-        html += 'Ataca automaticamente assim que TODA a composicao configurada estiver disponivel na cidade. Verifica a cada 20s.';
+
+        html += '<div style="padding:4px 10px;font-size:11px;font-weight:bold;">';
+        html += 'Ataca automaticamente quando a composicao estiver disponivel. Verifica a cada 20s.';
         html += '</div>';
 
-        html += '<div style="padding:8px 10px; border-top:1px solid rgba(0,0,0,0.1);">';
+        html += '<div style="padding:4px 10px;">';
 
-        html += '<div>';
+        // Linha 1: Cidade Atacante + Descanso lado a lado
+        html += '<div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">';
+        html += '<div style="flex:1; min-width:180px;">';
         html += '<label style="font-size:11px;font-weight:bold;">Cidade Atacante</label><br>';
-        html += '<select id="attack_origin_select" style="width:220px;padding:3px;">';
+        html += '<select id="attack_origin_select" style="width:100%;padding:3px;">';
         html += this._getTownOptionsHtml();
         html += '</select>';
         html += '</div>';
+        html += '<div style="width:140px;">';
+        html += '<label style="font-size:11px;font-weight:bold;" title="Espera antes de reatacar o mesmo alvo, +-10% de variacao. 0 = sem espera.">Descanso (min)</label><br>';
+        html += '<input type="number" id="attack_rest_minutes" min="0" placeholder="0" style="width:100%;padding:3px;" value="0">';
+        html += '</div>';
+        html += '</div>';
 
-        html += '<div style="margin-top:8px;font-weight:bold;font-size:12px;">Composicao do ataque</div>';
-        html += '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-top:4px;">';
-
-        html += '<div>';
+        // Linha 2: Unidade + Quantidade + Botao, tudo junto
+        html += '<div style="display:flex; gap:8px; align-items:flex-end; margin-top:6px; flex-wrap:wrap;">';
+        html += '<div style="flex:1; min-width:130px;">';
         html += '<label style="font-size:11px;font-weight:bold;">Unidade</label><br>';
-        html += '<select id="attack_unit_select" style="width:160px;padding:3px;">';
+        html += '<select id="attack_unit_select" style="width:100%;padding:3px;">';
         html += this._getUnitOptionsHtml();
         html += '</select>';
         html += '</div>';
-
+        html += '<div style="width:80px;">';
+        html += '<label style="font-size:11px;font-weight:bold;">Qtde</label><br>';
+        html += '<input type="number" id="attack_qty" min="1" placeholder="100" style="width:100%;padding:3px;">';
+        html += '</div>';
         html += '<div>';
-        html += '<label style="font-size:11px;font-weight:bold;">Quantidade</label><br>';
-        html += '<input type="number" id="attack_qty" min="1" placeholder="ex: 100" style="width:80px;padding:3px;">';
+        html += this.getButtonHtml('attack_add_unit_btn', '+ Unidade', this.addUnitToStaging);
+        html += '</div>';
         html += '</div>';
 
-        html += '<div>';
-        html += this.getButtonHtml('attack_add_unit_btn', '+ Add Unidade', this.addUnitToStaging);
-        html += '</div>';
+        html += '<div id="attack_staging_list" style="font-size:11px; margin-top:4px;"></div>';
 
-        html += '</div>';
-
-        html += '<div id="attack_staging_list" style="padding:6px 0;font-size:11px;"></div>';
-
+        // Linha 3: Alvos (compacto, 1 linha visivel)
         html += '<div style="margin-top:6px;">';
-        html += '<label style="font-size:11px;font-weight:bold;">Cidades-alvo (uma por linha, ou separadas por virgula)</label><br>';
-        html += '<textarea id="attack_targets" rows="2" style="width:100%;padding:4px;" placeholder="ex: 12345, 67890"></textarea>';
-        html += '</div>';
-
-        html += '<div style="margin-top:6px;">';
-        html += '<label style="font-size:11px;font-weight:bold;" title="Tempo de espera antes de atacar o mesmo alvo de novo, para o armazem encher. 0 = sem espera. Variacao aleatoria de +-10% e aplicada.">Descanso por alvo (minutos)</label><br>';
-        html += '<input type="number" id="attack_rest_minutes" min="0" placeholder="ex: 60 (0 = sem espera)" style="width:180px;padding:3px;" value="0">';
+        html += '<label style="font-size:11px;font-weight:bold;">Cidades-alvo (ID, separadas por virgula ou linha)</label>';
+        html += '<textarea id="attack_targets" rows="1" style="width:100%;padding:4px;box-sizing:border-box;" placeholder="ex: 12345, 67890"></textarea>';
         html += '</div>';
 
         html += '<div style="margin-top:6px;">';
@@ -166,24 +157,22 @@ class AutoAttack extends ModernUtil {
         html += '</div>';
         html += '</div>';
 
-        html += '<div style="padding:8px 10px; border-top:1px solid rgba(0,0,0,0.1);">';
-        html += '<div style="font-weight:bold;font-size:12px;margin-bottom:4px;">Planos ativos:</div>';
-        // Container com altura MAXIMA fixa. overflow-y:auto cria a
-        // barra de rolagem automaticamente assim que o conteudo
-        // ultrapassar PLANS_LIST_MAX_HEIGHT - nao importa quantos
-        // planos existam, essa div NUNCA cresce além disso.
+        // Lista de planos - SEMPRE com borda/fundo visivel, altura maxima fixa
+        html += '<div style="padding:4px 10px 8px;border-top:1px solid rgba(0,0,0,0.15);">';
+        html += '<div style="font-weight:bold;font-size:11px;margin:4px 0;">Planos ativos:</div>';
         html += '<div id="attack_plans_list" style="';
         html += 'max-height:' + this.PLANS_LIST_MAX_HEIGHT + 'px;';
-        html += 'overflow-y:auto;';
+        html += 'overflow-y:scroll;';
         html += 'overflow-x:hidden;';
-        html += 'border:1px solid rgba(0,0,0,0.15);';
+        html += 'border:1px solid #7a5c2a;';
         html += 'border-radius:3px;';
-        html += 'background:rgba(0,0,0,0.03);';
-        html += 'padding:2px 4px;';
+        html += 'background:rgba(255,255,255,0.35);';
+        html += 'padding:3px 5px;';
+        html += 'box-sizing:border-box;';
         html += '"></div>';
         html += '</div>';
 
-        html += '<div id="attack_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>';
+        html += '<div id="attack_log" style="padding:0 10px 6px;font-size:11px;color:#5a3a0a;min-height:14px;"></div>';
         html += '</div>';
 
         return html;
@@ -200,7 +189,7 @@ class AutoAttack extends ModernUtil {
                 return nameA.localeCompare(nameB);
             });
 
-            let html = '<option value="">Selecione uma cidade...</option>';
+            let html = '<option value="">Selecione...</option>';
             for (const id of keys) {
                 const t = towns[id];
                 const name = t.getName ? t.getName() : ('#' + id);
@@ -222,7 +211,7 @@ class AutoAttack extends ModernUtil {
             let html = '<option value="">Selecione...</option>';
             for (const key of keys) {
                 const isNaval = units[key].is_naval ? true : false;
-                const label = key + (isNaval ? ' (naval)' : ' (terrestre)');
+                const label = key + (isNaval ? ' (naval)' : ' (terra)');
                 html += '<option value="' + key + '">' + label + '</option>';
             }
             return html;
@@ -277,23 +266,25 @@ class AutoAttack extends ModernUtil {
         this._renderStagingUnits();
     };
 
+    /* Renderiza as unidades ja adicionadas como pequenos "chips" em
+       linha, em vez de uma linha por unidade - economiza espaco vertical. */
     _renderStagingUnits() {
         const container = uw.$('#attack_staging_list');
         if (!container.length) return;
 
         if (this._stagingUnits.length === 0) {
-            container.html('<span style="color:#7a5c2a;">Nenhuma unidade adicionada ainda a esta composicao.</span>');
+            container.html('<span style="color:#7a5c2a;">Nenhuma unidade na composicao ainda.</span>');
             return;
         }
 
-        let html = '<div style="font-weight:bold;margin-bottom:4px;">Composicao atual:</div>';
+        let html = '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
         for (const u of this._stagingUnits) {
-            const typeLabel = u.isNaval ? 'naval' : 'terrestre';
-            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px;">';
-            html += '<span>' + u.quantity + 'x ' + u.unit + ' (' + typeLabel + ')</span>';
-            html += '<span onclick="window.modernBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;padding:0 6px;">X</span>';
-            html += '</div>';
+            html += '<span style="background:rgba(0,0,0,0.08);border-radius:3px;padding:2px 6px;display:inline-flex;align-items:center;gap:4px;">';
+            html += u.quantity + 'x ' + u.unit;
+            html += '<span onclick="window.modernBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;">X</span>';
+            html += '</span>';
         }
+        html += '</div>';
         container.html(html);
     }
 
@@ -411,6 +402,9 @@ class AutoAttack extends ModernUtil {
         this.console.log('[AutoAttack] Plano removido.');
     };
 
+    /* Linha de plano compacta: nome + composicao + alvos em UMA linha
+       de texto corrido (sem quebra forcada), botao Remover pequeno
+       ao lado direito, sempre visivel. */
     _renderPlans() {
         const container = uw.$('#attack_plans_list');
         if (!container.length) return;
@@ -441,18 +435,17 @@ class AutoAttack extends ModernUtil {
                 const nextAt = plan.nextAllowedAt ? plan.nextAllowedAt[plan.targets[i]] : null;
                 if (nextAt && nextAt > Date.now()) {
                     const remainMin = Math.ceil((nextAt - Date.now()) / 60000);
-                    targetsLabel += ' (descansando ' + remainMin + 'min)';
+                    targetsLabel += '(' + remainMin + 'min)';
                 }
             }
 
-            const restLabel = (plan.restMinutes && plan.restMinutes > 0) ? (' | descanso: ' + plan.restMinutes + 'min') : '';
+            const restLabel = (plan.restMinutes && plan.restMinutes > 0) ? (' | ' + plan.restMinutes + 'min') : '';
 
-            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;">';
-            html += '<div style="max-width:75%;">' + '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + restLabel + '</div>';
-            html += '<div class="button_new" onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;margin:0;padding:0 6px;flex-shrink:0;">';
-            html += '<div class="left"></div><div class="right"></div>';
-            html += '<div class="caption js-caption">Remover<div class="effect js-effect"></div></div>';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 2px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:10px;line-height:1.3;">';
+            html += '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px;" title="' + townName + ' [' + unitsLabel + '] -> ' + targetsLabel + restLabel + '">';
+            html += '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + restLabel;
             html += '</div>';
+            html += '<span onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;flex-shrink:0;padding:0 4px;">X</span>';
             html += '</div>';
         }
 
