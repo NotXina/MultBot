@@ -219,32 +219,6 @@ class ColonizeShipSender extends ModernUtil {
         }
     }
 
-    _getTownName(townId) {
-        if (!townId) return String(townId);
-        const id  = parseInt(townId);
-        const ids = String(townId);
-        try {
-            // 1. ITowns — cidades do jogador (chave pode ser number ou string)
-            const t1 = uw.ITowns?.towns?.[id] ?? uw.ITowns?.towns?.[ids];
-            if (t1) return t1.getName() + ' (#' + ids + ')';
-
-            // 2. Backbone Town collection
-            const allTowns = uw.MM.getOnlyCollectionByName('Town')?.models ?? [];
-            for (const t of allTowns) {
-                const tid = t.attributes?.id ?? t.id;
-                if (parseInt(tid) === id) {
-                    return (t.attributes?.name ?? '?') + ' (#' + ids + ')';
-                }
-            }
-
-            // 3. WMap
-            const wt = uw.WMap?.towns?.[id] ?? uw.WMap?.towns?.[ids];
-            if (wt?.name) return wt.name + ' (#' + ids + ')';
-
-        } catch(e) {}
-        return '#' + ids;
-    }
-
     _parseTownId(input) {
         if (!input) return null;
         const bb = input.match(/\[town[^\]]*\](\d+)\[\/town\]/i);
