@@ -4,29 +4,31 @@
 //  quantidades configuradas de uma composicao de unidades
 //  estiverem disponiveis, dispara ataques automaticamente
 //  para uma ou mais cidades-alvo, com a composicao completa
-//  em um unico envio. Reutiliza o mesmo padrao de envio
-//  (send_units) ja validado no AutoDodge.
+//  em um unico envio.
 //
-//  NOVO: cada unidade da composicao pode ser marcada como
-//  "Max" - nesse modo, ao inves de uma quantidade fixa, o
-//  ataque sempre envia TUDO que estiver disponivel daquela
-//  unidade no momento do disparo. Util para ir incluindo
-//  unidades recem-produzidas automaticamente nos proximos
-//  ataques, sem precisar reconfigurar o plano toda vez.
+//  PDCA - correcoes desta rodada:
+//  1) O tick agora e verdadeiramente assincrono e aguarda TODOS
+//     os planos terminarem de processar antes de considerar o
+//     ciclo completo. Combinado com this.createGuardedInterval,
+//     isso elimina o risco de dois ciclos rodarem sobre o mesmo
+//     plano ao mesmo tempo (o que podia, em teoria, disparar o
+//     mesmo ataque duas vezes antes do jogo atualizar a contagem
+//     de tropas).
+//  2) O envio de ataque usa this.ajaxPostWithTimeout (herdado de
+//     ModernUtil) - evita Promise pendurada para sempre se a rede
+//     travar no meio do envio.
+//  3) _getTownName foi removido - usa this.getTownName (herdado
+//     de ModernUtil), eliminando a duplicacao dessa logica.
 //
 //  Nomes de unidade exibidos usam o nome traduzido do proprio
-//  GameData.units[id].name - bate com o idioma do jogo.
+//  GameData.units[id].name.
 //
-//  Layout compacto: cidade atacante e descanso na mesma linha,
-//  unidade/quantidade/max/botao na mesma linha, lista de planos
-//  ativos SEMPRE visivel com borda/fundo proprio e altura
-//  maxima fixa (rolagem interna quando precisar).
+//  Cada unidade da composicao pode ser marcada "Max" - nesse modo,
+//  o ataque envia SEMPRE tudo que estiver disponivel daquela
+//  unidade no momento do disparo.
 //
-//  Periodo de descanso (cooldown) por alvo, com jitter
-//  aleatorio de +-10%. Descanso = 0 significa sem espera.
-//
-//  Planos salvos em versoes anteriores sao migrados
-//  automaticamente para o formato atual ao carregar.
+//  Periodo de descanso (cooldown) por alvo, com jitter de +-10%,
+//  persistido em storage (sobrevive a reload).
 // ══════════════════════════════════════════════════════
 class AutoAttack extends ModernUtil {
     CHECK_INTERVAL_MS = 20000;
@@ -91,8 +93,6 @@ class AutoAttack extends ModernUtil {
                 changed = true;
             }
 
-            // Garante que toda unidade da composicao tenha o campo useMax
-            // (planos criados antes dessa versao nao tinham esse campo).
             if (Array.isArray(migratedPlan.units)) {
                 for (const u of migratedPlan.units) {
                     if (typeof u.useMax !== 'boolean') {
@@ -112,20 +112,10 @@ class AutoAttack extends ModernUtil {
         }
     }
 
-    /* Retorna o nome traduzido da unidade, direto do GameData do
-       proprio jogo (bate com o idioma configurado). Fallback seguro
-       para o ID interno se o campo nao existir. */
     _getUnitLabel(unitId) {
-        try {
-            const unitData = uw.GameData.units[unitId];
-            if (unitData && unitData.name) return unitData.name;
-        } catch (e) {}
-        return unitId;
+        return this.getGameName('unit', unitId);
     }
 
-    /* Formata uma entrada de unidade da composicao para exibicao:
-       "MAX x Nome" se estiver em modo maximo, ou "Nx Nome" com
-       quantidade fixa caso contrario. */
     _formatUnitEntry(u) {
         const label = this._getUnitLabel(u.unit);
         if (u.useMax) return 'MAX x ' + label;
@@ -179,7 +169,7 @@ class AutoAttack extends ModernUtil {
         html += '<input type="number" id="attack_qty" min="1" placeholder="100" style="width:100%;padding:3px;">';
         html += '</div>';
         html += '<div style="width:60px;">';
-        html += '<label style="font-size:11px;font-weight:bold;" title="Sempre envia TUDO que estiver disponivel dessa unidade no momento do ataque, ao inves de uma quantidade fixa.">&nbsp;</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;" title="Sempre envia TUDO que estiver disponivel dessa unidade no momento do ataque.">&nbsp;</label><br>';
         html += '<label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;padding:4px 0;">';
         html += '<input type="checkbox" id="attack_qty_max" onchange="window.modernBot.autoAttack.toggleMaxQty()"> Max';
         html += '</label>';
@@ -244,10 +234,6 @@ class AutoAttack extends ModernUtil {
         }
     }
 
-    /* Gera as opcoes do dropdown usando o nome TRADUZIDO da unidade
-       (uw.GameData.units[id].name), ordenado alfabeticamente pelo
-       nome exibido. Militia fica de fora, pois nao pode ser enviada
-       em ataque. */
     _getUnitOptionsHtml() {
         try {
             const units = uw.GameData.units;
@@ -275,8 +261,6 @@ class AutoAttack extends ModernUtil {
         }
     }
 
-    /* Alterna o campo de quantidade entre habilitado (quantidade fixa)
-       e desabilitado (modo Maximo), conforme o checkbox "Max". */
     toggleMaxQty = () => {
         const checked = uw.$('#attack_qty_max').is(':checked');
         const $qty = uw.$('#attack_qty');
@@ -319,7 +303,6 @@ class AutoAttack extends ModernUtil {
                 existing.useMax = true;
                 existing.quantity = 0;
             } else if (existing.useMax) {
-                // Ja estava em modo Max - a nova entrada com quantidade fixa substitui o modo
                 existing.useMax = false;
                 existing.quantity = qty;
             } else {
@@ -386,9 +369,7 @@ class AutoAttack extends ModernUtil {
         this._updateTitle();
         this.console.log('[AutoAttack] Iniciado. Monitorando planos de ataque...');
         this._tick();
-        this._intervalId = setInterval(() => {
-            this._tick();
-        }, this.CHECK_INTERVAL_MS);
+        this._intervalId = this.createGuardedInterval(() => this._tick(), this.CHECK_INTERVAL_MS);
     }
 
     stop() {
@@ -499,7 +480,7 @@ class AutoAttack extends ModernUtil {
         for (const plan of this._plans) {
             if (!Array.isArray(plan.units)) continue;
 
-            const townName = this._getTownName(plan.originId);
+            const townName = this.getTownName(plan.originId);
 
             let unitsLabel = '';
             for (let i = 0; i < plan.units.length; i++) {
@@ -510,7 +491,7 @@ class AutoAttack extends ModernUtil {
             let targetsLabel = '';
             for (let i = 0; i < plan.targets.length; i++) {
                 if (i > 0) targetsLabel += ', ';
-                targetsLabel += this._getTownName(plan.targets[i]);
+                targetsLabel += this.getTownName(plan.targets[i]);
 
                 const nextAt = plan.nextAllowedAt ? plan.nextAllowedAt[plan.targets[i]] : null;
                 if (nextAt && nextAt > Date.now()) {
@@ -532,14 +513,22 @@ class AutoAttack extends ModernUtil {
         container.html(html);
     }
 
-    _tick() {
+    /* Tick verdadeiramente assincrono: espera TODOS os planos
+       terminarem de processar antes de considerar o ciclo completo.
+       Rodando dentro de this.createGuardedInterval, isso garante que
+       o proximo disparo do timer so acontece depois que este ciclo
+       inteiro (incluindo todos os envios de rede) tiver terminado. */
+    async _tick() {
         if (window.__multbot_captcha_active) return;
         if (this._plans.length === 0) return;
 
+        const promises = [];
         for (const plan of this._plans) {
             if (!plan.enabled) continue;
-            this._checkAndFire(plan);
+            promises.push(this._checkAndFire(plan));
         }
+
+        await Promise.all(promises);
     }
 
     _computeNextAllowedAt(restMinutes) {
@@ -549,11 +538,6 @@ class AutoAttack extends ModernUtil {
         return Date.now() + baseMs + jitter;
     }
 
-    /* Verifica se a composicao esta pronta e dispara o ataque.
-       Unidades com quantidade FIXA precisam ter o valor exato
-       disponivel. Unidades em modo MAX so precisam ter pelo menos
-       1 disponivel - o valor real enviado e calculado na hora do
-       disparo, usando tudo que estiver disponivel naquele momento. */
     async _checkAndFire(plan) {
         try {
             if (!Array.isArray(plan.units) || plan.units.length === 0) {
@@ -605,11 +589,6 @@ class AutoAttack extends ModernUtil {
 
             this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques em ' + readyTargets.length + ' alvo(s) prontos...');
 
-            // "remaining" rastreia quanto ainda sobra de cada unidade
-            // conforme vamos consumindo pelos alvos deste ciclo. Para
-            // unidades fixas, e decrementado pela quantidade enviada.
-            // Para unidades MAX, comeca com o total disponivel e vira
-            // 0 apos o primeiro envio (tudo foi enviado de uma vez).
             const remaining = {};
             for (const u of plan.units) {
                 remaining[u.unit] = available[u.unit] || 0;
@@ -629,9 +608,6 @@ class AutoAttack extends ModernUtil {
                     break;
                 }
 
-                // Monta a composicao REAL que sera enviada neste ataque
-                // especifico: quantidade fixa configurada, ou tudo que
-                // ainda resta (remaining) para unidades em modo MAX.
                 const sendUnits = [];
                 for (const u of plan.units) {
                     const qtyToSend = u.useMax ? remaining[u.unit] : u.quantity;
@@ -644,7 +620,7 @@ class AutoAttack extends ModernUtil {
                     sendSummary += sendUnits[i].quantity + 'x ' + this._getUnitLabel(sendUnits[i].unit);
                 }
 
-                const targetName = this._getTownName(targetId);
+                const targetName = this.getTownName(targetId);
                 try {
                     await this._sendAttack(plan.originId, targetId, sendUnits);
                     this.console.log('[AutoAttack] OK: ' + townName + ' -> ' + targetName + ': ataque com [' + sendSummary + '] enviado!');
@@ -685,30 +661,17 @@ class AutoAttack extends ModernUtil {
 
     _sendAttack(fromTownId, toTownId, unitsList) {
         return this._withTownId(fromTownId, () => {
-            return new Promise((resolve, reject) => {
-                const data = {
-                    id: parseInt(toTownId, 10),
-                    type: 'attack',
-                    nl_init: true
-                };
+            const data = {
+                id: parseInt(toTownId, 10),
+                type: 'attack',
+                nl_init: true
+            };
 
-                for (const u of unitsList) {
-                    data[u.unit] = u.quantity;
-                }
+            for (const u of unitsList) {
+                data[u.unit] = u.quantity;
+            }
 
-                uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
-                    function (res) {
-                        if (res && res.success !== false) {
-                            resolve(res);
-                        } else {
-                            reject(new Error('Servidor recusou: ' + JSON.stringify(res)));
-                        }
-                    },
-                    function (r, status, txt) {
-                        reject(new Error('Erro de rede: ' + txt));
-                    }
-                );
-            });
+            return this.ajaxPostWithTimeout('town_info', 'send_units', data, 15000);
         });
     }
 
@@ -725,28 +688,5 @@ class AutoAttack extends ModernUtil {
             uw.Game.townId = orig;
             uw.Game.town_id = origStr;
         }
-    }
-
-    _getTownName(townId) {
-        if (!townId) return String(townId);
-
-        const id = parseInt(townId);
-        const ids = String(townId);
-
-        try {
-            const towns = (uw.ITowns && uw.ITowns.towns) ? uw.ITowns.towns : {};
-            const t1 = towns[id] ? towns[id] : towns[ids];
-            if (t1 && typeof t1.getName === 'function') {
-                return t1.getName() + ' (#' + ids + ')';
-            }
-
-            const wmapTowns = (uw.WMap && uw.WMap.towns) ? uw.WMap.towns : {};
-            const wt = wmapTowns[id] ? wmapTowns[id] : wmapTowns[ids];
-            if (wt && wt.name) {
-                return wt.name + ' (#' + ids + ')';
-            }
-        } catch (e) {}
-
-        return '#' + ids;
     }
 }
