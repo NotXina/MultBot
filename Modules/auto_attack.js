@@ -7,27 +7,26 @@
 //  em um unico envio. Reutiliza o mesmo padrao de envio
 //  (send_units) ja validado no AutoDodge.
 //
-//  Nomes de unidade exibidos na interface (dropdown, chips,
-//  lista de planos e logs) usam o nome traduzido do proprio
-//  GameData.units[id].name - mesmo campo que ja confirmamos
-//  existir nas pesquisas ("Espionagem", etc). Isso garante que
-//  o nome exibido sempre bate com o idioma configurado no jogo,
-//  sem precisar manter uma tabela de traducao manual. O ID
-//  interno (ingles, ex: "sword") continua sendo o valor real
-//  usado internamente e enviado ao servidor - so o TEXTO
-//  mostrado ao usuario muda.
+//  NOVO: cada unidade da composicao pode ser marcada como
+//  "Max" - nesse modo, ao inves de uma quantidade fixa, o
+//  ataque sempre envia TUDO que estiver disponivel daquela
+//  unidade no momento do disparo. Util para ir incluindo
+//  unidades recem-produzidas automaticamente nos proximos
+//  ataques, sem precisar reconfigurar o plano toda vez.
+//
+//  Nomes de unidade exibidos usam o nome traduzido do proprio
+//  GameData.units[id].name - bate com o idioma do jogo.
 //
 //  Layout compacto: cidade atacante e descanso na mesma linha,
-//  unidade/quantidade/botao na mesma linha, lista de planos
+//  unidade/quantidade/max/botao na mesma linha, lista de planos
 //  ativos SEMPRE visivel com borda/fundo proprio e altura
 //  maxima fixa (rolagem interna quando precisar).
 //
 //  Periodo de descanso (cooldown) por alvo, com jitter
 //  aleatorio de +-10%. Descanso = 0 significa sem espera.
 //
-//  Planos salvos ANTES da versao com multiplas unidades usavam
-//  o formato antigo (plan.unit + plan.quantity). Ao carregar,
-//  migramos automaticamente para o novo formato (plan.units).
+//  Planos salvos em versoes anteriores sao migrados
+//  automaticamente para o formato atual ao carregar.
 // ══════════════════════════════════════════════════════
 class AutoAttack extends ModernUtil {
     CHECK_INTERVAL_MS = 20000;
@@ -68,7 +67,8 @@ class AutoAttack extends ModernUtil {
                             {
                                 unit: plan.unit,
                                 quantity: plan.quantity,
-                                isNaval: !!plan.isNaval
+                                isNaval: !!plan.isNaval,
+                                useMax: false
                             }
                         ],
                         targets: plan.targets || [],
@@ -91,6 +91,17 @@ class AutoAttack extends ModernUtil {
                 changed = true;
             }
 
+            // Garante que toda unidade da composicao tenha o campo useMax
+            // (planos criados antes dessa versao nao tinham esse campo).
+            if (Array.isArray(migratedPlan.units)) {
+                for (const u of migratedPlan.units) {
+                    if (typeof u.useMax !== 'boolean') {
+                        u.useMax = false;
+                        changed = true;
+                    }
+                }
+            }
+
             newPlans.push(migratedPlan);
         }
 
@@ -102,15 +113,23 @@ class AutoAttack extends ModernUtil {
     }
 
     /* Retorna o nome traduzido da unidade, direto do GameData do
-       proprio jogo (bate com o idioma configurado). Se por algum
-       motivo o campo nao existir, cai no ID interno como fallback
-       seguro (nunca quebra a interface). */
+       proprio jogo (bate com o idioma configurado). Fallback seguro
+       para o ID interno se o campo nao existir. */
     _getUnitLabel(unitId) {
         try {
             const unitData = uw.GameData.units[unitId];
             if (unitData && unitData.name) return unitData.name;
         } catch (e) {}
         return unitId;
+    }
+
+    /* Formata uma entrada de unidade da composicao para exibicao:
+       "MAX x Nome" se estiver em modo maximo, ou "Nx Nome" com
+       quantidade fixa caso contrario. */
+    _formatUnitEntry(u) {
+        const label = this._getUnitLabel(u.unit);
+        if (u.useMax) return 'MAX x ' + label;
+        return u.quantity + 'x ' + label;
     }
 
     settings = () => {
@@ -155,9 +174,15 @@ class AutoAttack extends ModernUtil {
         html += this._getUnitOptionsHtml();
         html += '</select>';
         html += '</div>';
-        html += '<div style="width:80px;">';
+        html += '<div style="width:75px;">';
         html += '<label style="font-size:11px;font-weight:bold;">Qtde</label><br>';
         html += '<input type="number" id="attack_qty" min="1" placeholder="100" style="width:100%;padding:3px;">';
+        html += '</div>';
+        html += '<div style="width:60px;">';
+        html += '<label style="font-size:11px;font-weight:bold;" title="Sempre envia TUDO que estiver disponivel dessa unidade no momento do ataque, ao inves de uma quantidade fixa.">&nbsp;</label><br>';
+        html += '<label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;padding:4px 0;">';
+        html += '<input type="checkbox" id="attack_qty_max" onchange="window.modernBot.autoAttack.toggleMaxQty()"> Max';
+        html += '</label>';
         html += '</div>';
         html += '<div>';
         html += this.getButtonHtml('attack_add_unit_btn', '+ Unidade', this.addUnitToStaging);
@@ -220,9 +245,9 @@ class AutoAttack extends ModernUtil {
     }
 
     /* Gera as opcoes do dropdown usando o nome TRADUZIDO da unidade
-       (uw.GameData.units[id].name), nao mais o ID interno em ingles.
-       Ordenado alfabeticamente pelo nome exibido, pra ficar facil de
-       achar. Militia fica de fora, pois nao pode ser enviada em ataque. */
+       (uw.GameData.units[id].name), ordenado alfabeticamente pelo
+       nome exibido. Militia fica de fora, pois nao pode ser enviada
+       em ataque. */
     _getUnitOptionsHtml() {
         try {
             const units = uw.GameData.units;
@@ -250,8 +275,21 @@ class AutoAttack extends ModernUtil {
         }
     }
 
+    /* Alterna o campo de quantidade entre habilitado (quantidade fixa)
+       e desabilitado (modo Maximo), conforme o checkbox "Max". */
+    toggleMaxQty = () => {
+        const checked = uw.$('#attack_qty_max').is(':checked');
+        const $qty = uw.$('#attack_qty');
+        if (checked) {
+            $qty.prop('disabled', true).val('');
+        } else {
+            $qty.prop('disabled', false);
+        }
+    };
+
     addUnitToStaging = () => {
         const unit = uw.$('#attack_unit_select').val();
+        const useMax = uw.$('#attack_qty_max').is(':checked');
         const qty = parseInt(uw.$('#attack_qty').val(), 10);
 
         if (!unit) {
@@ -259,9 +297,9 @@ class AutoAttack extends ModernUtil {
             uw.$('#attack_log').text('Erro: selecione uma unidade.').css('color', '#f87171');
             return;
         }
-        if (!qty || qty <= 0) {
+        if (!useMax && (!qty || qty <= 0)) {
             this.console.log('[AutoAttack] Erro: quantidade invalida.');
-            uw.$('#attack_log').text('Erro: informe uma quantidade valida.').css('color', '#f87171');
+            uw.$('#attack_log').text('Erro: informe uma quantidade valida ou marque Max.').css('color', '#f87171');
             return;
         }
 
@@ -277,16 +315,33 @@ class AutoAttack extends ModernUtil {
         }
 
         if (existing) {
-            existing.quantity += qty;
+            if (useMax) {
+                existing.useMax = true;
+                existing.quantity = 0;
+            } else if (existing.useMax) {
+                // Ja estava em modo Max - a nova entrada com quantidade fixa substitui o modo
+                existing.useMax = false;
+                existing.quantity = qty;
+            } else {
+                existing.quantity += qty;
+            }
         } else {
-            this._stagingUnits.push({ unit: unit, quantity: qty, isNaval: isNaval });
+            this._stagingUnits.push({
+                unit: unit,
+                quantity: useMax ? 0 : qty,
+                isNaval: isNaval,
+                useMax: useMax
+            });
         }
 
-        uw.$('#attack_qty').val('');
+        uw.$('#attack_qty').val('').prop('disabled', false);
+        uw.$('#attack_qty_max').prop('checked', false);
         uw.$('#attack_unit_select').val('');
 
         this._renderStagingUnits();
-        this.console.log('[AutoAttack] Unidade adicionada a composicao: ' + qty + 'x ' + this._getUnitLabel(unit));
+
+        const entryForLog = existing ? existing : this._stagingUnits[this._stagingUnits.length - 1];
+        this.console.log('[AutoAttack] Unidade adicionada a composicao: ' + this._formatUnitEntry(entryForLog));
     };
 
     removeStagingUnit = (unit) => {
@@ -308,7 +363,7 @@ class AutoAttack extends ModernUtil {
         let html = '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
         for (const u of this._stagingUnits) {
             html += '<span style="background:rgba(0,0,0,0.08);border-radius:3px;padding:2px 6px;display:inline-flex;align-items:center;gap:4px;">';
-            html += u.quantity + 'x ' + this._getUnitLabel(u.unit);
+            html += this._formatUnitEntry(u);
             html += '<span onclick="window.modernBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;">X</span>';
             html += '</span>';
         }
@@ -384,7 +439,7 @@ class AutoAttack extends ModernUtil {
 
         const unitsCopy = [];
         for (const u of this._stagingUnits) {
-            unitsCopy.push({ unit: u.unit, quantity: u.quantity, isNaval: u.isNaval });
+            unitsCopy.push({ unit: u.unit, quantity: u.quantity, isNaval: u.isNaval, useMax: u.useMax });
         }
 
         const plan = {
@@ -413,7 +468,7 @@ class AutoAttack extends ModernUtil {
         let unitsSummary = '';
         for (let i = 0; i < plan.units.length; i++) {
             if (i > 0) unitsSummary += ', ';
-            unitsSummary += plan.units[i].quantity + 'x ' + this._getUnitLabel(plan.units[i].unit);
+            unitsSummary += this._formatUnitEntry(plan.units[i]);
         }
 
         const restLabel = restMinutes > 0 ? (', descanso ' + restMinutes + 'min') : '';
@@ -449,7 +504,7 @@ class AutoAttack extends ModernUtil {
             let unitsLabel = '';
             for (let i = 0; i < plan.units.length; i++) {
                 if (i > 0) unitsLabel += ', ';
-                unitsLabel += plan.units[i].quantity + 'x ' + this._getUnitLabel(plan.units[i].unit);
+                unitsLabel += this._formatUnitEntry(plan.units[i]);
             }
 
             let targetsLabel = '';
@@ -494,6 +549,11 @@ class AutoAttack extends ModernUtil {
         return Date.now() + baseMs + jitter;
     }
 
+    /* Verifica se a composicao esta pronta e dispara o ataque.
+       Unidades com quantidade FIXA precisam ter o valor exato
+       disponivel. Unidades em modo MAX so precisam ter pelo menos
+       1 disponivel - o valor real enviado e calculado na hora do
+       disparo, usando tudo que estiver disponivel naquele momento. */
     async _checkAndFire(plan) {
         try {
             if (!Array.isArray(plan.units) || plan.units.length === 0) {
@@ -512,7 +572,8 @@ class AutoAttack extends ModernUtil {
             let hasMissing = false;
             for (const u of plan.units) {
                 const have = available[u.unit] || 0;
-                if (have < u.quantity) {
+                const required = u.useMax ? 1 : u.quantity;
+                if (have < required) {
                     hasMissing = true;
                     break;
                 }
@@ -539,11 +600,16 @@ class AutoAttack extends ModernUtil {
             let unitsSummary = '';
             for (let i = 0; i < plan.units.length; i++) {
                 if (i > 0) unitsSummary += ', ';
-                unitsSummary += plan.units[i].quantity + 'x ' + this._getUnitLabel(plan.units[i].unit);
+                unitsSummary += this._formatUnitEntry(plan.units[i]);
             }
 
             this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques em ' + readyTargets.length + ' alvo(s) prontos...');
 
+            // "remaining" rastreia quanto ainda sobra de cada unidade
+            // conforme vamos consumindo pelos alvos deste ciclo. Para
+            // unidades fixas, e decrementado pela quantidade enviada.
+            // Para unidades MAX, comeca com o total disponivel e vira
+            // 0 apos o primeiro envio (tudo foi enviado de uma vez).
             const remaining = {};
             for (const u of plan.units) {
                 remaining[u.unit] = available[u.unit] || 0;
@@ -552,7 +618,8 @@ class AutoAttack extends ModernUtil {
             for (const targetId of readyTargets) {
                 let stillEnough = true;
                 for (const u of plan.units) {
-                    if (remaining[u.unit] < u.quantity) {
+                    const required = u.useMax ? 1 : u.quantity;
+                    if (remaining[u.unit] < required) {
                         stillEnough = false;
                         break;
                     }
@@ -562,17 +629,36 @@ class AutoAttack extends ModernUtil {
                     break;
                 }
 
+                // Monta a composicao REAL que sera enviada neste ataque
+                // especifico: quantidade fixa configurada, ou tudo que
+                // ainda resta (remaining) para unidades em modo MAX.
+                const sendUnits = [];
+                for (const u of plan.units) {
+                    const qtyToSend = u.useMax ? remaining[u.unit] : u.quantity;
+                    sendUnits.push({ unit: u.unit, quantity: qtyToSend });
+                }
+
+                let sendSummary = '';
+                for (let i = 0; i < sendUnits.length; i++) {
+                    if (i > 0) sendSummary += ', ';
+                    sendSummary += sendUnits[i].quantity + 'x ' + this._getUnitLabel(sendUnits[i].unit);
+                }
+
                 const targetName = this._getTownName(targetId);
                 try {
-                    await this._sendAttack(plan.originId, targetId, plan.units);
-                    this.console.log('[AutoAttack] OK: ' + townName + ' -> ' + targetName + ': ataque com [' + unitsSummary + '] enviado!');
-                    uw.$('#attack_log').text('OK: ' + townName + ' atacou ' + targetName + ' [' + unitsSummary + ']').css('color', '#1a6b2a');
+                    await this._sendAttack(plan.originId, targetId, sendUnits);
+                    this.console.log('[AutoAttack] OK: ' + townName + ' -> ' + targetName + ': ataque com [' + sendSummary + '] enviado!');
+                    uw.$('#attack_log').text('OK: ' + townName + ' atacou ' + targetName + ' [' + sendSummary + ']').css('color', '#1a6b2a');
                     if (uw.HumanMessage) {
                         uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + targetName + ' (ataque)');
                     }
 
                     for (const u of plan.units) {
-                        remaining[u.unit] -= u.quantity;
+                        if (u.useMax) {
+                            remaining[u.unit] = 0;
+                        } else {
+                            remaining[u.unit] -= u.quantity;
+                        }
                     }
 
                     if (plan.restMinutes && plan.restMinutes > 0) {
