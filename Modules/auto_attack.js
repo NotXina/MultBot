@@ -6,6 +6,13 @@
 //  para uma ou mais cidades-alvo, com a composicao completa
 //  em um unico envio. Reutiliza o mesmo padrao de envio
 //  (send_units) ja validado no AutoDodge.
+//
+//  BUGFIX: planos salvos ANTES da versao com multiplas
+//  unidades usavam o formato antigo (plan.unit + plan.quantity,
+//  no singular). Ao carregar, migramos automaticamente qualquer
+//  plano nesse formato para o novo (plan.units, array), evitando
+//  o erro "plan.units is undefined" e preservando planos ja
+//  configurados.
 // ══════════════════════════════════════════════════════
 class AutoAttack extends ModernUtil {
     CHECK_INTERVAL_MS = 20000;
@@ -16,12 +23,49 @@ class AutoAttack extends ModernUtil {
         this._active = false;
         this._intervalId = null;
         this._plans = this.storage.load('attack_plans', []);
-        // Lista temporaria de unidades sendo montadas antes de salvar o plano
-        // (fica so em memoria, nao precisa persistir)
         this._stagingUnits = [];
+
+        this._migrateOldPlans();
 
         if (this.storage.load('attack_active', false)) {
             setTimeout(() => this.start(), 2000);
+        }
+    }
+
+    /* Converte planos salvos no formato antigo (unit + quantity,
+       no singular) para o formato novo (units, array). Roda uma
+       unica vez na inicializacao, e salva de volta se algo mudou. */
+    _migrateOldPlans() {
+        let changed = false;
+
+        this._plans = this._plans.map(plan => {
+            if (Array.isArray(plan.units)) return plan; // ja esta no formato novo
+
+            if (plan.unit) {
+                changed = true;
+                const migrated = {
+                    id: plan.id,
+                    originId: plan.originId,
+                    units: [{
+                        unit: plan.unit,
+                        quantity: plan.quantity,
+                        isNaval: !!plan.isNaval,
+                    }],
+                    targets: plan.targets || [],
+                    enabled: plan.enabled !== false,
+                };
+                this.console.log('[AutoAttack] Plano antigo migrado: cidade #' + plan.originId + ' (' + plan.unit + ' x' + plan.quantity + ').');
+                return migrated;
+            }
+
+            // Plano corrompido/sem unit nem units - remove com log de aviso
+            changed = true;
+            this.console.log('[AutoAttack] Aviso: plano invalido removido (sem unidades definidas): ' + JSON.stringify(plan));
+            return null;
+        }).filter(p => p !== null);
+
+        if (changed) {
+            this.storage.save('attack_plans', this._plans);
         }
     }
 
@@ -246,200 +290,4 @@ class AutoAttack extends ModernUtil {
 
         if (targets.length === 0) {
             this.console.log('[AutoAttack] Erro: nenhuma cidade-alvo valida informada.');
-            uw.$('#attack_log').text('Erro: informe pelo menos uma cidade-alvo valida.').css('color', '#f87171');
-            return;
-        }
-
-        const plan = {
-            id: Date.now() + '_' + Math.floor(Math.random() * 10000),
-            originId: originId,
-            units: this._stagingUnits.map(u => ({ ...u })), // copia da composicao
-            targets: targets,
-            enabled: true,
-        };
-
-        this._plans.push(plan);
-        this.storage.save('attack_plans', this._plans);
-        this._renderPlans();
-
-        // Limpa a composicao temporaria e os campos apos salvar o plano
-        this._stagingUnits = [];
-        this._renderStagingUnits();
-        uw.$('#attack_origin_select').val('');
-        uw.$('#attack_targets').val('');
-
-        const originName = uw.ITowns.towns[originId]?.getName ? uw.ITowns.towns[originId].getName() : ('#' + originId);
-        const unitsSummary = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
-        this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s).');
-        uw.$('#attack_log').text('Plano adicionado com sucesso!').css('color', '#1a6b2a');
-    };
-
-    removePlan = (planId) => {
-        this._plans = this._plans.filter(p => p.id !== planId);
-        this.storage.save('attack_plans', this._plans);
-        this._renderPlans();
-        this.console.log('[AutoAttack] Plano removido.');
-    };
-
-    _renderPlans() {
-        const container = uw.$('#attack_plans_list');
-        if (!container.length) return;
-
-        if (this._plans.length === 0) {
-            container.html('<span style="font-size:11px;color:#7a5c2a;">Nenhum plano configurado.</span>');
-            return;
-        }
-
-        let html = '<div style="font-weight:bold;font-size:12px;margin-bottom:6px;">Planos ativos:</div>';
-
-        this._plans.forEach(plan => {
-            const townName = this._getTownName(plan.originId);
-            const unitsLabel = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
-            const targetsLabel = plan.targets.map(t => this._getTownName(t)).join(', ');
-
-            html += (
-                '<div style="display:flex;justify-content:space-between;align-items:center;' +
-                'padding:4px 6px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;">' +
-                '<div>' +
-                '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel +
-                '</div>' +
-                '<div class="button_new" onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;margin:0;padding:0 6px;">' +
-                '<div class="left"></div><div class="right"></div>' +
-                '<div class="caption js-caption">Remover<div class="effect js-effect"></div></div>' +
-                '</div>' +
-                '</div>'
-            );
-        });
-
-        container.html(html);
-    }
-
-    _tick() {
-        if (window.__multbot_captcha_active) return;
-        if (this._plans.length === 0) return;
-
-        this._plans.forEach(plan => {
-            if (!plan.enabled) return;
-            this._checkAndFire(plan);
-        });
-    }
-
-    /* So dispara quando TODAS as unidades da composicao tiverem a
-       quantidade configurada disponivel simultaneamente na cidade. */
-    async _checkAndFire(plan) {
-        try {
-            const town = uw.ITowns.towns[plan.originId];
-            if (!town) {
-                this.console.log('[AutoAttack] Aviso: cidade #' + plan.originId + ' nao encontrada (nao e sua ou saiu do cache).');
-                return;
-            }
-
-            const available = town.units();
-
-            const missing = plan.units.filter(u => (available[u.unit] || 0) < u.quantity);
-            if (missing.length > 0) {
-                return; // ainda falta pelo menos uma unidade da composicao
-            }
-
-            const townName = town.getName ? town.getName() : ('#' + plan.originId);
-            const unitsSummary = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
-            this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques...');
-
-            // Controla quanto ainda resta de cada unidade, conforme
-            // vamos consumindo em cada alvo da lista
-            const remaining = {};
-            plan.units.forEach(u => { remaining[u.unit] = available[u.unit] || 0; });
-
-            for (const targetId of plan.targets) {
-                const stillEnough = plan.units.every(u => remaining[u.unit] >= u.quantity);
-                if (!stillEnough) {
-                    this.console.log('[AutoAttack] ' + townName + ': composicao insuficiente para continuar aos proximos alvos.');
-                    break;
-                }
-
-                const targetName = this._getTownName(targetId);
-                try {
-                    await this._sendAttack(plan.originId, targetId, plan.units);
-                    this.console.log('[AutoAttack] ✓ ' + townName + ' -> ' + targetName + ': ataque com [' + unitsSummary + '] enviado!');
-                    uw.$('#attack_log').text('✓ ' + townName + ' atacou ' + targetName + ' [' + unitsSummary + ']').css('color', '#1a6b2a');
-                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + targetName + ' (ataque)');
-
-                    plan.units.forEach(u => { remaining[u.unit] -= u.quantity; });
-                } catch (e) {
-                    const msg = e && e.message ? e.message : e;
-                    this.console.log('[AutoAttack] ✗ Falha ao atacar ' + targetName + ' de ' + townName + ': ' + msg);
-                    uw.$('#attack_log').text('✗ Falha ao atacar ' + targetName + ': ' + msg).css('color', '#f87171');
-                }
-
-                await this.sleep(this.SEND_DELAY_MS);
-            }
-        } catch (e) {
-            const msg = e && e.message ? e.message : e;
-            this.console.log('[AutoAttack] Erro ao processar plano da cidade #' + plan.originId + ': ' + msg);
-        }
-    }
-
-    /* Envia o ataque via town_info/send_units com type "attack",
-       incluindo TODAS as unidades da composicao num unico payload -
-       mesmo endpoint ja validado no AutoDodge (que usa type "support"). */
-    _sendAttack(fromTownId, toTownId, unitsList) {
-        return this._withTownId(fromTownId, () => new Promise((resolve, reject) => {
-            const data = {
-                id: parseInt(toTownId, 10),
-                type: 'attack',
-                nl_init: true,
-            };
-
-            unitsList.forEach(u => {
-                data[u.unit] = u.quantity;
-            });
-
-            uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
-                res => {
-                    if (res && res.success !== false) {
-                        resolve(res);
-                    } else {
-                        reject(new Error('Servidor recusou: ' + JSON.stringify(res)));
-                    }
-                },
-                (r, status, txt) => {
-                    reject(new Error('Erro de rede: ' + txt));
-                }
-            );
-        }));
-    }
-
-    async _withTownId(townId, fn) {
-        const orig = uw.Game.townId;
-        const origStr = uw.Game.town_id;
-        uw.Game.townId = parseInt(townId, 10);
-        uw.Game.town_id = parseInt(townId, 10);
-
-        try {
-            const result = await fn();
-            return result;
-        } finally {
-            uw.Game.townId = orig;
-            uw.Game.town_id = origStr;
-        }
-    }
-
-    _getTownName(townId) {
-        if (!townId) return String(townId);
-
-        const id = parseInt(townId);
-        const ids = String(townId);
-
-        try {
-            const towns = uw.ITowns && uw.ITowns.towns ? uw.ITowns.towns : {};
-            const t1 = towns[id] ? towns[id] : towns[ids];
-            if (t1 && typeof t1.getName === 'function') return t1.getName() + ' (#' + ids + ')';
-
-            const wmapTowns = uw.WMap && uw.WMap.towns ? uw.WMap.towns : {};
-            const wt = wmapTowns[id] ? wmapTowns[id] : wmapTowns[ids];
-            if (wt && wt.name) return wt.name + ' (#' + ids + ')';
-        } catch (e) {}
-
-        return '#' + ids;
-    }
-}
+            uw.$('#attack_log').text('Erro: informe pelo menos uma cidade-alvo valida.').css('color',
