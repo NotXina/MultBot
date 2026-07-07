@@ -3,16 +3,13 @@
 //  Monitora o FAVOR DE ARES (rastreado por conta, nao por
 //  cidade - uw.ITowns.player_gods.attributes.ares_favor) e,
 //  assim que atingir 100, lanca o poder "Sacrificio a Ares"
-//  na cidade escolhida, acumulando furia ate o limite de 5000.
-//  Para automaticamente ao atingir o limite.
+//  na cidade escolhida (via dropdown), acumulando furia ate
+//  o limite de 5000. Para automaticamente ao atingir o limite.
 //
-//  BUGFIX: favor e rastreado POR DEUS, a nivel de conta -
-//  campos tipo ares_favor, zeus_favor, artemis_favor ficam em
+//  Favor e rastreado POR DEUS, a nivel de conta - campos tipo
+//  ares_favor, zeus_favor, artemis_favor ficam em
 //  player_gods.attributes (confirmado no dump do PlayerGods e
-//  ja usado com sucesso no anti_rage.js). town.resources().favor
-//  e o favor GERAL da cidade (do deus que ela adora agora, seja
-//  qual for) - nao e o mesmo campo e nunca deveria ser usado
-//  para checar favor de um deus especifico.
+//  ja usado com sucesso no anti_rage.js).
 //
 //  Endpoint confirmado via captura real:
 //  model_url: "CastedPowers", action_name: "cast",
@@ -51,8 +48,10 @@ class AutoAresSacrifice extends ModernUtil {
             'Lanca o Sacrificio a Ares assim que houver ' + this.FAVOR_COST + ' de favor de Ares acumulado, ate atingir ' + this.MAX_FURY + ' de furia. Verifica a cada 20s.' +
             '</div>' +
             '<div style="padding:8px 10px;display:flex;gap:8px;align-items:center;">' +
-            '<label style="font-size:11px;font-weight:bold;">Cidade (ID)</label>' +
-            '<input type="text" id="ares_sac_town_input" value="' + (this.townId || '') + '" placeholder="ex: 5342" style="width:100px;padding:3px;">' +
+            '<label style="font-size:11px;font-weight:bold;">Cidade</label>' +
+            '<select id="ares_sac_town_select" style="width:220px;padding:3px;">' +
+            this._getTownOptionsHtml() +
+            '</select>' +
             this.getButtonHtml('ares_sac_save_town_btn', 'Salvar', this.saveTown) +
             '</div>' +
             '<div id="ares_sac_status" style="padding:2px 10px;font-size:11px;color:#5a3a0a;"></div>' +
@@ -61,17 +60,42 @@ class AutoAresSacrifice extends ModernUtil {
         );
     };
 
+    /* Gera as opcoes do dropdown a partir de uw.ITowns.towns (suas
+       proprias cidades). Marca a cidade ja salva como selecionada. */
+    _getTownOptionsHtml() {
+        try {
+            const towns = uw.ITowns.towns;
+            const keys = Object.keys(towns).sort((a, b) => {
+                const nameA = towns[a].getName ? towns[a].getName() : '';
+                const nameB = towns[b].getName ? towns[b].getName() : '';
+                return nameA.localeCompare(nameB);
+            });
+
+            let html = '<option value="">Selecione uma cidade...</option>';
+            keys.forEach(id => {
+                const t = towns[id];
+                const name = t.getName ? t.getName() : ('#' + id);
+                const selected = String(id) === String(this.townId) ? ' selected' : '';
+                html += '<option value="' + id + '"' + selected + '>' + name + ' (#' + id + ')</option>';
+            });
+            return html;
+        } catch (e) {
+            return '<option value="">Erro ao carregar cidades</option>';
+        }
+    }
+
     saveTown = () => {
-        const raw = (uw.$('#ares_sac_town_input').val() || '').trim();
-        if (!raw || !/^\d+$/.test(raw)) {
-            this.console.log('[AutoAresSacrifice] Erro: ID de cidade invalido.');
-            uw.$('#ares_sac_log').text('Erro: ID de cidade invalido.').css('color', '#f87171');
+        const raw = (uw.$('#ares_sac_town_select').val() || '').trim();
+        if (!raw) {
+            this.console.log('[AutoAresSacrifice] Erro: nenhuma cidade selecionada.');
+            uw.$('#ares_sac_log').text('Erro: selecione uma cidade.').css('color', '#f87171');
             return;
         }
         this.townId = raw;
         this.storage.save('ares_sac_town_id', raw);
-        this.console.log('[AutoAresSacrifice] Cidade salva: #' + raw);
-        uw.$('#ares_sac_log').text('Cidade salva: #' + raw).css('color', '#1a6b2a');
+        const townName = uw.ITowns.towns[raw]?.getName ? uw.ITowns.towns[raw].getName() : ('#' + raw);
+        this.console.log('[AutoAresSacrifice] Cidade salva: ' + townName + ' (#' + raw + ')');
+        uw.$('#ares_sac_log').text('Cidade salva: ' + townName).css('color', '#1a6b2a');
         this._renderStatus();
     };
 
@@ -83,8 +107,8 @@ class AutoAresSacrifice extends ModernUtil {
     start() {
         if (this._active) return;
         if (!this.townId) {
-            this.console.log('[AutoAresSacrifice] Aviso: configure uma cidade antes de iniciar.');
-            uw.$('#ares_sac_log').text('Configure uma cidade antes de iniciar.').css('color', '#eab308');
+            this.console.log('[AutoAresSacrifice] Aviso: selecione uma cidade antes de iniciar.');
+            uw.$('#ares_sac_log').text('Selecione uma cidade antes de iniciar.').css('color', '#eab308');
             return;
         }
         this._active = true;
@@ -119,12 +143,9 @@ class AutoAresSacrifice extends ModernUtil {
         }
     }
 
-    /* BUGFIX: favor de Ares e rastreado POR CONTA, nao por cidade.
-       O campo correto e player_gods.attributes.ares_favor - mesmo
-       padrao ja usado no anti_rage.js para artemis_favor/zeus_favor.
-       town.resources().favor e o favor GERAL da cidade (do deus que
-       ela adora no momento) e NUNCA deve ser usado para checar o
-       favor de um deus especifico como Ares. */
+    /* Favor de Ares e rastreado POR CONTA, nao por cidade. O campo
+       correto e player_gods.attributes.ares_favor - mesmo padrao ja
+       usado no anti_rage.js para artemis_favor/zeus_favor. */
     _getAresFavor() {
         try {
             return uw.ITowns.player_gods.attributes.ares_favor || 0;
@@ -138,7 +159,7 @@ class AutoAresSacrifice extends ModernUtil {
             const fury = this._getCurrentFury();
             const aresFavor = this._getAresFavor();
             const town = this.townId ? uw.ITowns.towns[this.townId] : null;
-            const townName = town && town.getName ? town.getName() : (this.townId ? '#' + this.townId + ' (nao encontrada)' : 'nenhuma configurada');
+            const townName = town && town.getName ? town.getName() : (this.townId ? '#' + this.townId + ' (nao encontrada)' : 'nenhuma selecionada');
 
             const html = 'Furia atual: <b>' + fury + ' / ' + this.MAX_FURY + '</b>' +
                 ' | Favor de Ares (conta): <b>' + aresFavor + '</b>' +
