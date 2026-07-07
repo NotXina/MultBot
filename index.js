@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  ModernBot aprimorado com módulos adicionais para Grepolis
-// @version      1.2.0
+// @version      1.3.0
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -41,6 +41,7 @@
         'auto_militia.js',
         'auto_dodge.js',
         'auto_attack.js',
+        'auto_ares_sacrifice.js',
         'auto_research.js',
         'auto_send_resources.js',
         'colonize_ship_sender.js',
@@ -57,7 +58,7 @@
         script.textContent = fullCode;
         document.head.appendChild(script);
         script.remove();
-        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.2.0)');
+        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.3.0)');
     }
 
     async function fetchModule(index, attempt = 0) {
