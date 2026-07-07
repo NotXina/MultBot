@@ -48,11 +48,9 @@ class ModernUtil {
 
     /* Retorna o nome TRADUZIDO de uma unidade, construcao, pesquisa
        ou deus, direto dos dados nativos do jogo (uw.GameData) - bate
-       sempre com o idioma configurado no cliente, sem precisar manter
-       nenhum dicionario de traducao manual. Categorias suportadas:
-       'unit', 'building', 'research', 'god'. Se o dado nao existir
-       (ou a categoria for desconhecida), retorna o proprio ID como
-       fallback seguro - nunca quebra a interface. */
+       sempre com o idioma configurado no cliente, sem dicionario
+       manual. Categorias: 'unit', 'building', 'research', 'god'.
+       Fallback seguro para o proprio ID se o dado nao existir. */
     getGameName = (category, id) => {
         try {
             if (category === 'unit') {
@@ -71,6 +69,90 @@ class ModernUtil {
             }
         } catch (e) {}
         return id;
+    };
+
+    /* FONTE UNICA para "nome de exibicao de uma cidade a partir do ID".
+       Usado por AutoDodge, AutoAttack, StatusPanel e outros modulos -
+       antes cada um tinha sua propria copia quase identica desse
+       metodo; agora todos herdam daqui, evitando duplicacao e
+       divergencia entre implementacoes. */
+    getTownName = (townId) => {
+        if (!townId) return String(townId);
+
+        const id = parseInt(townId);
+        const ids = String(townId);
+
+        try {
+            const towns = (uw.ITowns && uw.ITowns.towns) ? uw.ITowns.towns : {};
+            const t1 = towns[id] ? towns[id] : towns[ids];
+            if (t1 && typeof t1.getName === 'function') {
+                return t1.getName() + ' (#' + ids + ')';
+            }
+
+            const wmapTowns = (uw.WMap && uw.WMap.towns) ? uw.WMap.towns : {};
+            const wt = wmapTowns[id] ? wmapTowns[id] : wmapTowns[ids];
+            if (wt && wt.name) {
+                return wt.name + ' (#' + ids + ')';
+            }
+        } catch (e) {}
+
+        return '#' + ids;
+    };
+
+    /* Wrapper de gpAjax.ajaxPost com timeout de seguranca. Sem isso,
+       uma chamada de rede que trava (sem erro nem sucesso, so nunca
+       responde) deixa a Promise pendurada para sempre, e o plano/tick
+       que esperava por ela fica "preso" silenciosamente ate o proximo
+       reload. Com o timeout, a Promise sempre resolve ou rejeita em
+       no maximo timeoutMs, liberando o fluxo para tentar de novo no
+       proximo ciclo. */
+    ajaxPostWithTimeout = (endpoint, action, data, timeoutMs = 15000) => {
+        return new Promise((resolve, reject) => {
+            let settled = false;
+
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                reject(new Error('Timeout de rede (' + timeoutMs + 'ms) em ' + endpoint + '/' + action));
+            }, timeoutMs);
+
+            uw.gpAjax.ajaxPost(endpoint, action, data, false,
+                (res) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    resolve(res);
+                },
+                (r, status, txt) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    reject(new Error('Erro de rede: ' + txt));
+                }
+            );
+        });
+    };
+
+    /* Cria um setInterval que NUNCA sobrepoe execucoes: se o ciclo
+       anterior (fn assincrona) ainda estiver rodando quando o proximo
+       disparo do timer chegar, esse disparo e simplesmente pulado.
+       Evita condicao de corrida em modulos cujo ciclo pode demorar
+       mais que o intervalo configurado (ex: muitas cidades/planos
+       para processar), o que antes podia fazer dois ciclos rodarem
+       ao mesmo tempo sobre o mesmo estado. */
+    createGuardedInterval = (fn, intervalMs) => {
+        let processing = false;
+        return setInterval(async () => {
+            if (processing) return;
+            processing = true;
+            try {
+                await fn();
+            } catch (e) {
+                // erros ja devem ser tratados dentro de fn; isso e so rede de seguranca
+            } finally {
+                processing = false;
+            }
+        }, intervalMs);
     };
 
     /* Usage async this.sleep(ms) -> stop the code for ms */
