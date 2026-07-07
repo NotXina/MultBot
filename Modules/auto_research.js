@@ -3,6 +3,11 @@
 //  Pesquisa automaticamente na academia seguindo
 //  uma ordem de prioridade configuravel.
 //  Endpoint: frontend_bridge/execute (ResearchOrder/research)
+//
+//  Nomes de pesquisa exibidos usam o helper getGameName()
+//  (herdado de ModernUtil), que puxa direto de
+//  uw.GameData.researches[id].name - bate sempre com o
+//  idioma configurado no jogo, sem dicionario manual.
 // ══════════════════════════════════════════════════════
 class AutoResearch extends ModernUtil {
     DEFAULT_ORDER = [
@@ -28,19 +33,6 @@ class AutoResearch extends ModernUtil {
             setTimeout(() => this.start(), 2500);
         }
     }
-
-    RESEARCH_NAMES = {
-        town_guard: 'Guarda da Cidade',
-        meteorology: 'Meteorologia',
-        espionage: 'Espionagem',
-        booty: 'Lealdade dos Aldeoes',
-        pottery: 'Ceramica',
-        architecture: 'Arquitetura',
-        building_crane: 'Guindaste',
-        shipwright: 'Const. Naval',
-        colonize_ship: 'Nav. Colonizador',
-        plow: 'Arado',
-    };
 
     settings = () => {
         requestAnimationFrame(() => {
@@ -70,8 +62,8 @@ class AutoResearch extends ModernUtil {
             const done = this.DEFAULT_ORDER.filter(t => researches[t] && uw.GameData.researches?.[t]);
             const pending = this.DEFAULT_ORDER.filter(t => !researches[t] && uw.GameData.researches?.[t]);
 
-            const doneNames = done.map(t => this.RESEARCH_NAMES[t]).join(', ') || '-';
-            const pendingNames = pending.map(t => this.RESEARCH_NAMES[t]).join(' -> ') || '-';
+            const doneNames = done.map(t => this.getGameName('research', t)).join(', ') || '-';
+            const pendingNames = pending.map(t => this.getGameName('research', t)).join(' -> ') || '-';
 
             uw.$('#ares_status').html(
                 `<span style="color:#1a6b2a;">Concluidas: ${doneNames}</span><br>` +
@@ -126,10 +118,6 @@ class AutoResearch extends ModernUtil {
         }
     }
 
-    /* Retorna true SO quando uma pesquisa foi de fato iniciada com sucesso.
-       Nenhum log e emitido para os casos de "pulo" (falta de academia,
-       sem recursos, sem aldeia barbara, ja pesquisado, etc) - apenas o
-       sucesso real gera entrada no log, conforme solicitado. */
     async _researchNext(townId) {
         try {
             const town = uw.ITowns.towns[townId];
@@ -143,7 +131,7 @@ class AutoResearch extends ModernUtil {
             if (orders) {
                 for (const key in orders) {
                     if (String(orders[key].attributes.town_id) === String(townId)) {
-                        return false; // ja tem pesquisa em andamento
+                        return false;
                     }
                 }
             }
@@ -197,8 +185,6 @@ class AutoResearch extends ModernUtil {
         } catch (e) { return false; }
     }
 
-    /* Unico ponto de log neste modulo: dispara SOMENTE quando o servidor
-       confirma que a pesquisa foi iniciada com sucesso. */
     _doResearch(townId, tech, townName) {
         return new Promise(resolve => {
             const data = {
@@ -211,7 +197,7 @@ class AutoResearch extends ModernUtil {
             uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
                 res => {
                     if (res && !res.error) {
-                        const msg = `${townName}: ${this.RESEARCH_NAMES[tech] ?? tech} iniciado`;
+                        const msg = `${townName}: ${this.getGameName('research', tech)} iniciado`;
                         this.console.log(`[AutoPesquisa] ✓ ${msg}`);
                         uw.$('#ares_log').text(`✓ ${msg}`).css('color', '#1a6b2a');
                         resolve(true);
