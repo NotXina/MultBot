@@ -1,10 +1,11 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: AutoAttack
-//  Monitora uma cidade atacante e, assim que a quantidade
-//  configurada de uma unidade estiver disponivel, dispara
-//  ataques automaticamente para uma ou mais cidades-alvo.
-//  Reutiliza o mesmo padrao de envio (send_units) e roteamento
-//  terrestre/naval ja validados no AutoDodge.
+//  Monitora uma cidade atacante e, assim que TODAS as
+//  quantidades configuradas de uma composicao de unidades
+//  estiverem disponiveis, dispara ataques automaticamente
+//  para uma ou mais cidades-alvo, com a composicao completa
+//  em um unico envio. Reutiliza o mesmo padrao de envio
+//  (send_units) ja validado no AutoDodge.
 // ══════════════════════════════════════════════════════
 class AutoAttack extends ModernUtil {
     CHECK_INTERVAL_MS = 20000;
@@ -15,6 +16,9 @@ class AutoAttack extends ModernUtil {
         this._active = false;
         this._intervalId = null;
         this._plans = this.storage.load('attack_plans', []);
+        // Lista temporaria de unidades sendo montadas antes de salvar o plano
+        // (fica so em memoria, nao precisa persistir)
+        this._stagingUnits = [];
 
         if (this.storage.load('attack_active', false)) {
             setTimeout(() => this.start(), 2000);
@@ -25,6 +29,7 @@ class AutoAttack extends ModernUtil {
         requestAnimationFrame(() => {
             this._updateTitle();
             this._renderPlans();
+            this._renderStagingUnits();
         });
 
         return (
@@ -35,16 +40,20 @@ class AutoAttack extends ModernUtil {
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
             this.getTitleHtml('attack_title', 'Auto Ataque', this.toggle, '', this._active) +
             '<div style="padding:5px 10px;font-weight:bold;">' +
-            'Ataca automaticamente assim que a quantidade configurada da unidade estiver disponivel na cidade. Verifica a cada 20s.' +
+            'Ataca automaticamente assim que TODA a composicao configurada estiver disponivel na cidade. Verifica a cada 20s.' +
             '</div>' +
 
             '<div style="padding:8px 10px; border-top:1px solid rgba(0,0,0,0.1);">' +
-            '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">' +
 
             '<div>' +
-            '<label style="font-size:11px;font-weight:bold;">Cidade Atacante (ID)</label><br>' +
-            '<input type="text" id="attack_origin_id" placeholder="ex: 5342" style="width:100px;padding:3px;">' +
+            '<label style="font-size:11px;font-weight:bold;">Cidade Atacante</label><br>' +
+            '<select id="attack_origin_select" style="width:220px;padding:3px;">' +
+            this._getTownOptionsHtml() +
+            '</select>' +
             '</div>' +
+
+            '<div style="margin-top:8px;font-weight:bold;font-size:12px;">Composicao do ataque</div>' +
+            '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-top:4px;">' +
 
             '<div>' +
             '<label style="font-size:11px;font-weight:bold;">Unidade</label><br>' +
@@ -58,7 +67,13 @@ class AutoAttack extends ModernUtil {
             '<input type="number" id="attack_qty" min="1" placeholder="ex: 100" style="width:80px;padding:3px;">' +
             '</div>' +
 
+            '<div>' +
+            this.getButtonHtml('attack_add_unit_btn', '+ Add Unidade', this.addUnitToStaging) +
             '</div>' +
+
+            '</div>' +
+
+            '<div id="attack_staging_list" style="padding:6px 0;font-size:11px;"></div>' +
 
             '<div style="margin-top:6px;">' +
             '<label style="font-size:11px;font-weight:bold;">Cidades-alvo (uma por linha, ou separadas por virgula)</label><br>' +
@@ -76,9 +91,31 @@ class AutoAttack extends ModernUtil {
         );
     };
 
+    /* Gera as opcoes do dropdown de cidade atacante, a partir de
+       uw.ITowns.towns (suas proprias cidades), ordenadas por nome. */
+    _getTownOptionsHtml() {
+        try {
+            const towns = uw.ITowns.towns;
+            const keys = Object.keys(towns).sort((a, b) => {
+                const nameA = towns[a].getName ? towns[a].getName() : '';
+                const nameB = towns[b].getName ? towns[b].getName() : '';
+                return nameA.localeCompare(nameB);
+            });
+
+            let html = '<option value="">Selecione uma cidade...</option>';
+            keys.forEach(id => {
+                const t = towns[id];
+                const name = t.getName ? t.getName() : ('#' + id);
+                html += '<option value="' + id + '">' + name + ' (#' + id + ')</option>';
+            });
+            return html;
+        } catch (e) {
+            return '<option value="">Erro ao carregar cidades</option>';
+        }
+    }
+
     /* Gera as opcoes do dropdown a partir do GameData.units real do
-       jogo (funciona em qualquer mundo, ja que le direto do cliente).
-       Militia fica de fora, pois nao pode ser enviada em ataque. */
+       jogo. Militia fica de fora, pois nao pode ser enviada em ataque. */
     _getUnitOptionsHtml() {
         try {
             const units = uw.GameData.units;
@@ -94,6 +131,67 @@ class AutoAttack extends ModernUtil {
         } catch (e) {
             return '<option value="">Erro ao carregar unidades</option>';
         }
+    }
+
+    /* Adiciona uma unidade+quantidade a lista temporaria (staging)
+       que sera usada para montar o plano. Se a unidade ja estiver
+       na lista, soma a quantidade em vez de duplicar a linha. */
+    addUnitToStaging = () => {
+        const unit = uw.$('#attack_unit_select').val();
+        const qty = parseInt(uw.$('#attack_qty').val(), 10);
+
+        if (!unit) {
+            this.console.log('[AutoAttack] Erro: selecione uma unidade antes de adicionar.');
+            uw.$('#attack_log').text('Erro: selecione uma unidade.').css('color', '#f87171');
+            return;
+        }
+        if (!qty || qty <= 0) {
+            this.console.log('[AutoAttack] Erro: quantidade invalida.');
+            uw.$('#attack_log').text('Erro: informe uma quantidade valida.').css('color', '#f87171');
+            return;
+        }
+
+        const isNaval = !!uw.GameData.units[unit]?.is_naval;
+        const existing = this._stagingUnits.find(u => u.unit === unit);
+
+        if (existing) {
+            existing.quantity += qty;
+        } else {
+            this._stagingUnits.push({ unit: unit, quantity: qty, isNaval: isNaval });
+        }
+
+        uw.$('#attack_qty').val('');
+        uw.$('#attack_unit_select').val('');
+
+        this._renderStagingUnits();
+        this.console.log('[AutoAttack] Unidade adicionada a composicao: ' + qty + 'x ' + unit);
+    };
+
+    removeStagingUnit = (unit) => {
+        this._stagingUnits = this._stagingUnits.filter(u => u.unit !== unit);
+        this._renderStagingUnits();
+    };
+
+    _renderStagingUnits() {
+        const container = uw.$('#attack_staging_list');
+        if (!container.length) return;
+
+        if (this._stagingUnits.length === 0) {
+            container.html('<span style="color:#7a5c2a;">Nenhuma unidade adicionada ainda a esta composicao.</span>');
+            return;
+        }
+
+        let html = '<div style="font-weight:bold;margin-bottom:4px;">Composicao atual:</div>';
+        this._stagingUnits.forEach(u => {
+            const typeLabel = u.isNaval ? 'naval' : 'terrestre';
+            html += (
+                '<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px;">' +
+                '<span>' + u.quantity + 'x ' + u.unit + ' (' + typeLabel + ')</span>' +
+                '<span onclick="window.modernBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;padding:0 6px;">✕</span>' +
+                '</div>'
+            );
+        });
+        container.html(html);
     }
 
     toggle = () => {
@@ -124,27 +222,20 @@ class AutoAttack extends ModernUtil {
             ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
 
-    /* Adiciona um novo plano a partir dos campos preenchidos. Faz
-       validacao basica antes de aceitar. */
+    /* Adiciona um novo plano usando a composicao montada em
+       _stagingUnits + a cidade atacante + as cidades-alvo. */
     addPlan = () => {
-        const originId = (uw.$('#attack_origin_id').val() || '').trim();
-        const unit = uw.$('#attack_unit_select').val();
-        const qty = parseInt(uw.$('#attack_qty').val(), 10);
+        const originId = (uw.$('#attack_origin_select').val() || '').trim();
         const targetsRaw = (uw.$('#attack_targets').val() || '').trim();
 
-        if (!originId || !/^\d+$/.test(originId)) {
-            this.console.log('[AutoAttack] Erro: ID da cidade atacante invalido.');
-            uw.$('#attack_log').text('Erro: informe um ID de cidade atacante valido.').css('color', '#f87171');
+        if (!originId) {
+            this.console.log('[AutoAttack] Erro: nenhuma cidade atacante selecionada.');
+            uw.$('#attack_log').text('Erro: selecione uma cidade atacante.').css('color', '#f87171');
             return;
         }
-        if (!unit) {
-            this.console.log('[AutoAttack] Erro: nenhuma unidade selecionada.');
-            uw.$('#attack_log').text('Erro: selecione uma unidade.').css('color', '#f87171');
-            return;
-        }
-        if (!qty || qty <= 0) {
-            this.console.log('[AutoAttack] Erro: quantidade invalida.');
-            uw.$('#attack_log').text('Erro: informe uma quantidade valida.').css('color', '#f87171');
+        if (this._stagingUnits.length === 0) {
+            this.console.log('[AutoAttack] Erro: adicione ao menos uma unidade a composicao.');
+            uw.$('#attack_log').text('Erro: adicione ao menos uma unidade.').css('color', '#f87171');
             return;
         }
 
@@ -159,13 +250,10 @@ class AutoAttack extends ModernUtil {
             return;
         }
 
-        const isNaval = !!uw.GameData.units[unit]?.is_naval;
         const plan = {
             id: Date.now() + '_' + Math.floor(Math.random() * 10000),
             originId: originId,
-            unit: unit,
-            isNaval: isNaval,
-            quantity: qty,
+            units: this._stagingUnits.map(u => ({ ...u })), // copia da composicao
             targets: targets,
             enabled: true,
         };
@@ -174,12 +262,15 @@ class AutoAttack extends ModernUtil {
         this.storage.save('attack_plans', this._plans);
         this._renderPlans();
 
-        uw.$('#attack_origin_id').val('');
-        uw.$('#attack_qty').val('');
+        // Limpa a composicao temporaria e os campos apos salvar o plano
+        this._stagingUnits = [];
+        this._renderStagingUnits();
+        uw.$('#attack_origin_select').val('');
         uw.$('#attack_targets').val('');
-        uw.$('#attack_unit_select').val('');
 
-        this.console.log('[AutoAttack] Plano adicionado: cidade #' + originId + ', ' + qty + 'x ' + unit + ' -> ' + targets.length + ' alvo(s).');
+        const originName = uw.ITowns.towns[originId]?.getName ? uw.ITowns.towns[originId].getName() : ('#' + originId);
+        const unitsSummary = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
+        this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s).');
         uw.$('#attack_log').text('Plano adicionado com sucesso!').css('color', '#1a6b2a');
     };
 
@@ -203,14 +294,14 @@ class AutoAttack extends ModernUtil {
 
         this._plans.forEach(plan => {
             const townName = this._getTownName(plan.originId);
-            const typeLabel = plan.isNaval ? 'naval' : 'terrestre';
+            const unitsLabel = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
             const targetsLabel = plan.targets.map(t => this._getTownName(t)).join(', ');
 
             html += (
                 '<div style="display:flex;justify-content:space-between;align-items:center;' +
                 'padding:4px 6px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;">' +
                 '<div>' +
-                '<b>' + townName + '</b> &rarr; ' + plan.quantity + 'x ' + plan.unit + ' (' + typeLabel + ') &rarr; ' + targetsLabel +
+                '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel +
                 '</div>' +
                 '<div class="button_new" onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;margin:0;padding:0 6px;">' +
                 '<div class="left"></div><div class="right"></div>' +
@@ -233,6 +324,8 @@ class AutoAttack extends ModernUtil {
         });
     }
 
+    /* So dispara quando TODAS as unidades da composicao tiverem a
+       quantidade configurada disponivel simultaneamente na cidade. */
     async _checkAndFire(plan) {
         try {
             const town = uw.ITowns.towns[plan.originId];
@@ -241,31 +334,37 @@ class AutoAttack extends ModernUtil {
                 return;
             }
 
-            const units = town.units();
-            const available = units[plan.unit] || 0;
+            const available = town.units();
 
-            if (available < plan.quantity) {
-                return; // ainda nao tem o suficiente, tenta de novo no proximo tick
+            const missing = plan.units.filter(u => (available[u.unit] || 0) < u.quantity);
+            if (missing.length > 0) {
+                return; // ainda falta pelo menos uma unidade da composicao
             }
 
             const townName = town.getName ? town.getName() : ('#' + plan.originId);
-            this.console.log('[AutoAttack] ' + townName + ': ' + available + 'x ' + plan.unit + ' disponivel (precisa ' + plan.quantity + '). Disparando ataques...');
+            const unitsSummary = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
+            this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques...');
 
-            let remaining = available;
+            // Controla quanto ainda resta de cada unidade, conforme
+            // vamos consumindo em cada alvo da lista
+            const remaining = {};
+            plan.units.forEach(u => { remaining[u.unit] = available[u.unit] || 0; });
 
             for (const targetId of plan.targets) {
-                if (remaining < plan.quantity) {
-                    this.console.log('[AutoAttack] ' + townName + ': quantidade insuficiente para continuar (restam ' + remaining + ').');
+                const stillEnough = plan.units.every(u => remaining[u.unit] >= u.quantity);
+                if (!stillEnough) {
+                    this.console.log('[AutoAttack] ' + townName + ': composicao insuficiente para continuar aos proximos alvos.');
                     break;
                 }
 
                 const targetName = this._getTownName(targetId);
                 try {
-                    await this._sendAttack(plan.originId, targetId, plan.unit, plan.quantity);
-                    this.console.log('[AutoAttack] ✓ ' + townName + ' -> ' + targetName + ': ataque com ' + plan.quantity + 'x ' + plan.unit + ' enviado!');
-                    uw.$('#attack_log').text('✓ ' + townName + ' atacou ' + targetName + ' (' + plan.quantity + 'x ' + plan.unit + ')').css('color', '#1a6b2a');
+                    await this._sendAttack(plan.originId, targetId, plan.units);
+                    this.console.log('[AutoAttack] ✓ ' + townName + ' -> ' + targetName + ': ataque com [' + unitsSummary + '] enviado!');
+                    uw.$('#attack_log').text('✓ ' + townName + ' atacou ' + targetName + ' [' + unitsSummary + ']').css('color', '#1a6b2a');
                     if (uw.HumanMessage) uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + targetName + ' (ataque)');
-                    remaining -= plan.quantity;
+
+                    plan.units.forEach(u => { remaining[u.unit] -= u.quantity; });
                 } catch (e) {
                     const msg = e && e.message ? e.message : e;
                     this.console.log('[AutoAttack] ✗ Falha ao atacar ' + targetName + ' de ' + townName + ': ' + msg);
@@ -280,16 +379,20 @@ class AutoAttack extends ModernUtil {
         }
     }
 
-    /* Envia o ataque via town_info/send_units com type "attack" - mesmo
-       endpoint ja validado no AutoDodge (que usa type "support"). */
-    _sendAttack(fromTownId, toTownId, unit, quantity) {
+    /* Envia o ataque via town_info/send_units com type "attack",
+       incluindo TODAS as unidades da composicao num unico payload -
+       mesmo endpoint ja validado no AutoDodge (que usa type "support"). */
+    _sendAttack(fromTownId, toTownId, unitsList) {
         return this._withTownId(fromTownId, () => new Promise((resolve, reject) => {
             const data = {
                 id: parseInt(toTownId, 10),
                 type: 'attack',
                 nl_init: true,
             };
-            data[unit] = quantity;
+
+            unitsList.forEach(u => {
+                data[u.unit] = u.quantity;
+            });
 
             uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
                 res => {
