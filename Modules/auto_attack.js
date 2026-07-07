@@ -7,14 +7,22 @@
 //  em um unico envio. Reutiliza o mesmo padrao de envio
 //  (send_units) ja validado no AutoDodge.
 //
+//  NOVO: periodo de descanso (cooldown) por alvo, com jitter
+//  aleatorio de +-10%. Depois de atacar um alvo, ele fica
+//  "de molho" pelo tempo configurado antes de ser atacado de
+//  novo pelo mesmo plano - da tempo do armazem inimigo encher.
+//  Descanso = 0 significa sem espera (comportamento antigo).
+//
 //  Planos salvos ANTES da versao com multiplas unidades usavam
 //  o formato antigo (plan.unit + plan.quantity, no singular).
 //  Ao carregar, migramos automaticamente qualquer plano nesse
-//  formato para o novo (plan.units, array).
+//  formato para o novo (plan.units, array), e tambem garantimos
+//  que plan.restMinutes e plan.nextAllowedAt existam.
 // ══════════════════════════════════════════════════════
 class AutoAttack extends ModernUtil {
     CHECK_INTERVAL_MS = 20000;
     SEND_DELAY_MS = 800;
+    JITTER_PERCENT = 0.10; // +-10% de variacao no descanso
 
     constructor(c, s) {
         super(c, s);
@@ -37,33 +45,43 @@ class AutoAttack extends ModernUtil {
         const newPlans = [];
 
         for (const plan of this._plans) {
-            if (Array.isArray(plan.units)) {
-                newPlans.push(plan);
-                continue;
+            let migratedPlan = plan;
+
+            if (!Array.isArray(plan.units)) {
+                if (plan.unit) {
+                    changed = true;
+                    migratedPlan = {
+                        id: plan.id,
+                        originId: plan.originId,
+                        units: [
+                            {
+                                unit: plan.unit,
+                                quantity: plan.quantity,
+                                isNaval: !!plan.isNaval
+                            }
+                        ],
+                        targets: plan.targets || [],
+                        enabled: plan.enabled !== false
+                    };
+                    this.console.log('[AutoAttack] Plano antigo migrado: cidade #' + plan.originId + ' (' + plan.unit + ' x' + plan.quantity + ').');
+                } else {
+                    changed = true;
+                    this.console.log('[AutoAttack] Aviso: plano invalido removido (sem unidades definidas).');
+                    continue;
+                }
             }
 
-            if (plan.unit) {
+            // Garante que os campos de descanso existam (planos antigos nao tinham)
+            if (typeof migratedPlan.restMinutes !== 'number') {
+                migratedPlan.restMinutes = 0;
                 changed = true;
-                const migrated = {
-                    id: plan.id,
-                    originId: plan.originId,
-                    units: [
-                        {
-                            unit: plan.unit,
-                            quantity: plan.quantity,
-                            isNaval: !!plan.isNaval
-                        }
-                    ],
-                    targets: plan.targets || [],
-                    enabled: plan.enabled !== false
-                };
-                this.console.log('[AutoAttack] Plano antigo migrado: cidade #' + plan.originId + ' (' + plan.unit + ' x' + plan.quantity + ').');
-                newPlans.push(migrated);
-                continue;
+            }
+            if (!migratedPlan.nextAllowedAt || typeof migratedPlan.nextAllowedAt !== 'object') {
+                migratedPlan.nextAllowedAt = {};
+                changed = true;
             }
 
-            changed = true;
-            this.console.log('[AutoAttack] Aviso: plano invalido removido (sem unidades definidas).');
+            newPlans.push(migratedPlan);
         }
 
         this._plans = newPlans;
@@ -127,6 +145,11 @@ class AutoAttack extends ModernUtil {
         html += '<div style="margin-top:6px;">';
         html += '<label style="font-size:11px;font-weight:bold;">Cidades-alvo (uma por linha, ou separadas por virgula)</label><br>';
         html += '<textarea id="attack_targets" rows="2" style="width:100%;padding:4px;" placeholder="ex: 12345, 67890"></textarea>';
+        html += '</div>';
+
+        html += '<div style="margin-top:6px;">';
+        html += '<label style="font-size:11px;font-weight:bold;" title="Tempo de espera antes de atacar o mesmo alvo de novo, para o armazem encher. 0 = sem espera. Variacao aleatoria de +-10% e aplicada.">Descanso por alvo (minutos)</label><br>';
+        html += '<input type="number" id="attack_rest_minutes" min="0" placeholder="ex: 60 (0 = sem espera)" style="width:180px;padding:3px;" value="0">';
         html += '</div>';
 
         html += '<div style="margin-top:6px;">';
@@ -288,6 +311,8 @@ class AutoAttack extends ModernUtil {
     addPlan = () => {
         const originId = (uw.$('#attack_origin_select').val() || '').trim();
         const targetsRaw = (uw.$('#attack_targets').val() || '').trim();
+        const restMinutesRaw = parseInt(uw.$('#attack_rest_minutes').val(), 10);
+        const restMinutes = (!isNaN(restMinutesRaw) && restMinutesRaw > 0) ? restMinutesRaw : 0;
 
         if (!originId) {
             this.console.log('[AutoAttack] Erro: nenhuma cidade atacante selecionada.');
@@ -323,6 +348,8 @@ class AutoAttack extends ModernUtil {
             originId: originId,
             units: unitsCopy,
             targets: targets,
+            restMinutes: restMinutes,
+            nextAllowedAt: {},
             enabled: true
         };
 
@@ -334,6 +361,7 @@ class AutoAttack extends ModernUtil {
         this._renderStagingUnits();
         uw.$('#attack_origin_select').val('');
         uw.$('#attack_targets').val('');
+        uw.$('#attack_rest_minutes').val('0');
 
         const originTown = uw.ITowns.towns[originId];
         const originName = originTown && originTown.getName ? originTown.getName() : ('#' + originId);
@@ -344,7 +372,8 @@ class AutoAttack extends ModernUtil {
             unitsSummary += plan.units[i].quantity + 'x ' + plan.units[i].unit;
         }
 
-        this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s).');
+        const restLabel = restMinutes > 0 ? (', descanso ' + restMinutes + 'min') : '';
+        this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s)' + restLabel + '.');
         uw.$('#attack_log').text('Plano adicionado com sucesso!').css('color', '#1a6b2a');
     };
 
@@ -383,10 +412,18 @@ class AutoAttack extends ModernUtil {
             for (let i = 0; i < plan.targets.length; i++) {
                 if (i > 0) targetsLabel += ', ';
                 targetsLabel += this._getTownName(plan.targets[i]);
+
+                const nextAt = plan.nextAllowedAt ? plan.nextAllowedAt[plan.targets[i]] : null;
+                if (nextAt && nextAt > Date.now()) {
+                    const remainMin = Math.ceil((nextAt - Date.now()) / 60000);
+                    targetsLabel += ' (descansando ' + remainMin + 'min)';
+                }
             }
 
+            const restLabel = (plan.restMinutes && plan.restMinutes > 0) ? (' | descanso: ' + plan.restMinutes + 'min') : '';
+
             html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;">';
-            html += '<div><b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + '</div>';
+            html += '<div><b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + restLabel + '</div>';
             html += '<div class="button_new" onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;margin:0;padding:0 6px;">';
             html += '<div class="left"></div><div class="right"></div>';
             html += '<div class="caption js-caption">Remover<div class="effect js-effect"></div></div>';
@@ -405,6 +442,16 @@ class AutoAttack extends ModernUtil {
             if (!plan.enabled) continue;
             this._checkAndFire(plan);
         }
+    }
+
+    /* Calcula o proximo horario permitido para atacar um alvo,
+       aplicando o descanso configurado + jitter aleatorio de +-10%.
+       Isso evita um padrao previsivel de "sempre X minutos exatos". */
+    _computeNextAllowedAt(restMinutes) {
+        const baseMs = restMinutes * 60 * 1000;
+        const jitterRange = baseMs * this.JITTER_PERCENT;
+        const jitter = (Math.random() * 2 - 1) * jitterRange; // entre -jitterRange e +jitterRange
+        return Date.now() + baseMs + jitter;
     }
 
     async _checkAndFire(plan) {
@@ -432,6 +479,22 @@ class AutoAttack extends ModernUtil {
             }
             if (hasMissing) return;
 
+            if (!plan.nextAllowedAt) plan.nextAllowedAt = {};
+
+            const now = Date.now();
+
+            // Filtra apenas os alvos que ja terminaram o descanso
+            const readyTargets = [];
+            for (const targetId of plan.targets) {
+                const nextAt = plan.nextAllowedAt[targetId];
+                if (nextAt && nextAt > now) continue; // ainda descansando, pula
+                readyTargets.push(targetId);
+            }
+
+            if (readyTargets.length === 0) {
+                return; // todos os alvos ainda estao descansando
+            }
+
             const townName = town.getName ? town.getName() : ('#' + plan.originId);
 
             let unitsSummary = '';
@@ -440,14 +503,14 @@ class AutoAttack extends ModernUtil {
                 unitsSummary += plan.units[i].quantity + 'x ' + plan.units[i].unit;
             }
 
-            this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques...');
+            this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques em ' + readyTargets.length + ' alvo(s) prontos...');
 
             const remaining = {};
             for (const u of plan.units) {
                 remaining[u.unit] = available[u.unit] || 0;
             }
 
-            for (const targetId of plan.targets) {
+            for (const targetId of readyTargets) {
                 let stillEnough = true;
                 for (const u of plan.units) {
                     if (remaining[u.unit] < u.quantity) {
@@ -471,6 +534,16 @@ class AutoAttack extends ModernUtil {
 
                     for (const u of plan.units) {
                         remaining[u.unit] -= u.quantity;
+                    }
+
+                    // Aplica o descanso (com jitter) para esse alvo, se configurado
+                    if (plan.restMinutes && plan.restMinutes > 0) {
+                        const nextAllowed = this._computeNextAllowedAt(plan.restMinutes);
+                        plan.nextAllowedAt[targetId] = nextAllowed;
+                        this.storage.save('attack_plans', this._plans);
+
+                        const remainMin = Math.round((nextAllowed - Date.now()) / 60000);
+                        this.console.log('[AutoAttack] ' + targetName + ' entrando em descanso por aproximadamente ' + remainMin + 'min.');
                     }
                 } catch (e) {
                     const msg = e && e.message ? e.message : e;
