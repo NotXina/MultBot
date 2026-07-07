@@ -34,7 +34,7 @@ class ModernBot {
         this.settingsFactory = new createGrepoWindow({
             id: 'MODERN_BOT',
             title: 'ModernBot (MultBot)',
-            size: [845, 460],
+            size: [845, 560],
             tabs: [
                 {
                     title: 'Status',
@@ -70,11 +70,6 @@ class ModernBot {
                     title: 'Mult',
                     id: 'mult',
                     render: this.settingsMult,
-                },
-                {
-                    title: 'Ships',
-                    id: 'ships',
-                    render: this.settingsShips,
                 },
                 {
                     title: 'Console',
@@ -129,16 +124,17 @@ class ModernBot {
         return html;
     };
 
+    /* Colonize Ships agora renderiza aqui dentro, na aba Mult,
+       junto com os presets, Auto Pesquisa e Auto Sacrificio.
+       A aba Ships separada foi removida - era ela que estava
+       quebrada por causa do this._getTownName. */
     settingsMult = () => {
         let html = '';
         html += this.multTools.settings();
+        html += this.colonizeShipSender.settings();
         html += this.autoResearch.settings();
         html += this.autoAresSacrifice.settings();
         return html;
-    };
-
-    settingsShips = () => {
-        return this.colonizeShipSender.settings();
     };
 
     settingsTrade = () => {
