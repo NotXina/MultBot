@@ -1,6 +1,9 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: StatusPanel
 //  Painel de status em tempo real de todos os módulos
+//
+//  PDCA - correcao desta rodada: _getTownName local removido,
+//  usa this.getTownName (herdado de ModernUtil).
 // ══════════════════════════════════════════════════════
 class StatusPanel extends ModernUtil {
     constructor(c, s) {
@@ -11,8 +14,6 @@ class StatusPanel extends ModernUtil {
         this._nextRefreshAt = null;
         this._refreshMinutes = this.storage.load('refresh_minutes', 0);
 
-        // O agendamento do refresh acontece AQUI, uma única vez, assim que
-        // o bot carrega — independente de o painel Status ser aberto ou não.
         if (this._refreshMinutes > 0) {
             this._scheduleRefresh();
         }
@@ -32,8 +33,6 @@ class StatusPanel extends ModernUtil {
         <div id="status_rows" style="padding:4px;"></div>`;
     };
 
-    /* Chamado só quando o usuário explicitamente muda e aplica o valor —
-       aqui SIM queremos reiniciar o agendamento do zero */
     _applyRefresh = () => {
         const val = parseInt(uw.$('#refresh_minutes_input').val(), 10);
 
@@ -55,7 +54,6 @@ class StatusPanel extends ModernUtil {
         this.console.log(`[StatusPanel] Auto Refresh: ${val} minuto(s) (± jitter).`);
     };
 
-    /* Cancela o timeout de refresh agendado (usado só ao trocar a config) */
     _clearRefresh() {
         if (this._refreshTimeoutId) {
             clearTimeout(this._refreshTimeoutId);
@@ -64,25 +62,18 @@ class StatusPanel extends ModernUtil {
         this._nextRefreshAt = null;
     }
 
-    /* Agenda o próximo reload com jitter de ±30s. Só é chamado:
-       1) uma vez no constructor (quando o bot carrega), ou
-       2) quando o usuário muda manualmente a configuração via _applyRefresh.
-       NUNCA é chamado apenas por abrir/fechar o painel. */
     _scheduleRefresh() {
         this._clearRefresh();
         if (this._refreshMinutes <= 0) return;
 
         const base = this._refreshMinutes * 60 * 1000;
-        const jitter = (Math.random() * 60000) - 30000; // -30s a +30s
-        const ms = Math.max(base + jitter, 10000); // nunca menos que 10s
+        const jitter = (Math.random() * 60000) - 30000;
+        const ms = Math.max(base + jitter, 10000);
 
         this._nextRefreshAt = Date.now() + ms;
         this._refreshTimeoutId = setTimeout(() => location.reload(), ms);
     }
 
-    /* Chamado toda vez que o painel Status é aberto/reaberto.
-       Cuida SÓ da parte visual (render de status + contador),
-       nunca mexe no agendamento real do refresh. */
     _startVisuals() {
         if (this._interval) clearInterval(this._interval);
         this._render();
@@ -91,11 +82,9 @@ class StatusPanel extends ModernUtil {
         if (this._countdownInterval) clearInterval(this._countdownInterval);
         this._countdownInterval = setInterval(() => this._updateCountdown(), 1000);
 
-        // Reflete o status atual do refresh na tela, sem reagendar nada
         if (this._refreshMinutes > 0 && this._nextRefreshAt) {
             uw.$('#refresh_status').text(`✓ Recarrega a cada ${this._refreshMinutes} min (±30s)`).css('color', '#1a6b2a');
         } else if (this._refreshMinutes > 0) {
-            // Segurança: se por algum motivo não há timer ativo mas deveria haver, cria um
             this._scheduleRefresh();
             uw.$('#refresh_status').text(`✓ Recarrega a cada ${this._refreshMinutes} min (±30s)`).css('color', '#1a6b2a');
         }
@@ -113,25 +102,6 @@ class StatusPanel extends ModernUtil {
         const ss = (totalSec % 60).toString().padStart(2, '0');
         uw.$('#refresh_countdown').text(`⏱ ${mm}:${ss}`);
     }
-
-    _openCaptcha = () => {
-        try {
-            window.__multbot_captcha_active = true;
-            uw.gpAjax.ajaxPost('frontend_bridge', 'execute', {
-                model_url: 'BuildingOrder', action_name: 'buildUp',
-                captcha: null, arguments: { building_id: 'main' }, town_id: uw.Game.townId
-            }, false, res => {
-                if (res?.captcha_required) {
-                    uw.$('#captcha_status').text('Aguarde — o jogo deve mostrar o captcha...');
-                } else {
-                    uw.$('#captcha_status').text('Captcha não apareceu. Tente recarregar a página (F5).');
-                }
-            });
-            uw.$('#captcha_status').text('Tentando acionar captcha...');
-        } catch(e) {
-            uw.$('#captcha_status').text('Erro: ' + e.message);
-        }
-    };
 
     _render() {
         try {
@@ -158,7 +128,7 @@ class StatusPanel extends ModernUtil {
             rows.push(this._row('⚡ Construção Grátis', gratisActive, gratisActive ? 'Ativo' : 'Parado', 'autoGratis',          'toggle'));
             rows.push(this._row('💰 Envio de Recursos', asrActive,   asrActive   ? 'Ativo' : 'Parado',   'autoSendResources',  'toggle'));
             rows.push(this._row('⚔️ Milícia Auto',      militiaActive, militiaActive ? 'Ativo' : 'Parado', 'autoMilitia', militiaActive ? 'stop' : 'start'));
-            rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this._getTownName(bot.colonizeShipSender.config.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
+            rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this.getTownName(bot.colonizeShipSender.config.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
 
             uw.$('#status_rows').html(rows.join(''));
         } catch(e) {
@@ -188,25 +158,6 @@ class StatusPanel extends ModernUtil {
                 ${btn}
             </div>
         </div>`;
-    }
-
-    _getTownName(townId) {
-        if (!townId) return String(townId);
-        const id  = parseInt(townId);
-        const ids = String(townId);
-        try {
-            const t1 = uw.ITowns?.towns?.[id] ?? uw.ITowns?.towns?.[ids];
-            if (t1) return t1.getName() + ' (#' + ids + ')';
-            const allTowns = uw.MM.getOnlyCollectionByName('Town')?.models ?? [];
-            for (const t of allTowns) {
-                if (parseInt(t.attributes?.id ?? t.id) === id) {
-                    return (t.attributes?.name ?? '?') + ' (#' + ids + ')';
-                }
-            }
-            const wt = uw.WMap?.towns?.[id] ?? uw.WMap?.towns?.[ids];
-            if (wt?.name) return wt.name + ' (#' + ids + ')';
-        } catch(e) {}
-        return '#' + ids;
     }
 
     _countCelebrations() {
