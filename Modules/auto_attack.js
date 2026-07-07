@@ -7,7 +7,14 @@
 //  em um unico envio. Reutiliza o mesmo padrao de envio
 //  (send_units) ja validado no AutoDodge.
 //
-//  NOVO: periodo de descanso (cooldown) por alvo, com jitter
+//  A lista de planos ativos fica dentro de um container com
+//  altura MAXIMA fixa (max-height) e overflow-y:auto - isso
+//  garante que, independente de quantos planos existam (1 ou
+//  100), a area nunca cresce além do limite: surge uma barra
+//  de rolagem propria. A janela do bot nunca precisa aumentar
+//  por causa da quantidade de planos.
+//
+//  Periodo de descanso (cooldown) por alvo, com jitter
 //  aleatorio de +-10%. Depois de atacar um alvo, ele fica
 //  "de molho" pelo tempo configurado antes de ser atacado de
 //  novo pelo mesmo plano - da tempo do armazem inimigo encher.
@@ -22,7 +29,10 @@
 class AutoAttack extends ModernUtil {
     CHECK_INTERVAL_MS = 20000;
     SEND_DELAY_MS = 800;
-    JITTER_PERCENT = 0.10; // +-10% de variacao no descanso
+    JITTER_PERCENT = 0.10;
+    // Altura maxima da lista de planos, em pixels. Nunca cresce
+    // além disso - o que passar vira rolagem interna.
+    PLANS_LIST_MAX_HEIGHT = 140;
 
     constructor(c, s) {
         super(c, s);
@@ -71,7 +81,6 @@ class AutoAttack extends ModernUtil {
                 }
             }
 
-            // Garante que os campos de descanso existam (planos antigos nao tinham)
             if (typeof migratedPlan.restMinutes !== 'number') {
                 migratedPlan.restMinutes = 0;
                 changed = true;
@@ -157,7 +166,23 @@ class AutoAttack extends ModernUtil {
         html += '</div>';
         html += '</div>';
 
-        html += '<div id="attack_plans_list" style="padding:8px 10px; border-top:1px solid rgba(0,0,0,0.1);"></div>';
+        html += '<div style="padding:8px 10px; border-top:1px solid rgba(0,0,0,0.1);">';
+        html += '<div style="font-weight:bold;font-size:12px;margin-bottom:4px;">Planos ativos:</div>';
+        // Container com altura MAXIMA fixa. overflow-y:auto cria a
+        // barra de rolagem automaticamente assim que o conteudo
+        // ultrapassar PLANS_LIST_MAX_HEIGHT - nao importa quantos
+        // planos existam, essa div NUNCA cresce além disso.
+        html += '<div id="attack_plans_list" style="';
+        html += 'max-height:' + this.PLANS_LIST_MAX_HEIGHT + 'px;';
+        html += 'overflow-y:auto;';
+        html += 'overflow-x:hidden;';
+        html += 'border:1px solid rgba(0,0,0,0.15);';
+        html += 'border-radius:3px;';
+        html += 'background:rgba(0,0,0,0.03);';
+        html += 'padding:2px 4px;';
+        html += '"></div>';
+        html += '</div>';
+
         html += '<div id="attack_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>';
         html += '</div>';
 
@@ -395,7 +420,7 @@ class AutoAttack extends ModernUtil {
             return;
         }
 
-        let html = '<div style="font-weight:bold;font-size:12px;margin-bottom:6px;">Planos ativos:</div>';
+        let html = '';
 
         for (const plan of this._plans) {
             if (!Array.isArray(plan.units)) continue;
@@ -423,8 +448,8 @@ class AutoAttack extends ModernUtil {
             const restLabel = (plan.restMinutes && plan.restMinutes > 0) ? (' | descanso: ' + plan.restMinutes + 'min') : '';
 
             html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;">';
-            html += '<div><b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + restLabel + '</div>';
-            html += '<div class="button_new" onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;margin:0;padding:0 6px;">';
+            html += '<div style="max-width:75%;">' + '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + restLabel + '</div>';
+            html += '<div class="button_new" onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;margin:0;padding:0 6px;flex-shrink:0;">';
             html += '<div class="left"></div><div class="right"></div>';
             html += '<div class="caption js-caption">Remover<div class="effect js-effect"></div></div>';
             html += '</div>';
@@ -444,13 +469,10 @@ class AutoAttack extends ModernUtil {
         }
     }
 
-    /* Calcula o proximo horario permitido para atacar um alvo,
-       aplicando o descanso configurado + jitter aleatorio de +-10%.
-       Isso evita um padrao previsivel de "sempre X minutos exatos". */
     _computeNextAllowedAt(restMinutes) {
         const baseMs = restMinutes * 60 * 1000;
         const jitterRange = baseMs * this.JITTER_PERCENT;
-        const jitter = (Math.random() * 2 - 1) * jitterRange; // entre -jitterRange e +jitterRange
+        const jitter = (Math.random() * 2 - 1) * jitterRange;
         return Date.now() + baseMs + jitter;
     }
 
@@ -483,16 +505,15 @@ class AutoAttack extends ModernUtil {
 
             const now = Date.now();
 
-            // Filtra apenas os alvos que ja terminaram o descanso
             const readyTargets = [];
             for (const targetId of plan.targets) {
                 const nextAt = plan.nextAllowedAt[targetId];
-                if (nextAt && nextAt > now) continue; // ainda descansando, pula
+                if (nextAt && nextAt > now) continue;
                 readyTargets.push(targetId);
             }
 
             if (readyTargets.length === 0) {
-                return; // todos os alvos ainda estao descansando
+                return;
             }
 
             const townName = town.getName ? town.getName() : ('#' + plan.originId);
@@ -536,7 +557,6 @@ class AutoAttack extends ModernUtil {
                         remaining[u.unit] -= u.quantity;
                     }
 
-                    // Aplica o descanso (com jitter) para esse alvo, se configurado
                     if (plan.restMinutes && plan.restMinutes > 0) {
                         const nextAllowed = this._computeNextAllowedAt(plan.restMinutes);
                         plan.nextAllowedAt[targetId] = nextAllowed;
