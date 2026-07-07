@@ -96,8 +96,8 @@ class ColonizeShipSender extends ModernUtil {
         if (!id) { uw.$('#css_target_status').text('ID inválido.').css('color','#f87171'); return; }
         this.config.targetTownId = id;
         this._saveConfig();
-        uw.$('#css_target_status').text('✓ Destino: #' + id).css('color','#4ade80');
-        this.console.log('[ColonizeShipSender] Destino salvo: #' + id);
+        uw.$('#css_target_status').text('✓ Destino: ' + this.getTownName(id)).css('color','#4ade80');
+        this.console.log('[ColonizeShipSender] Destino salvo: ' + this.getTownName(id));
     };
 
     _saveInterval = () => {
