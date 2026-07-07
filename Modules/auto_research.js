@@ -2,19 +2,12 @@
 //  MODULE: AutoResearch
 //  Pesquisa automaticamente na academia seguindo
 //  uma ordem de prioridade configuravel.
-//  Endpoint: frontend_bridge/execute (ResearchOrder/research)
 //
-//  BUGFIX: o painel de status (Concluidas/Pendentes) so era
-//  renderizado uma vez, na abertura da aba - trocar de cidade
-//  ativa no jogo nao atualizava a lista. Agora ha uma inscricao
-//  em uw.GameEvents.town.town_switch (mesmo padrao ja usado em
-//  auto_build.js e auto_train.js) que re-renderiza o status
-//  automaticamente sempre que a cidade ativa muda.
-//
-//  Nomes de pesquisa exibidos usam o helper getGameName()
-//  (herdado de ModernUtil), que puxa direto de
-//  uw.GameData.researches[id].name - bate sempre com o
-//  idioma configurado no jogo, sem dicionario manual.
+//  PDCA - correcao desta rodada: o tick roda via
+//  this.createGuardedInterval - com muitas cidades, um ciclo
+//  pode facilmente passar de 30s (sleep de 800ms por cidade
+//  bem sucedida); sem a guarda, o proximo tick podia comecar
+//  em cima do anterior ainda rodando.
 // ══════════════════════════════════════════════════════
 class AutoResearch extends ModernUtil {
     DEFAULT_ORDER = [
@@ -63,10 +56,6 @@ class AutoResearch extends ModernUtil {
         </div>`;
     };
 
-    /* Inscreve (uma unica vez, mesmo que settings() seja chamado varias
-       vezes ao reabrir a aba) para re-renderizar o status sempre que o
-       jogador trocar a cidade ativa - mesmo padrao ja usado em
-       auto_build.js e auto_train.js. */
     _subscribeTownSwitch() {
         if (this._townSwitchSubscribed) return;
         try {
@@ -112,7 +101,7 @@ class AutoResearch extends ModernUtil {
         this._updateTitle();
         this.console.log('[AutoPesquisa] Iniciado.');
         this._tick();
-        this._interval = setInterval(() => this._tick(), 30000);
+        this._interval = this.createGuardedInterval(() => this._tick(), 30000);
     }
 
     stop() {
