@@ -7,12 +7,10 @@
 //  em um unico envio. Reutiliza o mesmo padrao de envio
 //  (send_units) ja validado no AutoDodge.
 //
-//  BUGFIX: planos salvos ANTES da versao com multiplas
-//  unidades usavam o formato antigo (plan.unit + plan.quantity,
-//  no singular). Ao carregar, migramos automaticamente qualquer
-//  plano nesse formato para o novo (plan.units, array), evitando
-//  o erro "plan.units is undefined" e preservando planos ja
-//  configurados.
+//  Planos salvos ANTES da versao com multiplas unidades usavam
+//  o formato antigo (plan.unit + plan.quantity, no singular).
+//  Ao carregar, migramos automaticamente qualquer plano nesse
+//  formato para o novo (plan.units, array).
 // ══════════════════════════════════════════════════════
 class AutoAttack extends ModernUtil {
     CHECK_INTERVAL_MS = 20000;
@@ -28,41 +26,47 @@ class AutoAttack extends ModernUtil {
         this._migrateOldPlans();
 
         if (this.storage.load('attack_active', false)) {
-            setTimeout(() => this.start(), 2000);
+            setTimeout(() => {
+                this.start();
+            }, 2000);
         }
     }
 
-    /* Converte planos salvos no formato antigo (unit + quantity,
-       no singular) para o formato novo (units, array). Roda uma
-       unica vez na inicializacao, e salva de volta se algo mudou. */
     _migrateOldPlans() {
         let changed = false;
+        const newPlans = [];
 
-        this._plans = this._plans.map(plan => {
-            if (Array.isArray(plan.units)) return plan; // ja esta no formato novo
+        for (const plan of this._plans) {
+            if (Array.isArray(plan.units)) {
+                newPlans.push(plan);
+                continue;
+            }
 
             if (plan.unit) {
                 changed = true;
                 const migrated = {
                     id: plan.id,
                     originId: plan.originId,
-                    units: [{
-                        unit: plan.unit,
-                        quantity: plan.quantity,
-                        isNaval: !!plan.isNaval,
-                    }],
+                    units: [
+                        {
+                            unit: plan.unit,
+                            quantity: plan.quantity,
+                            isNaval: !!plan.isNaval
+                        }
+                    ],
                     targets: plan.targets || [],
-                    enabled: plan.enabled !== false,
+                    enabled: plan.enabled !== false
                 };
                 this.console.log('[AutoAttack] Plano antigo migrado: cidade #' + plan.originId + ' (' + plan.unit + ' x' + plan.quantity + ').');
-                return migrated;
+                newPlans.push(migrated);
+                continue;
             }
 
-            // Plano corrompido/sem unit nem units - remove com log de aviso
             changed = true;
-            this.console.log('[AutoAttack] Aviso: plano invalido removido (sem unidades definidas): ' + JSON.stringify(plan));
-            return null;
-        }).filter(p => p !== null);
+            this.console.log('[AutoAttack] Aviso: plano invalido removido (sem unidades definidas).');
+        }
+
+        this._plans = newPlans;
 
         if (changed) {
             this.storage.save('attack_plans', this._plans);
@@ -70,116 +74,115 @@ class AutoAttack extends ModernUtil {
     }
 
     settings = () => {
-        requestAnimationFrame(() => {
-            this._updateTitle();
-            this._renderPlans();
-            this._renderStagingUnits();
+        const self = this;
+        requestAnimationFrame(function () {
+            self._updateTitle();
+            self._renderPlans();
+            self._renderStagingUnits();
         });
 
-        return (
-            '<div class="game_border" style="margin-bottom:20px;">' +
-            '<div class="game_border_top"></div><div class="game_border_bottom"></div>' +
-            '<div class="game_border_left"></div><div class="game_border_right"></div>' +
-            '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
-            '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
-            this.getTitleHtml('attack_title', 'Auto Ataque', this.toggle, '', this._active) +
-            '<div style="padding:5px 10px;font-weight:bold;">' +
-            'Ataca automaticamente assim que TODA a composicao configurada estiver disponivel na cidade. Verifica a cada 20s.' +
-            '</div>' +
+        let html = '';
+        html += '<div class="game_border" style="margin-bottom:20px;">';
+        html += '<div class="game_border_top"></div><div class="game_border_bottom"></div>';
+        html += '<div class="game_border_left"></div><div class="game_border_right"></div>';
+        html += '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>';
+        html += '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>';
+        html += this.getTitleHtml('attack_title', 'Auto Ataque', this.toggle, '', this._active);
+        html += '<div style="padding:5px 10px;font-weight:bold;">';
+        html += 'Ataca automaticamente assim que TODA a composicao configurada estiver disponivel na cidade. Verifica a cada 20s.';
+        html += '</div>';
 
-            '<div style="padding:8px 10px; border-top:1px solid rgba(0,0,0,0.1);">' +
+        html += '<div style="padding:8px 10px; border-top:1px solid rgba(0,0,0,0.1);">';
 
-            '<div>' +
-            '<label style="font-size:11px;font-weight:bold;">Cidade Atacante</label><br>' +
-            '<select id="attack_origin_select" style="width:220px;padding:3px;">' +
-            this._getTownOptionsHtml() +
-            '</select>' +
-            '</div>' +
+        html += '<div>';
+        html += '<label style="font-size:11px;font-weight:bold;">Cidade Atacante</label><br>';
+        html += '<select id="attack_origin_select" style="width:220px;padding:3px;">';
+        html += this._getTownOptionsHtml();
+        html += '</select>';
+        html += '</div>';
 
-            '<div style="margin-top:8px;font-weight:bold;font-size:12px;">Composicao do ataque</div>' +
-            '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-top:4px;">' +
+        html += '<div style="margin-top:8px;font-weight:bold;font-size:12px;">Composicao do ataque</div>';
+        html += '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-top:4px;">';
 
-            '<div>' +
-            '<label style="font-size:11px;font-weight:bold;">Unidade</label><br>' +
-            '<select id="attack_unit_select" style="width:160px;padding:3px;">' +
-            this._getUnitOptionsHtml() +
-            '</select>' +
-            '</div>' +
+        html += '<div>';
+        html += '<label style="font-size:11px;font-weight:bold;">Unidade</label><br>';
+        html += '<select id="attack_unit_select" style="width:160px;padding:3px;">';
+        html += this._getUnitOptionsHtml();
+        html += '</select>';
+        html += '</div>';
 
-            '<div>' +
-            '<label style="font-size:11px;font-weight:bold;">Quantidade</label><br>' +
-            '<input type="number" id="attack_qty" min="1" placeholder="ex: 100" style="width:80px;padding:3px;">' +
-            '</div>' +
+        html += '<div>';
+        html += '<label style="font-size:11px;font-weight:bold;">Quantidade</label><br>';
+        html += '<input type="number" id="attack_qty" min="1" placeholder="ex: 100" style="width:80px;padding:3px;">';
+        html += '</div>';
 
-            '<div>' +
-            this.getButtonHtml('attack_add_unit_btn', '+ Add Unidade', this.addUnitToStaging) +
-            '</div>' +
+        html += '<div>';
+        html += this.getButtonHtml('attack_add_unit_btn', '+ Add Unidade', this.addUnitToStaging);
+        html += '</div>';
 
-            '</div>' +
+        html += '</div>';
 
-            '<div id="attack_staging_list" style="padding:6px 0;font-size:11px;"></div>' +
+        html += '<div id="attack_staging_list" style="padding:6px 0;font-size:11px;"></div>';
 
-            '<div style="margin-top:6px;">' +
-            '<label style="font-size:11px;font-weight:bold;">Cidades-alvo (uma por linha, ou separadas por virgula)</label><br>' +
-            '<textarea id="attack_targets" rows="2" style="width:100%;padding:4px;" placeholder="ex: 12345, 67890"></textarea>' +
-            '</div>' +
+        html += '<div style="margin-top:6px;">';
+        html += '<label style="font-size:11px;font-weight:bold;">Cidades-alvo (uma por linha, ou separadas por virgula)</label><br>';
+        html += '<textarea id="attack_targets" rows="2" style="width:100%;padding:4px;" placeholder="ex: 12345, 67890"></textarea>';
+        html += '</div>';
 
-            '<div style="margin-top:6px;">' +
-            this.getButtonHtml('attack_add_plan_btn', '+ Adicionar Plano', this.addPlan) +
-            '</div>' +
-            '</div>' +
+        html += '<div style="margin-top:6px;">';
+        html += this.getButtonHtml('attack_add_plan_btn', '+ Adicionar Plano', this.addPlan);
+        html += '</div>';
+        html += '</div>';
 
-            '<div id="attack_plans_list" style="padding:8px 10px; border-top:1px solid rgba(0,0,0,0.1);"></div>' +
-            '<div id="attack_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
-            '</div>'
-        );
+        html += '<div id="attack_plans_list" style="padding:8px 10px; border-top:1px solid rgba(0,0,0,0.1);"></div>';
+        html += '<div id="attack_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>';
+        html += '</div>';
+
+        return html;
     };
 
-    /* Gera as opcoes do dropdown de cidade atacante, a partir de
-       uw.ITowns.towns (suas proprias cidades), ordenadas por nome. */
     _getTownOptionsHtml() {
         try {
             const towns = uw.ITowns.towns;
-            const keys = Object.keys(towns).sort((a, b) => {
+            const keys = Object.keys(towns);
+
+            keys.sort(function (a, b) {
                 const nameA = towns[a].getName ? towns[a].getName() : '';
                 const nameB = towns[b].getName ? towns[b].getName() : '';
                 return nameA.localeCompare(nameB);
             });
 
             let html = '<option value="">Selecione uma cidade...</option>';
-            keys.forEach(id => {
+            for (const id of keys) {
                 const t = towns[id];
                 const name = t.getName ? t.getName() : ('#' + id);
                 html += '<option value="' + id + '">' + name + ' (#' + id + ')</option>';
-            });
+            }
             return html;
         } catch (e) {
             return '<option value="">Erro ao carregar cidades</option>';
         }
     }
 
-    /* Gera as opcoes do dropdown a partir do GameData.units real do
-       jogo. Militia fica de fora, pois nao pode ser enviada em ataque. */
     _getUnitOptionsHtml() {
         try {
             const units = uw.GameData.units;
-            const keys = Object.keys(units).filter(u => u !== 'militia');
+            const keys = Object.keys(units).filter(function (u) {
+                return u !== 'militia';
+            });
 
             let html = '<option value="">Selecione...</option>';
-            keys.forEach(key => {
-                const isNaval = !!units[key].is_naval;
+            for (const key of keys) {
+                const isNaval = units[key].is_naval ? true : false;
                 const label = key + (isNaval ? ' (naval)' : ' (terrestre)');
                 html += '<option value="' + key + '">' + label + '</option>';
-            });
+            }
             return html;
         } catch (e) {
             return '<option value="">Erro ao carregar unidades</option>';
         }
     }
 
-    /* Adiciona uma unidade+quantidade a lista temporaria (staging)
-       que sera usada para montar o plano. Se a unidade ja estiver
-       na lista, soma a quantidade em vez de duplicar a linha. */
     addUnitToStaging = () => {
         const unit = uw.$('#attack_unit_select').val();
         const qty = parseInt(uw.$('#attack_qty').val(), 10);
@@ -195,8 +198,16 @@ class AutoAttack extends ModernUtil {
             return;
         }
 
-        const isNaval = !!uw.GameData.units[unit]?.is_naval;
-        const existing = this._stagingUnits.find(u => u.unit === unit);
+        const unitData = uw.GameData.units[unit];
+        const isNaval = unitData && unitData.is_naval ? true : false;
+
+        let existing = null;
+        for (const u of this._stagingUnits) {
+            if (u.unit === unit) {
+                existing = u;
+                break;
+            }
+        }
 
         if (existing) {
             existing.quantity += qty;
@@ -212,7 +223,9 @@ class AutoAttack extends ModernUtil {
     };
 
     removeStagingUnit = (unit) => {
-        this._stagingUnits = this._stagingUnits.filter(u => u.unit !== unit);
+        this._stagingUnits = this._stagingUnits.filter(function (u) {
+            return u.unit !== unit;
+        });
         this._renderStagingUnits();
     };
 
@@ -226,21 +239,22 @@ class AutoAttack extends ModernUtil {
         }
 
         let html = '<div style="font-weight:bold;margin-bottom:4px;">Composicao atual:</div>';
-        this._stagingUnits.forEach(u => {
+        for (const u of this._stagingUnits) {
             const typeLabel = u.isNaval ? 'naval' : 'terrestre';
-            html += (
-                '<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px;">' +
-                '<span>' + u.quantity + 'x ' + u.unit + ' (' + typeLabel + ')</span>' +
-                '<span onclick="window.modernBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;padding:0 6px;">✕</span>' +
-                '</div>'
-            );
-        });
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px;">';
+            html += '<span>' + u.quantity + 'x ' + u.unit + ' (' + typeLabel + ')</span>';
+            html += '<span onclick="window.modernBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;padding:0 6px;">X</span>';
+            html += '</div>';
+        }
         container.html(html);
     }
 
     toggle = () => {
-        if (this._active) this.stop();
-        else this.start();
+        if (this._active) {
+            this.stop();
+        } else {
+            this.start();
+        }
     };
 
     start() {
@@ -250,24 +264,27 @@ class AutoAttack extends ModernUtil {
         this._updateTitle();
         this.console.log('[AutoAttack] Iniciado. Monitorando planos de ataque...');
         this._tick();
-        this._intervalId = setInterval(() => this._tick(), this.CHECK_INTERVAL_MS);
+        this._intervalId = setInterval(() => {
+            this._tick();
+        }, this.CHECK_INTERVAL_MS);
     }
 
     stop() {
         this._active = false;
         this.storage.save('attack_active', false);
-        if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
+        if (this._intervalId) {
+            clearInterval(this._intervalId);
+            this._intervalId = null;
+        }
         this._updateTitle();
         this.console.log('[AutoAttack] Parado.');
     }
 
     _updateTitle() {
-        uw.$('#attack_title').css('filter', this._active
-            ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
+        const filter = this._active ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '';
+        uw.$('#attack_title').css('filter', filter);
     }
 
-    /* Adiciona um novo plano usando a composicao montada em
-       _stagingUnits + a cidade atacante + as cidades-alvo. */
     addPlan = () => {
         const originId = (uw.$('#attack_origin_select').val() || '').trim();
         const targetsRaw = (uw.$('#attack_targets').val() || '').trim();
@@ -283,10 +300,12 @@ class AutoAttack extends ModernUtil {
             return;
         }
 
-        const targets = targetsRaw
-            .split(/[\n,]+/)
-            .map(t => t.trim())
-            .filter(t => /^\d+$/.test(t));
+        const rawTargets = targetsRaw.split(/[\n,]+/);
+        const targets = [];
+        for (const t of rawTargets) {
+            const trimmed = t.trim();
+            if (/^\d+$/.test(trimmed)) targets.push(trimmed);
+        }
 
         if (targets.length === 0) {
             this.console.log('[AutoAttack] Erro: nenhuma cidade-alvo valida informada.');
@@ -294,12 +313,17 @@ class AutoAttack extends ModernUtil {
             return;
         }
 
+        const unitsCopy = [];
+        for (const u of this._stagingUnits) {
+            unitsCopy.push({ unit: u.unit, quantity: u.quantity, isNaval: u.isNaval });
+        }
+
         const plan = {
             id: Date.now() + '_' + Math.floor(Math.random() * 10000),
             originId: originId,
-            units: this._stagingUnits.map(u => ({ ...u })),
+            units: unitsCopy,
             targets: targets,
-            enabled: true,
+            enabled: true
         };
 
         this._plans.push(plan);
@@ -311,14 +335,23 @@ class AutoAttack extends ModernUtil {
         uw.$('#attack_origin_select').val('');
         uw.$('#attack_targets').val('');
 
-        const originName = uw.ITowns.towns[originId]?.getName ? uw.ITowns.towns[originId].getName() : ('#' + originId);
-        const unitsSummary = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
+        const originTown = uw.ITowns.towns[originId];
+        const originName = originTown && originTown.getName ? originTown.getName() : ('#' + originId);
+
+        let unitsSummary = '';
+        for (let i = 0; i < plan.units.length; i++) {
+            if (i > 0) unitsSummary += ', ';
+            unitsSummary += plan.units[i].quantity + 'x ' + plan.units[i].unit;
+        }
+
         this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s).');
         uw.$('#attack_log').text('Plano adicionado com sucesso!').css('color', '#1a6b2a');
     };
 
     removePlan = (planId) => {
-        this._plans = this._plans.filter(p => p.id !== planId);
+        this._plans = this._plans.filter(function (p) {
+            return p.id !== planId;
+        });
         this.storage.save('attack_plans', this._plans);
         this._renderPlans();
         this.console.log('[AutoAttack] Plano removido.');
@@ -335,26 +368,31 @@ class AutoAttack extends ModernUtil {
 
         let html = '<div style="font-weight:bold;font-size:12px;margin-bottom:6px;">Planos ativos:</div>';
 
-        this._plans.forEach(plan => {
-            if (!Array.isArray(plan.units)) return; // seguranca extra, nunca deveria acontecer apos migracao
+        for (const plan of this._plans) {
+            if (!Array.isArray(plan.units)) continue;
 
             const townName = this._getTownName(plan.originId);
-            const unitsLabel = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
-            const targetsLabel = plan.targets.map(t => this._getTownName(t)).join(', ');
 
-            html += (
-                '<div style="display:flex;justify-content:space-between;align-items:center;' +
-                'padding:4px 6px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;">' +
-                '<div>' +
-                '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel +
-                '</div>' +
-                '<div class="button_new" onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;margin:0;padding:0 6px;">' +
-                '<div class="left"></div><div class="right"></div>' +
-                '<div class="caption js-caption">Remover<div class="effect js-effect"></div></div>' +
-                '</div>' +
-                '</div>'
-            );
-        });
+            let unitsLabel = '';
+            for (let i = 0; i < plan.units.length; i++) {
+                if (i > 0) unitsLabel += ', ';
+                unitsLabel += plan.units[i].quantity + 'x ' + plan.units[i].unit;
+            }
+
+            let targetsLabel = '';
+            for (let i = 0; i < plan.targets.length; i++) {
+                if (i > 0) targetsLabel += ', ';
+                targetsLabel += this._getTownName(plan.targets[i]);
+            }
+
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;">';
+            html += '<div><b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + '</div>';
+            html += '<div class="button_new" onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;margin:0;padding:0 6px;">';
+            html += '<div class="left"></div><div class="right"></div>';
+            html += '<div class="caption js-caption">Remover<div class="effect js-effect"></div></div>';
+            html += '</div>';
+            html += '</div>';
+        }
 
         container.html(html);
     }
@@ -363,17 +401,12 @@ class AutoAttack extends ModernUtil {
         if (window.__multbot_captcha_active) return;
         if (this._plans.length === 0) return;
 
-        this._plans.forEach(plan => {
-            if (!plan.enabled) return;
+        for (const plan of this._plans) {
+            if (!plan.enabled) continue;
             this._checkAndFire(plan);
-        });
+        }
     }
 
-    /* So dispara quando TODAS as unidades da composicao tiverem a
-       quantidade configurada disponivel simultaneamente na cidade.
-       Guard extra: se por algum motivo plan.units nao for um array
-       (nunca deveria acontecer apos a migracao), loga aviso e sai
-       sem quebrar o loop dos outros planos. */
     async _checkAndFire(plan) {
         try {
             if (!Array.isArray(plan.units) || plan.units.length === 0) {
@@ -389,20 +422,39 @@ class AutoAttack extends ModernUtil {
 
             const available = town.units();
 
-            const missing = plan.units.filter(u => (available[u.unit] || 0) < u.quantity);
-            if (missing.length > 0) {
-                return; // ainda falta pelo menos uma unidade da composicao
+            let hasMissing = false;
+            for (const u of plan.units) {
+                const have = available[u.unit] || 0;
+                if (have < u.quantity) {
+                    hasMissing = true;
+                    break;
+                }
             }
+            if (hasMissing) return;
 
             const townName = town.getName ? town.getName() : ('#' + plan.originId);
-            const unitsSummary = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
+
+            let unitsSummary = '';
+            for (let i = 0; i < plan.units.length; i++) {
+                if (i > 0) unitsSummary += ', ';
+                unitsSummary += plan.units[i].quantity + 'x ' + plan.units[i].unit;
+            }
+
             this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques...');
 
             const remaining = {};
-            plan.units.forEach(u => { remaining[u.unit] = available[u.unit] || 0; });
+            for (const u of plan.units) {
+                remaining[u.unit] = available[u.unit] || 0;
+            }
 
             for (const targetId of plan.targets) {
-                const stillEnough = plan.units.every(u => remaining[u.unit] >= u.quantity);
+                let stillEnough = true;
+                for (const u of plan.units) {
+                    if (remaining[u.unit] < u.quantity) {
+                        stillEnough = false;
+                        break;
+                    }
+                }
                 if (!stillEnough) {
                     this.console.log('[AutoAttack] ' + townName + ': composicao insuficiente para continuar aos proximos alvos.');
                     break;
@@ -411,15 +463,19 @@ class AutoAttack extends ModernUtil {
                 const targetName = this._getTownName(targetId);
                 try {
                     await this._sendAttack(plan.originId, targetId, plan.units);
-                    this.console.log('[AutoAttack] ✓ ' + townName + ' -> ' + targetName + ': ataque com [' + unitsSummary + '] enviado!');
-                    uw.$('#attack_log').text('✓ ' + townName + ' atacou ' + targetName + ' [' + unitsSummary + ']').css('color', '#1a6b2a');
-                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + targetName + ' (ataque)');
+                    this.console.log('[AutoAttack] OK: ' + townName + ' -> ' + targetName + ': ataque com [' + unitsSummary + '] enviado!');
+                    uw.$('#attack_log').text('OK: ' + townName + ' atacou ' + targetName + ' [' + unitsSummary + ']').css('color', '#1a6b2a');
+                    if (uw.HumanMessage) {
+                        uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + targetName + ' (ataque)');
+                    }
 
-                    plan.units.forEach(u => { remaining[u.unit] -= u.quantity; });
+                    for (const u of plan.units) {
+                        remaining[u.unit] -= u.quantity;
+                    }
                 } catch (e) {
                     const msg = e && e.message ? e.message : e;
-                    this.console.log('[AutoAttack] ✗ Falha ao atacar ' + targetName + ' de ' + townName + ': ' + msg);
-                    uw.$('#attack_log').text('✗ Falha ao atacar ' + targetName + ': ' + msg).css('color', '#f87171');
+                    this.console.log('[AutoAttack] FALHA ao atacar ' + targetName + ' de ' + townName + ': ' + msg);
+                    uw.$('#attack_log').text('Falha ao atacar ' + targetName + ': ' + msg).css('color', '#f87171');
                 }
 
                 await this.sleep(this.SEND_DELAY_MS);
@@ -430,33 +486,33 @@ class AutoAttack extends ModernUtil {
         }
     }
 
-    /* Envia o ataque via town_info/send_units com type "attack",
-       incluindo TODAS as unidades da composicao num unico payload. */
     _sendAttack(fromTownId, toTownId, unitsList) {
-        return this._withTownId(fromTownId, () => new Promise((resolve, reject) => {
-            const data = {
-                id: parseInt(toTownId, 10),
-                type: 'attack',
-                nl_init: true,
-            };
+        return this._withTownId(fromTownId, () => {
+            return new Promise((resolve, reject) => {
+                const data = {
+                    id: parseInt(toTownId, 10),
+                    type: 'attack',
+                    nl_init: true
+                };
 
-            unitsList.forEach(u => {
-                data[u.unit] = u.quantity;
-            });
-
-            uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
-                res => {
-                    if (res && res.success !== false) {
-                        resolve(res);
-                    } else {
-                        reject(new Error('Servidor recusou: ' + JSON.stringify(res)));
-                    }
-                },
-                (r, status, txt) => {
-                    reject(new Error('Erro de rede: ' + txt));
+                for (const u of unitsList) {
+                    data[u.unit] = u.quantity;
                 }
-            );
-        }));
+
+                uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
+                    function (res) {
+                        if (res && res.success !== false) {
+                            resolve(res);
+                        } else {
+                            reject(new Error('Servidor recusou: ' + JSON.stringify(res)));
+                        }
+                    },
+                    function (r, status, txt) {
+                        reject(new Error('Erro de rede: ' + txt));
+                    }
+                );
+            });
+        });
     }
 
     async _withTownId(townId, fn) {
@@ -481,13 +537,17 @@ class AutoAttack extends ModernUtil {
         const ids = String(townId);
 
         try {
-            const towns = uw.ITowns && uw.ITowns.towns ? uw.ITowns.towns : {};
+            const towns = (uw.ITowns && uw.ITowns.towns) ? uw.ITowns.towns : {};
             const t1 = towns[id] ? towns[id] : towns[ids];
-            if (t1 && typeof t1.getName === 'function') return t1.getName() + ' (#' + ids + ')';
+            if (t1 && typeof t1.getName === 'function') {
+                return t1.getName() + ' (#' + ids + ')';
+            }
 
-            const wmapTowns = uw.WMap && uw.WMap.towns ? uw.WMap.towns : {};
+            const wmapTowns = (uw.WMap && uw.WMap.towns) ? uw.WMap.towns : {};
             const wt = wmapTowns[id] ? wmapTowns[id] : wmapTowns[ids];
-            if (wt && wt.name) return wt.name + ' (#' + ids + ')';
+            if (wt && wt.name) {
+                return wt.name + ' (#' + ids + ')';
+            }
         } catch (e) {}
 
         return '#' + ids;
