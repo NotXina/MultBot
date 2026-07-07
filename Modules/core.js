@@ -45,6 +45,34 @@ class ModernUtil {
         this.console = console;
         this.storage = storage;
     }
+
+    /* Retorna o nome TRADUZIDO de uma unidade, construcao, pesquisa
+       ou deus, direto dos dados nativos do jogo (uw.GameData) - bate
+       sempre com o idioma configurado no cliente, sem precisar manter
+       nenhum dicionario de traducao manual. Categorias suportadas:
+       'unit', 'building', 'research', 'god'. Se o dado nao existir
+       (ou a categoria for desconhecida), retorna o proprio ID como
+       fallback seguro - nunca quebra a interface. */
+    getGameName = (category, id) => {
+        try {
+            if (category === 'unit') {
+                const d = uw.GameData.units[id];
+                if (d && d.name) return d.name;
+            } else if (category === 'building') {
+                const d = uw.GameData.buildings[id];
+                if (d && d.name) return d.name;
+            } else if (category === 'research') {
+                const d = uw.GameData.researches[id];
+                if (d && d.name) return d.name;
+            } else if (category === 'god') {
+                const gods = uw.GameData.gods;
+                const d = gods ? gods[id] : null;
+                if (d && d.name) return d.name;
+            }
+        } catch (e) {}
+        return id;
+    };
+
     /* Usage async this.sleep(ms) -> stop the code for ms */
     sleep = (ms, stdDev) => {
         // Check if a standard deviation is not provided
@@ -329,7 +357,6 @@ class BotConsole {
 		const time = date.toLocaleTimeString();
 		this.string.push(`[${time}] ${string}`);
 
-		// Corta o mais antigo quando passa do limite — evita crescimento infinito do DOM
 		if (this.string.length > this.MAX_ENTRIES) {
 			this.string.splice(0, this.string.length - this.MAX_ENTRIES);
 		}
@@ -342,7 +369,6 @@ class BotConsole {
 			console.prepend(`<p id="log_id_${i}">${e}</p>`);
 		});
 
-		// Remove do DOM as entradas que já saíram do array (via splice acima)
 		const validIds = new Set(this.string.map((_, i) => `log_id_${i}`));
 		console.find('p').each(function () {
 			if (!validIds.has(this.id)) uw.$(this).remove();
@@ -782,12 +808,3 @@ class ModernStorage extends Compressor {
 /* Setup autofarm in the window object */
 
 window.__multbot_captcha_active = false;
-
-// ══════════════════════════════════════════════════════
-//  Carimbo de versão/build — ajuda a confirmar visualmente
-//  se o cache do GitHub/navegador já pegou a versão mais
-//  recente dos módulos. Atualize o BUILD_TAG manualmente
-//  sempre que fizer uma mudança importante.
-// ══════════════════════════════════════════════════════
-window.__multbot_build_tag = 'BUILD-2026-07-05-A';
-console.log(`%c[MultBot] Build carregado: ${window.__multbot_build_tag}`, 'color: #4ade80; font-weight: bold; font-size: 13px;');
