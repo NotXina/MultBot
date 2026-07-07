@@ -1,18 +1,22 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: AutoAresSacrifice
-//  Monitora o favor de uma cidade escolhida e, assim que
-//  atingir 100 de favor, lanca o poder "Sacrificio a Ares",
-//  acumulando furia (global na conta) ate o limite de 5000.
+//  Monitora o FAVOR DE ARES (rastreado por conta, nao por
+//  cidade - uw.ITowns.player_gods.attributes.ares_favor) e,
+//  assim que atingir 100, lanca o poder "Sacrificio a Ares"
+//  na cidade escolhida, acumulando furia ate o limite de 5000.
 //  Para automaticamente ao atingir o limite.
+//
+//  BUGFIX: favor e rastreado POR DEUS, a nivel de conta -
+//  campos tipo ares_favor, zeus_favor, artemis_favor ficam em
+//  player_gods.attributes (confirmado no dump do PlayerGods e
+//  ja usado com sucesso no anti_rage.js). town.resources().favor
+//  e o favor GERAL da cidade (do deus que ela adora agora, seja
+//  qual for) - nao e o mesmo campo e nunca deveria ser usado
+//  para checar favor de um deus especifico.
 //
 //  Endpoint confirmado via captura real:
 //  model_url: "CastedPowers", action_name: "cast",
 //  arguments: { power_id: "ares_sacrifice", target_id: <town_id> }
-//
-//  Observacao: o jogo tambem exige uma populacao minima na cidade
-//  (visto um hint "ares_sacrifice_not_enough_population" durante a
-//  captura). Nao bloqueamos por populacao no cliente - se faltar,
-//  o proprio servidor recusa e o motivo aparece logado.
 // ══════════════════════════════════════════════════════
 class AutoAresSacrifice extends ModernUtil {
     FAVOR_COST = 100;
@@ -44,7 +48,7 @@ class AutoAresSacrifice extends ModernUtil {
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
             this.getTitleHtml('ares_sac_title', 'Auto Sacrificio de Ares', this.toggle, '', this._active) +
             '<div style="padding:5px 10px;font-weight:bold;">' +
-            'Lanca o Sacrificio a Ares assim que a cidade escolhida tiver ' + this.FAVOR_COST + ' de favor, ate acumular ' + this.MAX_FURY + ' de furia. Verifica a cada 20s.' +
+            'Lanca o Sacrificio a Ares assim que houver ' + this.FAVOR_COST + ' de favor de Ares acumulado, ate atingir ' + this.MAX_FURY + ' de furia. Verifica a cada 20s.' +
             '</div>' +
             '<div style="padding:8px 10px;display:flex;gap:8px;align-items:center;">' +
             '<label style="font-size:11px;font-weight:bold;">Cidade (ID)</label>' +
@@ -104,7 +108,7 @@ class AutoAresSacrifice extends ModernUtil {
             ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
 
-    /* Furia e um valor GLOBAL da conta (nao por cidade), lido de
+    /* Furia e um valor GLOBAL da conta, lido de
        uw.ITowns.player_gods.attributes.fury - confirmado no dump
        anterior de PlayerGods (fury: 0, max_fury: 5000). */
     _getCurrentFury() {
@@ -115,19 +119,30 @@ class AutoAresSacrifice extends ModernUtil {
         }
     }
 
+    /* BUGFIX: favor de Ares e rastreado POR CONTA, nao por cidade.
+       O campo correto e player_gods.attributes.ares_favor - mesmo
+       padrao ja usado no anti_rage.js para artemis_favor/zeus_favor.
+       town.resources().favor e o favor GERAL da cidade (do deus que
+       ela adora no momento) e NUNCA deve ser usado para checar o
+       favor de um deus especifico como Ares. */
+    _getAresFavor() {
+        try {
+            return uw.ITowns.player_gods.attributes.ares_favor || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
     _renderStatus() {
         try {
             const fury = this._getCurrentFury();
+            const aresFavor = this._getAresFavor();
             const town = this.townId ? uw.ITowns.towns[this.townId] : null;
-            const favor = town ? (town.resources().favor || 0) : null;
             const townName = town && town.getName ? town.getName() : (this.townId ? '#' + this.townId + ' (nao encontrada)' : 'nenhuma configurada');
 
-            let html = 'Furia atual: <b>' + fury + ' / ' + this.MAX_FURY + '</b>';
-            if (favor !== null) {
-                html += ' | Cidade: <b>' + townName + '</b> | Favor: <b>' + favor + '</b>';
-            } else {
-                html += ' | Cidade: ' + townName;
-            }
+            const html = 'Furia atual: <b>' + fury + ' / ' + this.MAX_FURY + '</b>' +
+                ' | Favor de Ares (conta): <b>' + aresFavor + '</b>' +
+                ' | Cidade: <b>' + townName + '</b>';
             uw.$('#ares_sac_status').html(html);
         } catch (e) {}
     }
@@ -151,19 +166,20 @@ class AutoAresSacrifice extends ModernUtil {
                 return;
             }
 
-            const favor = town.resources().favor || 0;
+            const aresFavor = this._getAresFavor();
             this._renderStatus();
 
-            if (favor < this.FAVOR_COST) return; // ainda nao tem favor suficiente
+            if (aresFavor < this.FAVOR_COST) return; // ainda nao tem favor de Ares suficiente
 
             const townName = town.getName ? town.getName() : ('#' + this.townId);
-            this.console.log('[AutoAresSacrifice] ' + townName + ': ' + favor + ' de favor disponivel. Lancando Sacrificio a Ares...');
+            this.console.log('[AutoAresSacrifice] ' + townName + ': ' + aresFavor + ' de favor de Ares disponivel. Lancando Sacrificio a Ares...');
 
             const result = await this._castAresSacrifice(this.townId);
 
             if (result.success) {
                 const newFury = this._getCurrentFury();
-                this.console.log('[AutoAresSacrifice] ✓ Sacrificio lancado! Furia agora: ' + newFury + '/' + this.MAX_FURY);
+                const newAresFavor = this._getAresFavor();
+                this.console.log('[AutoAresSacrifice] ✓ Sacrificio lancado! Furia agora: ' + newFury + '/' + this.MAX_FURY + ' | Favor de Ares restante: ' + newAresFavor);
                 uw.$('#ares_sac_log').text('✓ Sacrificio lancado! Furia: ' + newFury + '/' + this.MAX_FURY).css('color', '#1a6b2a');
                 if (uw.HumanMessage) uw.HumanMessage.success('MultBot: Sacrificio a Ares lancado (' + newFury + '/' + this.MAX_FURY + ')');
                 this._renderStatus();
