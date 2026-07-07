@@ -4,6 +4,13 @@
 //  uma ordem de prioridade configuravel.
 //  Endpoint: frontend_bridge/execute (ResearchOrder/research)
 //
+//  BUGFIX: o painel de status (Concluidas/Pendentes) so era
+//  renderizado uma vez, na abertura da aba - trocar de cidade
+//  ativa no jogo nao atualizava a lista. Agora ha uma inscricao
+//  em uw.GameEvents.town.town_switch (mesmo padrao ja usado em
+//  auto_build.js e auto_train.js) que re-renderiza o status
+//  automaticamente sempre que a cidade ativa muda.
+//
 //  Nomes de pesquisa exibidos usam o helper getGameName()
 //  (herdado de ModernUtil), que puxa direto de
 //  uw.GameData.researches[id].name - bate sempre com o
@@ -28,6 +35,7 @@ class AutoResearch extends ModernUtil {
         this._interval = null;
         this._active = false;
         this._failedThisCycle = new Map();
+        this._townSwitchSubscribed = false;
 
         if (this.storage.load('ares_active', false)) {
             setTimeout(() => this.start(), 2500);
@@ -38,6 +46,7 @@ class AutoResearch extends ModernUtil {
         requestAnimationFrame(() => {
             this._updateTitle();
             this._renderStatus();
+            this._subscribeTownSwitch();
         });
         return `
         <div class="game_border" style="margin-bottom:20px;">
@@ -54,6 +63,22 @@ class AutoResearch extends ModernUtil {
         </div>`;
     };
 
+    /* Inscreve (uma unica vez, mesmo que settings() seja chamado varias
+       vezes ao reabrir a aba) para re-renderizar o status sempre que o
+       jogador trocar a cidade ativa - mesmo padrao ja usado em
+       auto_build.js e auto_train.js. */
+    _subscribeTownSwitch() {
+        if (this._townSwitchSubscribed) return;
+        try {
+            uw.$.Observer(uw.GameEvents.town.town_switch).subscribe(() => {
+                this._renderStatus();
+            });
+            this._townSwitchSubscribed = true;
+        } catch (e) {
+            this.console.log('[AutoPesquisa] Aviso: nao foi possivel inscrever no evento de troca de cidade: ' + (e?.message ?? e));
+        }
+    }
+
     _renderStatus() {
         try {
             const town = uw.ITowns.getCurrentTown();
@@ -65,7 +90,10 @@ class AutoResearch extends ModernUtil {
             const doneNames = done.map(t => this.getGameName('research', t)).join(', ') || '-';
             const pendingNames = pending.map(t => this.getGameName('research', t)).join(' -> ') || '-';
 
+            const townName = town && town.getName ? town.getName() : '?';
+
             uw.$('#ares_status').html(
+                `<span style="color:#3a2a0a;font-weight:bold;">${townName}</span><br>` +
                 `<span style="color:#1a6b2a;">Concluidas: ${doneNames}</span><br>` +
                 `<span style="color:#5a3a0a;">Pendentes: ${pendingNames}</span>`
             );
