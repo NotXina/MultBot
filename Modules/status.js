@@ -4,6 +4,10 @@
 //
 //  PDCA - correcao desta rodada: _getTownName local removido,
 //  usa this.getTownName (herdado de ModernUtil).
+//
+//  PDCA - nesta rodada: adicionadas linhas de Auto Ataque,
+//  Auto Fuga (Dodge), Sacrificio de Ares e Auto Pesquisa,
+//  que ja existiam no bot mas nao apareciam no painel.
 // ══════════════════════════════════════════════════════
 class StatusPanel extends ModernUtil {
     constructor(c, s) {
@@ -120,6 +124,13 @@ class StatusPanel extends ModernUtil {
             const asrActive   = !!bot.autoSendResources?._active;
             const militiaActive = !!bot.autoMilitia?._active;
 
+            // NOVO: esses módulos já existiam e já expõem _active + toggle(),
+            // só não estavam sendo lidos aqui no painel.
+            const attackActive   = !!bot.autoAttack?._active;
+            const dodgeActive    = !!bot.autoDodge?._active;
+            const aresActive     = !!bot.autoAresSacrifice?._active;
+            const researchActive = !!bot.autoResearch?._active;
+
             rows.push(this._row('🌾 Fazenda',           farmActive,  farmActive  ? 'Ativo'               : 'Parado',             'autoFarm',           'toggle'));
             rows.push(this._row('🏡 Aldeias Rurais',    ruralActive, ruralActive ? `Nível ${bot.autoRuralLevel.rural_level}` : 'Parado', 'autoRuralLevel', 'toggle'));
             rows.push(this._row('🏗 Construção',        buildCount > 0, buildCount > 0 ? `${buildCount} cidade(s)` : 'Nenhuma cidade', null, null));
@@ -129,6 +140,12 @@ class StatusPanel extends ModernUtil {
             rows.push(this._row('💰 Envio de Recursos', asrActive,   asrActive   ? 'Ativo' : 'Parado',   'autoSendResources',  'toggle'));
             rows.push(this._row('⚔️ Milícia Auto',      militiaActive, militiaActive ? 'Ativo' : 'Parado', 'autoMilitia', militiaActive ? 'stop' : 'start'));
             rows.push(this._row('⚓ Navio Colonizador', cssActive,   cssActive   ? `→ ${this.getTownName(bot.colonizeShipSender.config.targetTownId)}` : 'Parado', 'colonizeShipSender', cssActive ? 'stop' : 'start'));
+
+            // NOVO: linhas adicionadas nesta rodada
+            rows.push(this._row('🗡️ Auto Ataque',        attackActive,   attackActive   ? 'Ativo' : 'Parado', 'autoAttack',        'toggle'));
+            rows.push(this._row('🛡️ Auto Fuga (Dodge)',  dodgeActive,    dodgeActive    ? 'Ativo' : 'Parado', 'autoDodge',         'toggle'));
+            rows.push(this._row('🔥 Sacrifício de Ares',  aresActive,     aresActive     ? 'Ativo' : 'Parado', 'autoAresSacrifice', 'toggle'));
+            rows.push(this._row('📚 Auto Pesquisa',       researchActive, researchActive ? 'Ativo' : 'Parado', 'autoResearch',      'toggle'));
 
             uw.$('#status_rows').html(rows.join(''));
         } catch(e) {
