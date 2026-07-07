@@ -290,4 +290,206 @@ class AutoAttack extends ModernUtil {
 
         if (targets.length === 0) {
             this.console.log('[AutoAttack] Erro: nenhuma cidade-alvo valida informada.');
-            uw.$('#attack_log').text('Erro: informe pelo menos uma cidade-alvo valida.').css('color',
+            uw.$('#attack_log').text('Erro: informe pelo menos uma cidade-alvo valida.').css('color', '#f87171');
+            return;
+        }
+
+        const plan = {
+            id: Date.now() + '_' + Math.floor(Math.random() * 10000),
+            originId: originId,
+            units: this._stagingUnits.map(u => ({ ...u })),
+            targets: targets,
+            enabled: true,
+        };
+
+        this._plans.push(plan);
+        this.storage.save('attack_plans', this._plans);
+        this._renderPlans();
+
+        this._stagingUnits = [];
+        this._renderStagingUnits();
+        uw.$('#attack_origin_select').val('');
+        uw.$('#attack_targets').val('');
+
+        const originName = uw.ITowns.towns[originId]?.getName ? uw.ITowns.towns[originId].getName() : ('#' + originId);
+        const unitsSummary = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
+        this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s).');
+        uw.$('#attack_log').text('Plano adicionado com sucesso!').css('color', '#1a6b2a');
+    };
+
+    removePlan = (planId) => {
+        this._plans = this._plans.filter(p => p.id !== planId);
+        this.storage.save('attack_plans', this._plans);
+        this._renderPlans();
+        this.console.log('[AutoAttack] Plano removido.');
+    };
+
+    _renderPlans() {
+        const container = uw.$('#attack_plans_list');
+        if (!container.length) return;
+
+        if (this._plans.length === 0) {
+            container.html('<span style="font-size:11px;color:#7a5c2a;">Nenhum plano configurado.</span>');
+            return;
+        }
+
+        let html = '<div style="font-weight:bold;font-size:12px;margin-bottom:6px;">Planos ativos:</div>';
+
+        this._plans.forEach(plan => {
+            if (!Array.isArray(plan.units)) return; // seguranca extra, nunca deveria acontecer apos migracao
+
+            const townName = this._getTownName(plan.originId);
+            const unitsLabel = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
+            const targetsLabel = plan.targets.map(t => this._getTownName(t)).join(', ');
+
+            html += (
+                '<div style="display:flex;justify-content:space-between;align-items:center;' +
+                'padding:4px 6px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;">' +
+                '<div>' +
+                '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel +
+                '</div>' +
+                '<div class="button_new" onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;margin:0;padding:0 6px;">' +
+                '<div class="left"></div><div class="right"></div>' +
+                '<div class="caption js-caption">Remover<div class="effect js-effect"></div></div>' +
+                '</div>' +
+                '</div>'
+            );
+        });
+
+        container.html(html);
+    }
+
+    _tick() {
+        if (window.__multbot_captcha_active) return;
+        if (this._plans.length === 0) return;
+
+        this._plans.forEach(plan => {
+            if (!plan.enabled) return;
+            this._checkAndFire(plan);
+        });
+    }
+
+    /* So dispara quando TODAS as unidades da composicao tiverem a
+       quantidade configurada disponivel simultaneamente na cidade.
+       Guard extra: se por algum motivo plan.units nao for um array
+       (nunca deveria acontecer apos a migracao), loga aviso e sai
+       sem quebrar o loop dos outros planos. */
+    async _checkAndFire(plan) {
+        try {
+            if (!Array.isArray(plan.units) || plan.units.length === 0) {
+                this.console.log('[AutoAttack] Aviso: plano da cidade #' + plan.originId + ' sem composicao valida, ignorado.');
+                return;
+            }
+
+            const town = uw.ITowns.towns[plan.originId];
+            if (!town) {
+                this.console.log('[AutoAttack] Aviso: cidade #' + plan.originId + ' nao encontrada (nao e sua ou saiu do cache).');
+                return;
+            }
+
+            const available = town.units();
+
+            const missing = plan.units.filter(u => (available[u.unit] || 0) < u.quantity);
+            if (missing.length > 0) {
+                return; // ainda falta pelo menos uma unidade da composicao
+            }
+
+            const townName = town.getName ? town.getName() : ('#' + plan.originId);
+            const unitsSummary = plan.units.map(u => u.quantity + 'x ' + u.unit).join(', ');
+            this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques...');
+
+            const remaining = {};
+            plan.units.forEach(u => { remaining[u.unit] = available[u.unit] || 0; });
+
+            for (const targetId of plan.targets) {
+                const stillEnough = plan.units.every(u => remaining[u.unit] >= u.quantity);
+                if (!stillEnough) {
+                    this.console.log('[AutoAttack] ' + townName + ': composicao insuficiente para continuar aos proximos alvos.');
+                    break;
+                }
+
+                const targetName = this._getTownName(targetId);
+                try {
+                    await this._sendAttack(plan.originId, targetId, plan.units);
+                    this.console.log('[AutoAttack] ✓ ' + townName + ' -> ' + targetName + ': ataque com [' + unitsSummary + '] enviado!');
+                    uw.$('#attack_log').text('✓ ' + townName + ' atacou ' + targetName + ' [' + unitsSummary + ']').css('color', '#1a6b2a');
+                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + targetName + ' (ataque)');
+
+                    plan.units.forEach(u => { remaining[u.unit] -= u.quantity; });
+                } catch (e) {
+                    const msg = e && e.message ? e.message : e;
+                    this.console.log('[AutoAttack] ✗ Falha ao atacar ' + targetName + ' de ' + townName + ': ' + msg);
+                    uw.$('#attack_log').text('✗ Falha ao atacar ' + targetName + ': ' + msg).css('color', '#f87171');
+                }
+
+                await this.sleep(this.SEND_DELAY_MS);
+            }
+        } catch (e) {
+            const msg = e && e.message ? e.message : e;
+            this.console.log('[AutoAttack] Erro ao processar plano da cidade #' + plan.originId + ': ' + msg);
+        }
+    }
+
+    /* Envia o ataque via town_info/send_units com type "attack",
+       incluindo TODAS as unidades da composicao num unico payload. */
+    _sendAttack(fromTownId, toTownId, unitsList) {
+        return this._withTownId(fromTownId, () => new Promise((resolve, reject) => {
+            const data = {
+                id: parseInt(toTownId, 10),
+                type: 'attack',
+                nl_init: true,
+            };
+
+            unitsList.forEach(u => {
+                data[u.unit] = u.quantity;
+            });
+
+            uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
+                res => {
+                    if (res && res.success !== false) {
+                        resolve(res);
+                    } else {
+                        reject(new Error('Servidor recusou: ' + JSON.stringify(res)));
+                    }
+                },
+                (r, status, txt) => {
+                    reject(new Error('Erro de rede: ' + txt));
+                }
+            );
+        }));
+    }
+
+    async _withTownId(townId, fn) {
+        const orig = uw.Game.townId;
+        const origStr = uw.Game.town_id;
+        uw.Game.townId = parseInt(townId, 10);
+        uw.Game.town_id = parseInt(townId, 10);
+
+        try {
+            const result = await fn();
+            return result;
+        } finally {
+            uw.Game.townId = orig;
+            uw.Game.town_id = origStr;
+        }
+    }
+
+    _getTownName(townId) {
+        if (!townId) return String(townId);
+
+        const id = parseInt(townId);
+        const ids = String(townId);
+
+        try {
+            const towns = uw.ITowns && uw.ITowns.towns ? uw.ITowns.towns : {};
+            const t1 = towns[id] ? towns[id] : towns[ids];
+            if (t1 && typeof t1.getName === 'function') return t1.getName() + ' (#' + ids + ')';
+
+            const wmapTowns = uw.WMap && uw.WMap.towns ? uw.WMap.towns : {};
+            const wt = wmapTowns[id] ? wmapTowns[id] : wmapTowns[ids];
+            if (wt && wt.name) return wt.name + ' (#' + ids + ')';
+        } catch (e) {}
+
+        return '#' + ids;
+    }
+}
