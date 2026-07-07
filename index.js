@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  ModernBot aprimorado com módulos adicionais para Grepolis
-// @version      1.3.0
+// @version      1.3.1
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
