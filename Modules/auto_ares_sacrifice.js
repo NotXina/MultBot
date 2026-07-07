@@ -7,16 +7,18 @@
 //  o limite de 5000. Para automaticamente ao atingir o limite.
 //
 //  So lanca o sacrificio se a cidade tiver pelo menos
-//  MIN_LAND_TROOPS (50) tropas terrestres COMUNS disponiveis -
-//  excluindo navais, unidades miticas e Enviados Divinos.
-//  A deteccao de mitica/enviado divino e automatica: qualquer
-//  unidade com o campo "god_id" no GameData.units e considerada
-//  vinculada a um deus (mitica ou enviado divino), nao entrando
-//  na contagem - sem precisar manter lista manual.
+//  MIN_LAND_TROOPS (50) tropas terrestres COMUNS e PROPRIAS
+//  disponiveis - excluindo navais, unidades miticas, Enviados
+//  Divinos E tropas de apoio recebidas (de si mesmo ou de
+//  aliados) estacionadas ali. O desconto de apoio usa
+//  town.unitsSupport() (confirmado existir no jogo), subtraindo
+//  cada unidade de town.units() - cobre tanto o caso de units()
+//  vir somado com o apoio quanto o caso de ja vir separado.
 //
-//  Favor de Ares e rastreado POR CONTA, nao por cidade. O campo
-//  correto e player_gods.attributes.ares_favor - mesmo padrao ja
-//  usado no anti_rage.js para artemis_favor/zeus_favor.
+//  Deteccao de mitica/enviado divino e automatica: qualquer
+//  unidade com o campo "god_id" no GameData.units.
+//
+//  Favor de Ares e rastreado POR CONTA, nao por cidade.
 //
 //  Endpoint confirmado via captura real:
 //  model_url: "CastedPowers", action_name: "cast",
@@ -61,7 +63,7 @@ class AutoAresSacrifice extends ModernUtil {
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
             this.getTitleHtml('ares_sac_title', 'Auto Sacrificio de ' + godLabel, this.toggle, '', this._active) +
             '<div style="padding:5px 10px;font-weight:bold;">' +
-            'Lanca o Sacrificio de ' + godLabel + ' assim que houver ' + this.FAVOR_COST + ' de favor acumulado E pelo menos ' + this.MIN_LAND_TROOPS + ' tropas terrestres comuns na cidade (excluindo navais, miticas e Enviados Divinos), ate atingir ' + this.MAX_FURY + ' de furia. Verifica a cada 20s.' +
+            'Lanca o Sacrificio de ' + godLabel + ' assim que houver ' + this.FAVOR_COST + ' de favor acumulado E pelo menos ' + this.MIN_LAND_TROOPS + ' tropas terrestres PROPRIAS na cidade selecionada (excluindo navais, miticas, Enviados Divinos e apoios recebidos), ate atingir ' + this.MAX_FURY + ' de furia. Verifica a cada 20s.' +
             '</div>' +
             '<div style="padding:8px 10px;display:flex;gap:8px;align-items:center;">' +
             '<label style="font-size:11px;font-weight:bold;">Cidade</label>' +
@@ -162,17 +164,9 @@ class AutoAresSacrifice extends ModernUtil {
         }
     }
 
-    /* Verifica se uma unidade e "especial" (naval, mitica, ou
-       Enviado Divino) - qualquer uma dessas NAO deve contar como
-       tropa terrestre comum de defesa.
-
-       - Naval: unitData.is_naval === true
-       - Mitica / Enviado Divino: unitData.god_id existe (qualquer
-         unidade vinculada a um deus, seja uma mitica de combate
-         normal ou um Enviado Divino, sempre carrega esse campo -
-         confirmado no GameData quando investigamos as unidades
-         miticas no AutoTrain). Isso cobre automaticamente qualquer
-         unidade desse tipo, sem precisar manter lista manual. */
+    /* Unidade naval, mitica ou Enviado Divino - identificado
+       automaticamente via is_naval / god_id no GameData, sem
+       lista manual. */
     _isSpecialUnit(unitId) {
         try {
             const unitData = uw.GameData.units[unitId];
@@ -185,20 +179,37 @@ class AutoAresSacrifice extends ModernUtil {
         }
     }
 
-    /* Conta o total de tropas TERRESTRES COMUNS disponiveis na
-       cidade: exclui militia, navais, miticas e Enviados Divinos
-       (via _isSpecialUnit). So sobra a "tropa de defesa padrao". */
+    /* Conta o total de tropas TERRESTRES COMUNS e PROPRIAS
+       disponiveis na cidade:
+       1) Parte de town.units() (garrison total exibido pelo jogo)
+       2) Subtrai, unidade por unidade, o que estiver em
+          town.unitsSupport() - tropas de apoio recebidas (suas
+          ou de aliados) estacionadas ali, que NAO contam como
+          defesa propria da cidade para efeito desta regra.
+       3) Exclui militia, navais, miticas e Enviados Divinos
+          (via _isSpecialUnit).
+       O resultado nunca fica negativo por unidade (protegido com
+       Math.max(0, ...) em cada tipo). */
     _getLandTroopCount(town) {
         try {
-            const units = town.units();
+            const units = town.units() || {};
+            let support = {};
+            try {
+                support = town.unitsSupport() || {};
+            } catch (e) {
+                support = {};
+            }
+
             let total = 0;
             for (const unit of Object.keys(units)) {
                 if (unit === 'militia') continue;
-                const count = units[unit];
-                if (!count || count <= 0) continue;
                 if (this._isSpecialUnit(unit)) continue;
 
-                total += count;
+                const totalCount = units[unit] || 0;
+                const supportCount = support[unit] || 0;
+                const ownCount = Math.max(0, totalCount - supportCount);
+
+                total += ownCount;
             }
             return total;
         } catch (e) {
@@ -219,7 +230,7 @@ class AutoAresSacrifice extends ModernUtil {
             const html = 'Furia atual: <b>' + fury + ' / ' + this.MAX_FURY + '</b>' +
                 ' | Favor de ' + godLabel + ' (conta): <b>' + godFavor + '</b>' +
                 ' | Cidade: <b>' + townName + '</b>' +
-                ' | Tropas terrestres comuns: <b style="color:' + troopColor + ';">' + landTroops + ' / ' + this.MIN_LAND_TROOPS + '</b>';
+                ' | Tropas terrestres proprias: <b style="color:' + troopColor + ';">' + landTroops + ' / ' + this.MIN_LAND_TROOPS + '</b>';
             uw.$('#ares_sac_status').html(html);
         } catch (e) {}
     }
@@ -252,12 +263,12 @@ class AutoAresSacrifice extends ModernUtil {
             const townName = town.getName ? town.getName() : ('#' + this.townId);
 
             if (landTroops < this.MIN_LAND_TROOPS) {
-                this.console.log('[AutoAresSacrifice] ' + townName + ': favor disponivel, mas apenas ' + landTroops + ' tropas terrestres comuns (minimo ' + this.MIN_LAND_TROOPS + '). Aguardando reforco.');
+                this.console.log('[AutoAresSacrifice] ' + townName + ': favor disponivel, mas apenas ' + landTroops + ' tropas terrestres proprias (minimo ' + this.MIN_LAND_TROOPS + '). Aguardando reforco.');
                 return;
             }
 
             const godLabel = this._getGodLabel();
-            this.console.log('[AutoAresSacrifice] ' + townName + ': ' + godFavor + ' de favor de ' + godLabel + ' e ' + landTroops + ' tropas terrestres comuns disponiveis. Lancando sacrificio...');
+            this.console.log('[AutoAresSacrifice] ' + townName + ': ' + godFavor + ' de favor de ' + godLabel + ' e ' + landTroops + ' tropas terrestres proprias disponiveis. Lancando sacrificio...');
 
             const result = await this._castAresSacrifice(this.townId);
 
