@@ -8,6 +8,12 @@ class AutoBuild extends ModernUtil {
         /* Check if shift is pressed */
         this.shiftHeld = false;
 
+        /* Guarda a ultima tentativa de construcao (cidade + predio),
+           usada para dar contexto ao interceptar mensagens nativas de
+           erro do jogo (ex: "requisitos de construcao nao preenchidos") */
+        this._lastBuildAttempt = null;
+        this._hookNativeErrorMessages();
+
         /* Active always, check if the towns are in the active list */
         this.interval = setInterval(this.main.bind(this), 5000);
 
@@ -21,6 +27,40 @@ class AutoBuild extends ModernUtil {
 
     startInterval() {
         this.interval = setInterval(this.main.bind(this), 5000);
+    }
+
+    /* Intercepta uw.HumanMessage.error UMA UNICA VEZ (guard global via
+       window, sobrevive a reloads normalmente ja que o flag reseta a
+       cada carregamento de pagina). Sempre que uma mensagem de erro
+       nativa do jogo disparar dentro de 3s de uma tentativa nossa de
+       construir algo, loga no console qual cidade e qual predio
+       estavam envolvidos - sem isso, o banner aparece na tela mas
+       nunca sabemos qual construcao especifica foi rejeitada. */
+    _hookNativeErrorMessages() {
+        if (window.__multbot_humanmessage_error_hooked) return;
+        window.__multbot_humanmessage_error_hooked = true;
+
+        try {
+            const original = uw.HumanMessage.error.bind(uw.HumanMessage);
+            const self = this;
+
+            uw.HumanMessage.error = function (message, ...rest) {
+                try {
+                    const attempt = self._lastBuildAttempt;
+                    if (attempt && (Date.now() - attempt.at) < 3000) {
+                        const buildingName = self.getGameName ? self.getGameName('building', attempt.building) : attempt.building;
+                        self.console.log('[AutoBuild] Aviso nativo do jogo: "' + message + '" ao tentar construir ' + buildingName + ' em ' + attempt.townName + '.');
+                    }
+                } catch (e) {
+                    // nunca deixa o hook quebrar a mensagem original do jogo
+                }
+                return original(message, ...rest);
+            };
+
+            this.console.log('[AutoBuild] Interceptador de mensagens nativas de erro ativo.');
+        } catch (e) {
+            this.console.log('[AutoBuild] Nao foi possivel interceptar mensagens nativas: ' + e.message);
+        }
     }
 
     settings = () => {
@@ -52,10 +92,73 @@ class AutoBuild extends ModernUtil {
             <div id="auto_build_title" style="cursor: pointer; filter: ${this.interval ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : ''}" class="game_header bold" onclick="window.modernBot.autoBuild.toggle()"> Auto Build <span class="command_count"></span>
                 <div style="position: absolute; right: 10px; top: 4px; font-size: 10px;"> (click to toggle) </div>
             </div>
+            <div style="padding: 6px; display:flex; gap:6px; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
+                <span style="font-size:11px;font-weight:bold;" title="Aplica somente na cidade atualmente ativa">Presets (cidade atual):</span>
+                ${this.getButtonHtml('auto_build_preset_naval', 'Preset Naval', this.applyNavalPreset)}
+                ${this.getButtonHtml('auto_build_preset_land', 'Preset Terrestre', this.applyLandPreset)}
+            </div>
             <div id="buildings_lvl_buttons"></div>    
         </div> `;
     };
 
+    /* Preset Naval: tudo no maximo, exceto quartel=5 e muro=0.
+       Aplica SOMENTE na cidade atualmente ativa no jogo. */
+    applyNavalPreset = () => {
+        try {
+            const town = uw.ITowns.getCurrentTown();
+            const town_id = town.getId();
+            const buildings = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
+
+            const preset = {};
+            for (const b of buildings) {
+                const maxLevel = uw.GameData.buildings[b]?.max_level ?? 45;
+                if (b === 'barracks') preset[b] = 5;
+                else if (b === 'wall') preset[b] = 0;
+                else preset[b] = maxLevel;
+            }
+
+            this.towns_buildings[town_id] = preset;
+            this.storage.save('buildings', this.towns_buildings);
+            if (!this.interval) this.startInterval();
+
+            this.setPolisInSettings(town_id);
+            this.updateTitle();
+
+            const msg = 'Preset Naval aplicado em ' + town.getName() + '.';
+            this.console.log('[AutoBuild] ' + msg);
+        } catch (e) {
+            this.console.log('[AutoBuild] Erro ao aplicar preset naval: ' + e.message);
+        }
+    };
+
+    /* Preset Terrestre: tudo no maximo, exceto porto=5.
+       Aplica SOMENTE na cidade atualmente ativa no jogo. */
+    applyLandPreset = () => {
+        try {
+            const town = uw.ITowns.getCurrentTown();
+            const town_id = town.getId();
+            const buildings = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
+
+            const preset = {};
+            for (const b of buildings) {
+                const maxLevel = uw.GameData.buildings[b]?.max_level ?? 45;
+                if (b === 'docks') preset[b] = 5;
+                else preset[b] = maxLevel;
+            }
+
+            this.towns_buildings[town_id] = preset;
+            this.storage.save('buildings', this.towns_buildings);
+            if (!this.interval) this.startInterval();
+
+            this.setPolisInSettings(town_id);
+            this.updateTitle();
+
+            const msg = 'Preset Terrestre aplicado em ' + town.getName() + '.';
+            this.console.log('[AutoBuild] ' + msg);
+        } catch (e) {
+            this.console.log('[AutoBuild] Erro ao aplicar preset terrestre: ' + e.message);
+        }
+    };
 
     /* Update the senate view */
     updateSenate = (event, handler) => {
@@ -246,7 +349,7 @@ class AutoBuild extends ModernUtil {
                 if (!uw.ITowns.towns[town_id]) {
                     delete this.towns_buildings[town_id];
                     this.storage.save('buildings', this.towns_buildings);
-                    return; // continue → return dentro de async map
+                    return;
                 }
 
                 if (this.isFullQueue(town_id)) return;
@@ -265,7 +368,11 @@ class AutoBuild extends ModernUtil {
         );
     };
 
-    /* Make post request to the server to buildup the building */
+    /* Make post request to the server to buildup the building.
+       Registra a tentativa (cidade + predio) em _lastBuildAttempt
+       ANTES de disparar a requisicao, para o interceptor de mensagens
+       nativas de erro (_hookNativeErrorMessages) saber dar contexto
+       caso o jogo mostre um banner de "requisitos nao preenchidos". */
     postBuild = async (type, town_id) => {
         const town = uw.ITowns.getTown(town_id);
         let { wood, stone, iron } = town.resources();
@@ -276,6 +383,9 @@ class AutoBuild extends ModernUtil {
         if (town.getAvailablePopulation() < population_for) return;
         const m = 20;
         if (wood < resources_for.wood + m || stone < resources_for.stone + m || iron < resources_for.iron + m) return;
+
+        this._lastBuildAttempt = { townName: town.getName(), building: type, at: Date.now() };
+
         let data = {
             model_url: 'BuildingOrder',
             action_name: 'buildUp',
@@ -285,9 +395,9 @@ class AutoBuild extends ModernUtil {
         uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
             res => {
                 if (res && !res.error) {
-                    this.console.log(`[AutoBuild] ${town.getName()}: Build Up ${type}`);
+                    this.console.log(`[AutoBuild] ${town.getName()}: Build Up ${this.getGameName('building', type)}`);
                 } else {
-                    this.console.log(`[AutoBuild] ✗ ${town.getName()}: ${type} — ${res?.error ?? JSON.stringify(res)}`);
+                    this.console.log(`[AutoBuild] ✗ ${town.getName()}: ${this.getGameName('building', type)} — ${res?.error ?? JSON.stringify(res)}`);
                 }
             }
         );
@@ -304,7 +414,7 @@ class AutoBuild extends ModernUtil {
             town_id: town_id,
         };
         uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
-        this.console.log(`${town.getName()}: Build Down ${type}`);
+        this.console.log(`${town.getName()}: Build Down ${this.getGameName('building', type)}`);
         await this.sleep(1234);
     };
 
