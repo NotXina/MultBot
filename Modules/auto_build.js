@@ -131,7 +131,7 @@ class AutoBuild extends ModernUtil {
         }
     };
 
-    /* Preset Terrestre: tudo no maximo, exceto porto=5.
+    /* Preset Terrestre: tudo no maximo, exceto porto=5 e muro=0.
        Aplica SOMENTE na cidade atualmente ativa no jogo. */
     applyLandPreset = () => {
         try {
@@ -143,6 +143,7 @@ class AutoBuild extends ModernUtil {
             for (const b of buildings) {
                 const maxLevel = uw.GameData.buildings[b]?.max_level ?? 45;
                 if (b === 'docks') preset[b] = 5;
+                else if (b === 'wall') preset[b] = 0;
                 else preset[b] = maxLevel;
             }
 
