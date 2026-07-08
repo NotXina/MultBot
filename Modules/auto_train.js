@@ -2,11 +2,12 @@ class AutoTrain extends ModernUtil {
     POWER_LIST = ['call_of_the_ocean', 'spartan_training', 'fertility_improvement'];
     GROUND_ORDER    = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot'];
     NAVAL_ORDER     = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship'];
-    MYTHICAL_GROUND = ['minotaur', 'manticore', 'zyklop', 'harpy', 'medusa', 'centaur', 'cerberus', 'fury', 'griffin', 'calydonian_boar', 'satyr', 'spartoi', 'ladon', 'pegasus'];
+    MYTHICAL_GROUND = ['minotaur', 'manticore', 'zyklop', 'harpy', 'medusa', 'centaur', 'cerberus', 'fury', 'griffin', 'calydonian_boar', 'satyr', 'spartoi', 'ladon', 'pegasus', 'godsent'];
     MYTHICAL_NAVAL  = ['sea_monster', 'siren'];
 
-    // Mapeamento de fallback (usado só se GameData.units[troop].god_id não existir
-    // nesse mundo específico). Confirmado pela tabela oficial do jogo.
+    // Mapeamento de fallback (usado so se GameData.units[troop].god_id nao existir
+    // nesse mundo especifico). godsent nao precisa entrar aqui - seu god_id real
+    // ("all") ja vem direto do GameData, sem precisar de fallback.
     MYTHICAL_GOD = {
         minotaur:         'zeus',
         manticore:        'zeus',
@@ -57,6 +58,7 @@ class AutoTrain extends ModernUtil {
         pegasus:            [10,  2],
         sea_monster:        [2,   1],
         siren:              [10,  2],
+        godsent:            [5,   1],
     };
 
     constructor(c, s) {
@@ -188,15 +190,19 @@ class AutoTrain extends ModernUtil {
         return town.getAvailablePopulation() + used;
     };
 
-    /* Favor disponível na cidade */
+    /* Favor disponivel na cidade */
     _getFavor = (town_id) => {
         try {
             return uw.ITowns.towns[town_id]?.resources?.()?.favor ?? 0;
         } catch (e) { return 0; }
     };
 
-    /* Deus atualmente escolhido no templo desta cidade.
-       Confirmado: town.god() retorna string minúscula, ex: 'poseidon'. */
+    _isMythical = (troop) => {
+        return this.MYTHICAL_GROUND.includes(troop) || this.MYTHICAL_NAVAL.includes(troop);
+    };
+
+    /* Descobre qual deus a cidade esta adorando (deus do templo).
+       Confirmado: town.god() retorna string minuscula, ex: 'poseidon'. */
     _getTownGod = (town_id) => {
         try {
             return uw.ITowns.towns[town_id]?.god?.() ?? null;
@@ -205,23 +211,25 @@ class AutoTrain extends ModernUtil {
         }
     };
 
-    /* Deus dono de uma unidade mítica. Prioriza o dado nativo do jogo
-       (GameData.units[troop].god_id), com fallback pro mapeamento fixo
-       caso esse mundo não exponha o campo. */
+    /* Deus dono de uma unidade mitica. Prioriza o dado nativo do jogo
+       (GameData.units[troop].god_id, ex: "zeus", "poseidon", ou "all"
+       para o Enviado Divino), com fallback pro mapeamento fixo caso
+       esse mundo nao exponha o campo. */
     _getMythGod = (troop) => {
         return uw.GameData.units[troop]?.god_id ?? this.MYTHICAL_GOD[troop] ?? null;
     };
 
-    _isMythical = (troop) => {
-        return this.MYTHICAL_GROUND.includes(troop) || this.MYTHICAL_NAVAL.includes(troop);
-    };
-
-    /* true se a unidade é mítica e NÃO pertence ao deus atual da cidade */
+    /* true se a unidade e mitica e NAO pertence ao deus atual da cidade.
+       Unidades com god_id "all" (ex: Enviado Divino) NUNCA sao bloqueadas
+       por deus - estao sempre disponiveis independente de qual deus a
+       cidade esta adorando, desde que haja favor suficiente (a checagem
+       de favor em getTroopCount ja cuida disso naturalmente). */
     _isWrongGodMythical = (troop, town_id) => {
         if (!this._isMythical(troop)) return false;
         const requiredGod = this._getMythGod(troop);
+        if (requiredGod === 'all') return false;
         const townGod = this._getTownGod(town_id);
-        if (!requiredGod || !townGod) return true; // sem certeza -> trava por segurança
+        if (!requiredGod || !townGod) return true; // sem certeza -> trava por seguranca
         return townGod !== requiredGod;
     };
 
@@ -231,7 +239,9 @@ class AutoTrain extends ModernUtil {
         let buildings = town.buildings().attributes;
 
         const isGray = troop => {
-            // Míticas: cinza se pertencem a um deus diferente do escolhido nesta cidade
+            // Miticas: cinza se pertencem a um deus diferente do escolhido nesta
+            // cidade. Enviado Divino (god_id "all") nunca fica cinza por esse
+            // motivo - so a disponibilidade de favor decide na hora de treinar.
             if (this._isMythical(troop)) {
                 return this._isWrongGodMythical(troop, town_id);
             }
@@ -312,13 +322,14 @@ class AutoTrain extends ModernUtil {
             ${getTroopHtml('ladon')}
             ${getTroopHtml('sea_monster')}
             ${getTroopHtml('siren')}
+            ${getTroopHtml('godsent')}
             </div>
         </div>`);
     };
 
     editTroopCount = (town_id, troop, count) => {
-        /* Bloqueia edição de unidade mítica de deus errado, mesmo se
-           alguém tentar clicar via onclick manual/injeção de HTML */
+        /* Bloqueia edicao de unidade mitica de deus errado, mesmo se
+           alguem tentar clicar via onclick manual/injecao de HTML */
         if (this._isWrongGodMythical(troop, town_id)) return;
 
         /* restart the interval to prevent spam*/
@@ -394,18 +405,18 @@ class AutoTrain extends ModernUtil {
         return town.getUnitOrdersCollection().where({ kind: type }).length;
     };
 
-    /* Quanto de uma tropa ainda falta recrutar, e o quanto é possível agora.
-       0   = meta já atingida
-       -1  = sem recursos/favor/população suficiente agora (tenta a próxima tropa)
+    /* Quanto de uma tropa ainda falta recrutar, e o quanto e possivel agora.
+       0   = meta ja atingida
+       -1  = sem recursos/favor/populacao suficiente agora (tenta a proxima tropa)
        N>0 = quantidade a recrutar agora */
     getTroopCount = (troop, town_id) => {
         const town = uw.ITowns.getTown(town_id);
         if (!this.city_troops[town_id]?.[troop]) return 0;
 
         const unitData = uw.GameData.units[troop];
-        if (!unitData) return 0; // unidade não existe neste mundo/servidor
+        if (!unitData) return 0; // unidade nao existe neste mundo/servidor
 
-        // Quanto falta recrutar (meta - já existentes - em fila)
+        // Quanto falta recrutar (meta - ja existentes - em fila)
         let count = this.city_troops[town_id][troop];
         for (let order of town.getUnitOrdersCollection().models) {
             if (order.attributes.unit_type === troop) count -= order.attributes.count;
@@ -414,7 +425,7 @@ class AutoTrain extends ModernUtil {
         const outerUnits = town.unitsOuter();
         if (townUnits[troop])  count -= townUnits[troop];
         if (outerUnits[troop]) count -= outerUnits[troop];
-        if (count <= 0) return 0; // meta já atingida
+        if (count <= 0) return 0; // meta ja atingida
 
         const resources = town.resources();
         const discount  = uw.GeneralModifications.getUnitBuildResourcesModification(town_id, unitData);
@@ -423,7 +434,7 @@ class AutoTrain extends ModernUtil {
         // Limite por recursos normais
         let byResources;
         if (wood === 0 && stone === 0 && iron === 0) {
-            byResources = count;
+            byResources = count; // godsent tem custo 0/0/0 - sem gargalo de recursos
         } else {
             byResources = parseInt(Math.min(
                 resources.wood  / Math.round(wood  * discount),
@@ -433,8 +444,11 @@ class AutoTrain extends ModernUtil {
         }
         if (byResources <= 0) return -1;
 
-        // Limite por favor (apenas míticas) — segunda camada de proteção
-        // além do filtro visual/de deus já aplicado antes de chegar aqui
+        // Limite por favor (apenas miticas) - e aqui que "deus errado" e
+        // naturalmente filtrado tambem para deuses especificos: sem favor
+        // pra esse deus, retorna -1 sempre. Godsent (god_id "all") usa o
+        // favor que a cidade tiver acumulado com o deus atual, sem
+        // restricao de qual deus e.
         let byFavor = count;
         if (this._isMythical(troop) && unitData.favor > 0) {
             const favor = this._getFavor(town_id);
@@ -442,11 +456,11 @@ class AutoTrain extends ModernUtil {
             if (byFavor <= 0) return -1;
         }
 
-        // Limite por população
+        // Limite por populacao
         const byPop = parseInt(resources.population / unitData.population);
         if (byPop <= 0) return -1;
 
-        // Limite máximo por storage e percentual configurado (1=80%, 2=90%, 3=100%)
+        // Limite maximo por storage e percentual configurado (1=80%, 2=90%, 3=100%)
         const pct = [0.8, 0.9, 1.0][(this.percentual ?? 1) - 1] ?? 0.85;
         let byStorage = count;
         if (wood > 0 || stone > 0 || iron > 0) {
@@ -455,14 +469,14 @@ class AutoTrain extends ModernUtil {
                 resources.storage / (stone * discount),
                 resources.storage / (iron  * discount)
             ) * pct);
-        }
+        } // godsent nao tem custo de recursos, entao nao ha limite de storage a aplicar
 
         const toRecruit = Math.min(count, byResources, byFavor, byPop, byStorage);
         return toRecruit > 0 ? toRecruit : -1;
     };
 
-    /* Check the given town, for ground or naval — sem risco de loop infinito.
-       Míticas de deus errado são puladas antes de gastar qualquer verificação. */
+    /* Check the given town, for ground or naval - sem risco de loop infinito.
+       Miticas de deus errado sao puladas antes de gastar qualquer verificacao. */
     checkPolis = (type, town_id) => {
         const order_count = this.getUnitOrdersCount(type, town_id);
         if (order_count > 6) return 0;
@@ -475,7 +489,7 @@ class AutoTrain extends ModernUtil {
         const unitOrder = [...normalOrder, ...mythicalOrder];
 
         for (const unit of unitOrder) {
-            if (!troops[unit]) continue; // não configurada
+            if (!troops[unit]) continue; // nao configurada
             if (this._isWrongGodMythical(unit, town_id)) continue; // deus errado, pula
             const count = this.getTroopCount(unit, town_id);
             if (count === 0) continue; // meta atingida
@@ -505,7 +519,10 @@ class AutoTrain extends ModernUtil {
 
     /* Make build request to the server.
        Roteia entre docks (naval) e barracks (terrestre), cobrindo
-       unidades normais e míticas navais (sea_monster, siren). */
+       unidades normais e miticas navais (sea_monster, siren). Godsent
+       (categoria mythological_ground, is_naval: false) e roteado
+       corretamente para building_barracks, mesmo local onde o jogo
+       treina Enviados Divinos de verdade. */
     buildPost = (town_id, unit, count) => {
         const isNaval = this.NAVAL_ORDER.includes(unit) || this.MYTHICAL_NAVAL.includes(unit);
         const endpoint = isNaval ? 'building_docks' : 'building_barracks';
@@ -516,7 +533,7 @@ class AutoTrain extends ModernUtil {
             town_id: town_id,
         };
 
-        this.console.log(`${uw.ITowns.towns[town_id].getName()}: recrutando ${count}x ${unit} (${endpoint})`);
+        this.console.log(`${uw.ITowns.towns[town_id].getName()}: recrutando ${count}x ${this.getGameName('unit', unit)} (${endpoint})`);
 
         uw.gpAjax.ajaxPost(endpoint, 'build', data);
     };
@@ -527,7 +544,7 @@ class AutoTrain extends ModernUtil {
         return this.getPowerActive();
     };
 
-    /* Main function — treina ground + naval em todas as cidades */
+    /* Main function - treina ground + naval em todas as cidades */
     main = () => {
         if (window.__multbot_captcha_active) return;
         const town_list = this.getActiveList();
