@@ -29,7 +29,7 @@ class AutoAresSacrifice extends ModernUtil {
     FAVOR_COST = 100;
     MAX_FURY = 5000;
     MIN_LAND_TROOPS = 50;
-    CHECK_INTERVAL_MS = 20000;
+    CHECK_INTERVAL_MS = 500;
 
     constructor(c, s) {
         super(c, s);
