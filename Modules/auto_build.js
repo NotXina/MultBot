@@ -1,22 +1,27 @@
 class AutoBuild extends ModernUtil {
+    /* Quando o jogo rejeita uma construcao por requisitos nao
+       atendidos (ex: Porto precisa de outro predio num nivel
+       minimo), esse predio fica "bloqueado" por esse tempo antes
+       de ser tentado de novo - evita ficar re-tentando (e logando)
+       a cada ciclo do main() enquanto o requisito nao e atendido. */
+    BUILD_ERROR_COOLDOWN_MS = 5 * 60 * 1000;
+
     constructor(c, s) {
         super(c, s);
-
         /* Load settings, the polis in the settings are the active */
         this.towns_buildings = this.storage.load('buildings', {});
-
         /* Check if shift is pressed */
         this.shiftHeld = false;
-
         /* Guarda a ultima tentativa de construcao (cidade + predio),
            usada para dar contexto ao interceptar mensagens nativas de
            erro do jogo (ex: "requisitos de construcao nao preenchidos") */
         this._lastBuildAttempt = null;
+        /* town_id:building -> timestamp ate quando fica bloqueado
+           apos um erro de requisitos nao atendidos */
+        this._buildBlockedUntil = {};
         this._hookNativeErrorMessages();
-
         /* Active always, check if the towns are in the active list */
         this.interval = setInterval(this.main.bind(this), 5000);
-
         /* Add listener that change the Senate look */
         try {
             uw.$.Observer(uw.GameEvents.window.open).subscribe("modernSenate", this.updateSenate);
@@ -24,61 +29,79 @@ class AutoBuild extends ModernUtil {
             this.console.log('[AutoBuild] Observer error: ' + e.message);
         }
     }
-
     startInterval() {
         this.interval = setInterval(this.main.bind(this), 5000);
     }
-
+    _buildKey(town_id, building) {
+        return town_id + ':' + building;
+    }
+    /* Bloqueia um predio especifico numa cidade especifica por
+       BUILD_ERROR_COOLDOWN_MS. Enquanto bloqueado, getNextBuild pula
+       essa construcao e segue tentando as outras da composicao. */
+    _blockBuilding(town_id, building) {
+        const key = this._buildKey(town_id, building);
+        this._buildBlockedUntil[key] = Date.now() + this.BUILD_ERROR_COOLDOWN_MS;
+        const town = uw.ITowns.towns[town_id];
+        const townName = town && town.getName ? town.getName() : ('#' + town_id);
+        const buildingName = this.getGameName ? this.getGameName('building', building) : building;
+        const minutes = Math.round(this.BUILD_ERROR_COOLDOWN_MS / 60000);
+        this.console.log('[AutoBuild] ' + townName + ': ' + buildingName + ' bloqueado por ' + minutes + 'min (requisitos nao atendidos) - pulando para a proxima construcao da composicao.');
+    }
+    _isBuildBlocked(town_id, building) {
+        const key = this._buildKey(town_id, building);
+        const until = this._buildBlockedUntil[key];
+        return !!(until && until > Date.now());
+    }
     /* Intercepta uw.HumanMessage.error UMA UNICA VEZ (guard global via
        window, sobrevive a reloads normalmente ja que o flag reseta a
        cada carregamento de pagina). Sempre que uma mensagem de erro
        nativa do jogo disparar dentro de 3s de uma tentativa nossa de
        construir algo, loga no console qual cidade e qual predio
        estavam envolvidos - sem isso, o banner aparece na tela mas
-       nunca sabemos qual construcao especifica foi rejeitada. */
+       nunca sabemos qual construcao especifica foi rejeitada.
+       Se a mensagem for de requisitos nao atendidos, alem de logar,
+       bloqueia esse predio (ver _blockBuilding) para nao ficar
+       spammando a mesma tentativa fadada a falhar a cada 5s. */
     _hookNativeErrorMessages() {
         if (window.__multbot_humanmessage_error_hooked) return;
         window.__multbot_humanmessage_error_hooked = true;
-
         try {
             const original = uw.HumanMessage.error.bind(uw.HumanMessage);
             const self = this;
-
             uw.HumanMessage.error = function (message, ...rest) {
                 try {
                     const attempt = self._lastBuildAttempt;
                     if (attempt && (Date.now() - attempt.at) < 3000) {
                         const buildingName = self.getGameName ? self.getGameName('building', attempt.building) : attempt.building;
                         self.console.log('[AutoBuild] Aviso nativo do jogo: "' + message + '" ao tentar construir ' + buildingName + ' em ' + attempt.townName + '.');
+
+                        if (/requisit/i.test(message) && attempt.townId != null) {
+                            self._blockBuilding(attempt.townId, attempt.building);
+                        }
                     }
                 } catch (e) {
                     // nunca deixa o hook quebrar a mensagem original do jogo
                 }
                 return original(message, ...rest);
             };
-
             this.console.log('[AutoBuild] Interceptador de mensagens nativas de erro ativo.');
         } catch (e) {
             this.console.log('[AutoBuild] Nao foi possivel interceptar mensagens nativas: ' + e.message);
         }
     }
-
     settings = () => {
         /* Apply event to shift */
         requestAnimationFrame(() => {
             uw.$('#buildings_lvl_buttons').on('mousedown', e => {
                 this.shiftHeld = e.shiftKey;
             });
-
             this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
             this.updateTitle();
-
             uw.$.Observer(uw.GameEvents.town.town_switch).subscribe(() => {
                 this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
                 this.updateTitle();
             });
         });
-
         return `
         <div class="game_border" style="margin-bottom: 20px">
             <div class="game_border_top"></div>
@@ -97,10 +120,9 @@ class AutoBuild extends ModernUtil {
                 ${this.getButtonHtml('auto_build_preset_naval', 'Preset Naval', this.applyNavalPreset)}
                 ${this.getButtonHtml('auto_build_preset_land', 'Preset Terrestre', this.applyLandPreset)}
             </div>
-            <div id="buildings_lvl_buttons"></div>    
+            <div id="buildings_lvl_buttons"></div>
         </div> `;
     };
-
     /* Preset Naval: tudo no maximo, exceto quartel=5 e muro=0.
        Aplica SOMENTE na cidade atualmente ativa no jogo. */
     applyNavalPreset = () => {
@@ -108,7 +130,6 @@ class AutoBuild extends ModernUtil {
             const town = uw.ITowns.getCurrentTown();
             const town_id = town.getId();
             const buildings = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
-
             const preset = {};
             for (const b of buildings) {
                 const maxLevel = uw.GameData.buildings[b]?.max_level ?? 45;
@@ -116,21 +137,17 @@ class AutoBuild extends ModernUtil {
                 else if (b === 'wall') preset[b] = 0;
                 else preset[b] = maxLevel;
             }
-
             this.towns_buildings[town_id] = preset;
             this.storage.save('buildings', this.towns_buildings);
             if (!this.interval) this.startInterval();
-
             this.setPolisInSettings(town_id);
             this.updateTitle();
-
             const msg = 'Preset Naval aplicado em ' + town.getName() + '.';
             this.console.log('[AutoBuild] ' + msg);
         } catch (e) {
             this.console.log('[AutoBuild] Erro ao aplicar preset naval: ' + e.message);
         }
     };
-
     /* Preset Terrestre: tudo no maximo, exceto porto=5 e muro=0.
        Aplica SOMENTE na cidade atualmente ativa no jogo. */
     applyLandPreset = () => {
@@ -138,7 +155,6 @@ class AutoBuild extends ModernUtil {
             const town = uw.ITowns.getCurrentTown();
             const town_id = town.getId();
             const buildings = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
-
             const preset = {};
             for (const b of buildings) {
                 const maxLevel = uw.GameData.buildings[b]?.max_level ?? 45;
@@ -146,71 +162,55 @@ class AutoBuild extends ModernUtil {
                 else if (b === 'wall') preset[b] = 0;
                 else preset[b] = maxLevel;
             }
-
             this.towns_buildings[town_id] = preset;
             this.storage.save('buildings', this.towns_buildings);
             if (!this.interval) this.startInterval();
-
             this.setPolisInSettings(town_id);
             this.updateTitle();
-
             const msg = 'Preset Terrestre aplicado em ' + town.getName() + '.';
             this.console.log('[AutoBuild] ' + msg);
         } catch (e) {
             this.console.log('[AutoBuild] Erro ao aplicar preset terrestre: ' + e.message);
         }
     };
-
     /* Update the senate view */
     updateSenate = (event, handler) => {
         if (handler.context !== "building_senate") return;
-
         // Edit the width of the window to fit the new element
         handler.wnd.setWidth(850);
-
         // Compute the id of the window
         const id = `gpwnd_${handler.wnd.getID()}`;
-
         // Loop until the element is found
         const updateView = () => {
             const interval = setInterval(() => {
                 const $window = uw.$('#' + id);
-
                 const $mainTasks = $window.find('#main_tasks');
                 if (!$mainTasks.length) return;
-
                 $mainTasks.hide();
-
                 let $newElement = uw.$('<div></div>').append(this.settings());
-
                 $newElement.css({
                     position: $mainTasks.css('position'),
                     left: $mainTasks.css('left') - 20,
                     top: $mainTasks.css('top'),
                 });
                 $mainTasks.after($newElement);
-
                 // Center the techTree
                 const $techTree = $window.find('#techtree');
                 $techTree.css({
                     position: 'relative',
                     left: "40px",
                 });
-
-                // Edit the width of the 
+                // Edit the width of the
                 $window.css({
                     overflowY: 'visible',
                 });
-
                 clearInterval(interval);
             }, 10);
-
-            // If the element is not found, stop the interval 
+            // If the element is not found, stop the interval
             setTimeout(() => {
                 clearInterval(interval);
             }, 100);
         };
-
         // subscribe to set content event
         const oldSetContent = handler.wnd.setContent2;
         handler.wnd.setContent2 = (...params) => {
@@ -218,20 +218,16 @@ class AutoBuild extends ModernUtil {
             oldSetContent(...params);
         };
     };
-
     /* Given the town id, set the polis in the settings menu */
     setPolisInSettings = town_id => {
         let town = uw.ITowns.towns[town_id];
-
         /* If the town is in the active list set */
         let town_buildings = this.towns_buildings?.[town_id] ?? { ...town.buildings()?.attributes } ?? {};
         let buildings = { ...town.buildings().attributes };
-
         const getBuildingHtml = (building, bg) => {
             let color = 'lime';
             if (buildings[building] > town_buildings[building]) color = 'red';
             else if (buildings[building] < town_buildings[building]) color = 'orange';
-
             return `
                 <div class="auto_build_box" onclick="window.modernBot.autoBuild.editBuildingLevel(${town_id}, '${building}', 0)" style="cursor: pointer">
                 <div class="item_icon auto_build_building" style="background-position: -${bg[0]}px -${bg[1]}px;">
@@ -241,18 +237,16 @@ class AutoBuild extends ModernUtil {
                 </div>
             </div>`;
         };
-
         /* If the town is in a group, the groups */
         const groups =
             `(${Object.values(uw.ITowns.getTownGroups())
                 .filter(group => group.id > 0 && group.id !== -1 && group.towns[town_id])
                 .map(group => group.name)
                 .join(', ')})` || '';
-
         uw.$('[id="buildings_lvl_buttons"]').html(`
         <div id="build_settings_${town_id}">
             <div style="width: 600px; margin-bottom: 3px; display: inline-flex">
-            <a class="gp_town_link" href="${town.getLinkFragment()}">${town.getName()}</a> 
+            <a class="gp_town_link" href="${town.getLinkFragment()}">${town.getName()}</a>
             <p style="font-weight: bold; margin: 0px 5px"> [${town.getPoints()} pts] </p>
             <p style="font-weight: bold; margin: 0px 5px"> ${groups} </p>
             </div>
@@ -273,42 +267,33 @@ class AutoBuild extends ModernUtil {
             </div>
         </div>`);
     };
-
     /* call with town_id, building type and level to be added */
     editBuildingLevel = (town_id, name, d) => {
         const town = uw.ITowns.getTown(town_id);
-
         const { max_level, min_level } = uw.GameData.buildings[name];
-
         const town_buildings = this.towns_buildings?.[town_id] ?? { ...town.buildings()?.attributes } ?? {};
         const townBuildings = town.buildings().attributes;
         const current_lvl = parseInt(uw.$(`#build_lvl_${name}`).text());
         if (d) {
             /* if shift is pressed, add or remove 10 */
             d = this.shiftHeld ? d * 10 : d;
-
             /* Check if bottom or top overflow */
             town_buildings[name] = Math.min(Math.max(current_lvl + d, min_level), max_level);
         } else {
             if (town_buildings[name] == current_lvl) town_buildings[name] = Math.min(Math.max(50, min_level), max_level);
             else town_buildings[name] = townBuildings[name];
         }
-
         const color = town_buildings[name] > townBuildings[name] ? 'orange' : town_buildings[name] < townBuildings[name] ? 'red' : 'lime';
-
         uw.$(`#build_settings_${town_id} #build_lvl_${name}`).css('color', color).text(town_buildings[name]);
-
         if (town_id.toString() in this.towns_buildings) {
             this.towns_buildings[town_id] = town_buildings;
             this.storage.save('buildings', this.towns_buildings);
         }
     };
-
     isActive = town_id => {
         let town = uw.ITowns.towns[town_id];
         return !this.towns_buildings?.[town.id];
     };
-
     updateTitle = () => {
         let town = uw.ITowns.getCurrentTown();
         if (town.id.toString() in this.towns_buildings) {
@@ -317,11 +302,9 @@ class AutoBuild extends ModernUtil {
             uw.$('[id="auto_build_title"]').css('filter', '');
         }
     };
-
     /* Call to toggle on and off (trigger the current town) */
     toggle = () => {
         let town = uw.ITowns.getCurrentTown();
-
         if (!(town.id.toString() in this.towns_buildings)) {
             this.console.log(`${town.name}: Auto Build On`);
             this.towns_buildings[town.id] = {};
@@ -336,25 +319,20 @@ class AutoBuild extends ModernUtil {
             this.storage.save('buildings', this.towns_buildings);
             this.console.log(`${town.name}: Auto Build Off`);
         }
-
         this.updateTitle();
     };
-
     /* Main loop for building — cidades em paralelo */
     main = async () => {
         if (window.__multbot_captcha_active) return;
         await Promise.allSettled(
             Object.keys(this.towns_buildings).map(async (town_id, i) => {
                 await this.sleep(i * 300); // delay escalonado
-
                 if (!uw.ITowns.towns[town_id]) {
                     delete this.towns_buildings[town_id];
                     this.storage.save('buildings', this.towns_buildings);
                     return;
                 }
-
                 if (this.isFullQueue(town_id)) return;
-
                 if (this.isDone(town_id)) {
                     delete this.towns_buildings[town_id];
                     this.storage.save('buildings', this.towns_buildings);
@@ -363,12 +341,10 @@ class AutoBuild extends ModernUtil {
                     this.console.log(`${town.name}: Auto Build Done`);
                     return;
                 }
-
                 await this.getNextBuild(town_id);
             })
         );
     };
-
     /* Make post request to the server to buildup the building.
        Registra a tentativa (cidade + predio) em _lastBuildAttempt
        ANTES de disparar a requisicao, para o interceptor de mensagens
@@ -380,13 +356,10 @@ class AutoBuild extends ModernUtil {
         let buildData = uw.MM.getModels().BuildingBuildData?.[town_id]?.attributes?.building_data?.[type];
         if (!buildData) return;
         let { resources_for, population_for } = buildData;
-
         if (town.getAvailablePopulation() < population_for) return;
         const m = 20;
         if (wood < resources_for.wood + m || stone < resources_for.stone + m || iron < resources_for.iron + m) return;
-
-        this._lastBuildAttempt = { townName: town.getName(), building: type, at: Date.now() };
-
+        this._lastBuildAttempt = { townName: town.getName(), townId: town_id, building: type, at: Date.now() };
         let data = {
             model_url: 'BuildingOrder',
             action_name: 'buildUp',
@@ -405,7 +378,6 @@ class AutoBuild extends ModernUtil {
         await this.sleep(1234);
         return true;
     };
-
     /* Make post request to tear building down */
     postTearDown = async (type, town_id, town) => {
         let data = {
@@ -418,7 +390,6 @@ class AutoBuild extends ModernUtil {
         this.console.log(`${town.getName()}: Build Down ${this.getGameName('building', type)}`);
         await this.sleep(1234);
     };
-
     /* return true if the quee is full */
     isFullQueue = town_id => {
         const town = uw.ITowns.getTown(town_id);
@@ -430,7 +401,6 @@ class AutoBuild extends ModernUtil {
         }
         return false;
     };
-
     /* return true if building match polis */
     isDone = town_id => {
         const town = uw.ITowns.getTown(town_id);
@@ -442,23 +412,23 @@ class AutoBuild extends ModernUtil {
         }
         return true;
     };
-
-    /* Tenta construir tudo que for possível — sem ordem de prioridade */
+    /* Tenta construir tudo que for possível — sem ordem de prioridade.
+       Predios em cooldown (ver _isBuildBlocked) sao pulados, entao um
+       erro de requisitos numa unica construcao nao trava as outras. */
     getNextBuild = async town_id => {
         const town    = uw.ITowns.towns[town_id];
         const target  = this.towns_buildings[town_id];
         const current = { ...town.getBuildings().attributes };
-
         // Conta ordens já na fila
         for (const order of town.buildingOrders().models) {
             if (order.attributes.tear_down) current[order.attributes.building_type] -= 1;
             else                            current[order.attributes.building_type] += 1;
         }
-
         // Tenta cada edifício que ainda precisa de trabalho
         for (const build of Object.keys(target)) {
             if (this.isFullQueue(town_id)) break;
             if (target[build] > current[build]) {
+                if (this._isBuildBlocked(town_id, build)) continue;
                 const built = await this.postBuild(build, town_id);
                 if (built) current[build] += 1;
             } else if (target[build] < current[build]) {
