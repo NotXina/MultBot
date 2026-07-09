@@ -78,8 +78,13 @@ class ModernUtil {
     };
 
     /* FONTE UNICA para "nome de exibicao de uma cidade a partir do ID".
-       Simples e leve de proposito: so consulta uw.ITowns.towns (suas
-       proprias cidades) e uw.WMap.towns como fallback legado. */
+       3 fontes em ordem: 1) uw.ITowns.towns (cidades do proprio jogador,
+       mais rapido); 2) Backbone Town collection (pega cidades de outros
+       jogadores que ja passaram pelo cache do jogo, ex: alvos de ataque/
+       colonizacao); 3) uw.WMap.towns como ultimo fallback legado.
+       A fonte 2 foi incorporada aqui depois de nascer duplicada dentro
+       do colonize_ship_sender.js — resolvia nomes que as fontes 1 e 3
+       nao pegavam (cidades-alvo que nao sao do jogador). */
     getTownName = (townId) => {
         if (!townId) return String(townId);
 
@@ -91,6 +96,14 @@ class ModernUtil {
             const t1 = towns[id] ? towns[id] : towns[ids];
             if (t1 && typeof t1.getName === 'function') {
                 return t1.getName() + ' (#' + ids + ')';
+            }
+
+            const allTowns = uw.MM?.getOnlyCollectionByName('Town')?.models ?? [];
+            for (const t of allTowns) {
+                const tid = t.attributes?.id ?? t.id;
+                if (parseInt(tid) === id) {
+                    return (t.attributes?.name ?? '?') + ' (#' + ids + ')';
+                }
             }
 
             const wmapTowns = (uw.WMap && uw.WMap.towns) ? uw.WMap.towns : {};
