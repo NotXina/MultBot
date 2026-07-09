@@ -1,10 +1,10 @@
-class ModernBot {
+class MultBot {
     constructor() {
         this.console = new BotConsole();
-        this.storage = new ModernStorage();
+        this.storage = new MultStorage();
 
         this.$ui = uw.$("#ui_box");
-        this.$menu = this.createModernMenu();
+        this.$menu = this.createMultMenu();
         const $divider = uw.$('<div class="divider"></div>');
 
         this.autoFarm = this._safeInit('AutoFarm', () => new AutoFarm(this.console, this.storage));
@@ -34,8 +34,8 @@ class ModernBot {
         this.statusPanel        = this._safeInit('StatusPanel', () => new StatusPanel(this.console, this.storage));
 
         this.settingsFactory = this._safeInit('SettingsWindow', () => new createGrepoWindow({
-            id: 'MODERN_BOT',
-            title: 'ModernBot (MultBot)',
+            id: 'MULT_BOT',
+            title: 'MultBot',
             size: [845, 560],
             tabs: [
                 {
@@ -178,8 +178,8 @@ class ModernBot {
         if (this.settingsFactory) this.settingsFactory.activate();
 
         uw.$('.gods_area_buttons').append(`
-            <div class='circle_button modern_bot_settings' onclick='window.modernBot.settingsFactory.openWindow()'>
-                <div style='width: 27px; height: 27px; background: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/gear.png) no-repeat 6px 5px' class='icon js-caption'></div>
+            <div class='circle_button mult_bot_settings' onclick='window.multBot.settingsFactory.openWindow()'>
+                <div style='width: 27px; height: 27px; display:flex; align-items:center; justify-content:center; font-size:18px;' class='icon js-caption' title='MultBot'>⚙️</div>
             </div>
         `);
 
@@ -193,11 +193,11 @@ class ModernBot {
             const oldRender = townController.controller.town_groups_list_view.render;
             townController.controller.town_groups_list_view.render = function () {
                 oldRender.call(this);
-                const both = `<div style='position: absolute; background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/hammer_wrench.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const build = `<div style='background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/hammer_only.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const troop = `<div style='background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/wrench.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const townIds = uw.modernBot.autoBuild ? Object.keys(uw.modernBot.autoBuild.towns_buildings) : [];
-                const troopsIds = uw.modernBot.autoTrain ? uw.modernBot.autoTrain.getActiveList().map(entry => entry.toString()) : [];
+                const both = `<div style='position: absolute; display:flex; align-items:center; justify-content:center; font-size:13px; margin: 1px; position: absolute; height: 20px; width: 25px; right: 18px;' title='Construção + Recrutamento'>🔨🔧</div>`;
+                const build = `<div style='display:flex; align-items:center; justify-content:center; font-size:14px; margin: 1px; position: absolute; height: 20px; width: 25px; right: 18px;' title='Construção'>🔨</div>`;
+                const troop = `<div style='display:flex; align-items:center; justify-content:center; font-size:14px; margin: 1px; position: absolute; height: 20px; width: 25px; right: 18px;' title='Recrutamento'>🔧</div>`;
+                const townIds = uw.multBot.autoBuild ? Object.keys(uw.multBot.autoBuild.towns_buildings) : [];
+                const troopsIds = uw.multBot.autoTrain ? uw.multBot.autoTrain.getActiveList().map(entry => entry.toString()) : [];
                 uw.$('.town_group_town').each(function () {
                     const townId = parseInt(uw.$(this).attr('data-townid'));
                     const is_build = townIds.includes(townId.toString());
@@ -213,8 +213,8 @@ class ModernBot {
         setTimeout(editController, 2500);
     };
 
-    createModernMenu = () => {
-        const $menu = uw.$('<div id="modern_menu" class="toolbar_activities"></div>');
+    createMultMenu = () => {
+        const $menu = uw.$('<div id="mult_menu" class="toolbar_activities"></div>');
         $menu.css({
             'position': 'absolute',
             'top': '3px',
@@ -238,7 +238,7 @@ if (!window.__multbot_loaded__) {
     window.__multbot_loaded__ = true;
     var _multbot_loader = setInterval(() => {
         if (uw.$("#loader").length > 0) return;
-        uw.modernBot = new ModernBot();
+        uw.multBot = new MultBot();
         clearInterval(_multbot_loader);
     }, 100);
 }

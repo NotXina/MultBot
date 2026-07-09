@@ -1,4 +1,4 @@
-class AutoTrain extends ModernUtil {
+class AutoTrain extends MultUtil {
     POWER_LIST = ['call_of_the_ocean', 'spartan_training', 'fertility_improvement'];
     GROUND_ORDER    = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot'];
     NAVAL_ORDER     = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship'];
@@ -135,7 +135,7 @@ class AutoTrain extends ModernUtil {
             <div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
-            <div id="auto_train_title" class="game_header bold" style="position: relative; cursor: pointer" onclick="window.modernBot.autoTrain.trigger()"> 
+            <div id="auto_train_title" class="game_header bold" style="position: relative; cursor: pointer" onclick="window.multBot.autoTrain.trigger()"> 
             <span style="z-index: 10; position: relative;">Auto Train </span>
             <div style="position: absolute; right: 10px; top: 4px; font-size: 10px; z-index: 10"> (click to reset) </div>
             <span class="command_count"></span></div>
@@ -270,9 +270,9 @@ class AutoTrain extends ModernUtil {
             }
             return `
                 <div class="auto_build_box">
-                <div class="unit_icon50x50 ${troop}" onclick="window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 0)" style="cursor: pointer">
-                    <div class="auto_build_up_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', 1)" ></div>
-                    <div class="auto_build_down_arrow" onclick="event.stopPropagation(); window.modernBot.autoTrain.editTroopCount(${town_id}, '${troop}', -1)"></div>
+                <div class="unit_icon50x50 ${troop}" onclick="window.multBot.autoTrain.editTroopCount(${town_id}, '${troop}', 0)" style="cursor: pointer">
+                    <div class="auto_build_up_arrow" onclick="event.stopPropagation(); window.multBot.autoTrain.editTroopCount(${town_id}, '${troop}', 1)" ></div>
+                    <div class="auto_build_down_arrow" onclick="event.stopPropagation(); window.multBot.autoTrain.editTroopCount(${town_id}, '${troop}', -1)"></div>
                     <p style="color: red" id="troop_lvl_${troop}" class="auto_build_lvl"> 0 <p>
                 </div>
             </div>`;

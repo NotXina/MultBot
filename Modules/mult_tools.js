@@ -2,7 +2,7 @@
 //  MODULE: MultTools
 //  Ferramentas em massa para todas as cidades
 // ══════════════════════════════════════════════════════
-class MultTools extends ModernUtil {
+class MultTools extends MultUtil {
     constructor(c, s) {
         super(c, s);
     }
@@ -49,11 +49,11 @@ class MultTools extends ModernUtil {
 
     /* Preset em massa: aplica em TODAS as cidades via a API publica
        do AutoBuild (applyPresetToAllTowns), em vez de ler/escrever
-       uw.modernBot.autoBuild.towns_buildings diretamente. Se o AutoBuild
+       uw.multBot.autoBuild.towns_buildings diretamente. Se o AutoBuild
        nao inicializou, avisa em vez de estourar exceção. */
     applyPreset = () => {
         try {
-            const autoBuild = uw.modernBot.autoBuild;
+            const autoBuild = uw.multBot.autoBuild;
             if (!autoBuild) { uw.$('#mult_status').text('Auto Build não encontrado.').css('color','#f87171'); return; }
 
             const count = autoBuild.applyPresetToAllTowns({ barracks: 5, wall: 0 });
@@ -75,7 +75,7 @@ class MultTools extends ModernUtil {
        diretamente. */
     applyNavalPreset = () => {
         try {
-            const autoTrain = uw.modernBot.autoTrain;
+            const autoTrain = uw.multBot.autoTrain;
             if (!autoTrain) { uw.$('#mult_status').text('Auto Train não encontrado.').css('color','#f87171'); return; }
 
             const townIds = Object.keys(uw.ITowns.towns);
@@ -114,7 +114,7 @@ class MultTools extends ModernUtil {
        publica ensureActive(), sem precisar checar _active/_tick aqui. */
     applyResearchPreset = () => {
         try {
-            const research = uw.modernBot.autoResearch;
+            const research = uw.multBot.autoResearch;
             if (!research) {
                 uw.$('#mult_status').text('Auto Pesquisa não encontrado.').css('color','#f87171');
                 return;

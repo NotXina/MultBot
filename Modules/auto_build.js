@@ -1,4 +1,4 @@
-class AutoBuild extends ModernUtil {
+class AutoBuild extends MultUtil {
     /* Quando o jogo rejeita uma construcao por requisitos nao
        atendidos (ex: Porto precisa de outro predio num nivel
        minimo), esse predio fica "bloqueado" por esse tempo antes
@@ -112,7 +112,7 @@ class AutoBuild extends ModernUtil {
             <div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
-            <div id="auto_build_title" style="cursor: pointer; filter: ${this.interval ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : ''}" class="game_header bold" onclick="window.modernBot.autoBuild.toggle()"> Auto Build <span class="command_count"></span>
+            <div id="auto_build_title" style="cursor: pointer; filter: ${this.interval ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : ''}" class="game_header bold" onclick="window.multBot.autoBuild.toggle()"> Auto Build <span class="command_count"></span>
                 <div style="position: absolute; right: 10px; top: 4px; font-size: 10px;"> (click to toggle) </div>
             </div>
             <div style="padding: 6px; display:flex; gap:6px; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
@@ -243,10 +243,10 @@ class AutoBuild extends ModernUtil {
             if (buildings[building] > town_buildings[building]) color = 'red';
             else if (buildings[building] < town_buildings[building]) color = 'orange';
             return `
-                <div class="auto_build_box" onclick="window.modernBot.autoBuild.editBuildingLevel(${town_id}, '${building}', 0)" style="cursor: pointer">
+                <div class="auto_build_box" onclick="window.multBot.autoBuild.editBuildingLevel(${town_id}, '${building}', 0)" style="cursor: pointer">
                 <div class="item_icon auto_build_building" style="background-position: -${bg[0]}px -${bg[1]}px;">
-                    <div class="auto_build_up_arrow" onclick="event.stopPropagation(); window.modernBot.autoBuild.editBuildingLevel(${town_id}, '${building}', 1)" ></div>
-                    <div class="auto_build_down_arrow" onclick="event.stopPropagation(); window.modernBot.autoBuild.editBuildingLevel(${town_id}, '${building}', -1)"></div>
+                    <div class="auto_build_up_arrow" onclick="event.stopPropagation(); window.multBot.autoBuild.editBuildingLevel(${town_id}, '${building}', 1)" ></div>
+                    <div class="auto_build_down_arrow" onclick="event.stopPropagation(); window.multBot.autoBuild.editBuildingLevel(${town_id}, '${building}', -1)"></div>
                     <p style="color: ${color}" id="build_lvl_${building}" class="auto_build_lvl"> ${town_buildings[building]} <p>
                 </div>
             </div>`;

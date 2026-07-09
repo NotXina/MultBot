@@ -16,14 +16,14 @@
 //     pendente e reconciliado: se ja deveria ter disparado, dispara
 //     na hora; senao, reagenda o tempo restante.
 //  2) Chamadas de rede (envio de tropas, cancelCommand) usam
-//     this.ajaxPostWithTimeout (herdado de ModernUtil) - evita
+//     this.ajaxPostWithTimeout (herdado de MultUtil) - evita
 //     Promise pendurada para sempre se a rede travar.
 //  3) O tick principal roda via this.createGuardedInterval - evita
 //     dois ciclos rodando ao mesmo tempo sobre o mesmo estado.
 //  4) _getTownName foi removido - usa this.getTownName (herdado de
-//     ModernUtil), eliminando a duplicacao dessa logica.
+//     MultUtil), eliminando a duplicacao dessa logica.
 // ══════════════════════════════════════════════════════
-class AutoDodge extends ModernUtil {
+class AutoDodge extends MultUtil {
     EVACUATE_LEAD_SECONDS = 15;
     RECALL_BUFFER_SECONDS = 20;
     CAPTURE_DELAY_MS = 2500;

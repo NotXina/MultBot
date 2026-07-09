@@ -4,7 +4,7 @@
 //  entrante. Endpoint: building_farm / request_militia
 //  Payload exato do Noct AutoMilitia.
 // ══════════════════════════════════════════════════════
-class AutoMilitia extends ModernUtil {
+class AutoMilitia extends MultUtil {
     constructor(c, s) {
         super(c, s);
 

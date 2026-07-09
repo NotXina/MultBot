@@ -3,7 +3,7 @@
 //  Envia colonize_ships de todas as cidades como apoio
 //  para uma cidade-alvo configurada pelo usuário.
 // ══════════════════════════════════════════════════════
-class ColonizeShipSender extends ModernUtil {
+class ColonizeShipSender extends MultUtil {
     constructor(c, s) {
         super(c, s);
         this._running    = false;

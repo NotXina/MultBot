@@ -1,4 +1,4 @@
-class AutoParty extends ModernUtil {
+class AutoParty extends MultUtil {
     constructor(c, s) {
         super(c, s);
 

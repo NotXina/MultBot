@@ -1,4 +1,4 @@
-class AutoGratis extends ModernUtil {
+class AutoGratis extends MultUtil {
     constructor(c, s) {
         super(c, s);
 
@@ -20,7 +20,7 @@ class AutoGratis extends ModernUtil {
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
             <div id="auto_gratis_title" style="cursor: pointer; filter: ${this.autogratis ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : ''
-            }" class="game_header bold" onclick="window.modernBot.autoGratis.toggle()"> Auto Gratis <span class="command_count"></span>
+            }" class="game_header bold" onclick="window.multBot.autoGratis.toggle()"> Auto Gratis <span class="command_count"></span>
                 <div style="position: absolute; right: 10px; top: 4px; font-size: 10px;"> (click to toggle) </div>
             </div>
             <div style="padding: 5px; font-weight: 600">
@@ -32,7 +32,7 @@ class AutoGratis extends ModernUtil {
             </div>
             <div style="padding: 0 5px 8px; font-size: 11px; font-weight: 500;">
                 <label style="cursor: pointer;">
-                    <input type="checkbox" ${this.onlyActiveTown ? 'checked' : ''} onchange="window.modernBot.autoGratis.setOnlyActiveTown(this.checked)" />
+                    <input type="checkbox" ${this.onlyActiveTown ? 'checked' : ''} onchange="window.multBot.autoGratis.setOnlyActiveTown(this.checked)" />
                     Only fire on the actively-viewed town (legacy behaviour)
                 </label>
             </div>

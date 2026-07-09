@@ -6,7 +6,7 @@
 //  - Cidade Y: cidade do jogador com menor % storage
 //  Envia o máximo balanceado via town_info/trade
 // ══════════════════════════════════════════════════════
-class AutoSendResources extends ModernUtil {
+class AutoSendResources extends MultUtil {
     constructor(c, s) {
         super(c, s);
         this._active     = false;

@@ -1,4 +1,4 @@
-class AutoFarm extends ModernUtil {
+class AutoFarm extends MultUtil {
     constructor(c, s) {
         super(c, s);
 
@@ -25,24 +25,24 @@ class AutoFarm extends ModernUtil {
     /* Create the dropdown menu */
     createDropdown = () => {
         this.$content = uw.$("<div></div>")
-        this.$title = uw.$("<p>Modern Farm</p>").css({ "text-align": "center", "margin": "2px", "font-weight": "bold", "font-size": "16px" })
+        this.$title = uw.$("<p>Mult Farm</p>").css({ "text-align": "center", "margin": "2px", "font-weight": "bold", "font-size": "16px" })
         this.$content.append(this.$title)
 
         this.$duration = uw.$("<p>Duration:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
-        this.$button5 = this.createButton("modern_farm_5", "5 min", this.toggleDuration)
-        this.$button10 = this.createButton("modern_farm_10", "10 min", this.toggleDuration)
-        this.$button20 = this.createButton("modern_farm_20", "20 min", this.toggleDuration)
+        this.$button5 = this.createButton("mult_farm_5", "5 min", this.toggleDuration)
+        this.$button10 = this.createButton("mult_farm_10", "10 min", this.toggleDuration)
+        this.$button20 = this.createButton("mult_farm_20", "20 min", this.toggleDuration)
         this.$content.append(this.$duration, this.$button5, this.$button10, this.$button20)
 
         this.$storage = uw.$("<p>Storage:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
-        this.$button80 = this.createButton("modern_farm_80", "80%", this.toggleStorage).css({ "width": "70px" })
-        this.$button90 = this.createButton("modern_farm_90", "90%", this.toggleStorage).css({ "width": "80px" })
-        this.$button100 = this.createButton("modern_farm_100", "100%", this.toggleStorage).css({ "width": "80px" })
+        this.$button80 = this.createButton("mult_farm_80", "80%", this.toggleStorage).css({ "width": "70px" })
+        this.$button90 = this.createButton("mult_farm_90", "90%", this.toggleStorage).css({ "width": "80px" })
+        this.$button100 = this.createButton("mult_farm_100", "100%", this.toggleStorage).css({ "width": "80px" })
         this.$content.append(this.$storage, this.$button80, this.$button90, this.$button100)
 
         this.$gui = uw.$("<p>Gui:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
-        this.$guiOn = this.createButton("modern_farm_gui_on", "ON", this.toggleGui)
-        this.$guiOff = this.createButton("modern_farm_gui_off", "OFF", this.toggleGui)
+        this.$guiOn = this.createButton("mult_farm_gui_on", "ON", this.toggleGui)
+        this.$guiOff = this.createButton("mult_farm_gui_off", "OFF", this.toggleGui)
         this.$content.append(this.$gui, this.$guiOn, this.$guiOff)
 
         this.$popup = this.createPopup(423, 250, 170, this.$content)
@@ -112,9 +112,9 @@ class AutoFarm extends ModernUtil {
         const { id } = event.currentTarget
 
         // Update the timer
-        if (id == "modern_farm_5") this.timing = 300_000
-        if (id == "modern_farm_10") this.timing = 600_000
-        if (id == "modern_farm_20") this.timing = 1_200_000
+        if (id == "mult_farm_5") this.timing = 300_000
+        if (id == "mult_farm_10") this.timing = 600_000
+        if (id == "mult_farm_20") this.timing = 1_200_000
 
         // Save the settings and update the buttons
         this.storage.save('af_level', this.timing);
@@ -125,9 +125,9 @@ class AutoFarm extends ModernUtil {
         const { id } = event.currentTarget
 
         // Update the percent
-        if (id == "modern_farm_80") this.percent = 0.8
-        if (id == "modern_farm_90") this.percent = 0.9
-        if (id == "modern_farm_100") this.percent = 1
+        if (id == "mult_farm_80") this.percent = 0.8
+        if (id == "mult_farm_90") this.percent = 0.9
+        if (id == "mult_farm_100") this.percent = 1
 
         // Save the settings and update the buttons
         this.storage.save('af_percent', this.percent);
@@ -139,8 +139,8 @@ class AutoFarm extends ModernUtil {
         const { id } = event.currentTarget
 
         // Update the gui
-        if (id == "modern_farm_gui_on") this.gui = true
-        if (id == "modern_farm_gui_off") this.gui = false
+        if (id == "mult_farm_gui_on") this.gui = true
+        if (id == "mult_farm_gui_off") this.gui = false
 
         // Save the settings and update the buttons
         this.storage.save('af_gui', this.gui);

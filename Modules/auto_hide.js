@@ -1,4 +1,4 @@
-class AutoHide extends ModernUtil {
+class AutoHide extends MultUtil {
     constructor(c, s) {
         super(c, s);
 
@@ -13,7 +13,7 @@ class AutoHide extends ModernUtil {
                     class: 'button_new',
                     id: 'autoCaveButton',
                     style: 'float: right; margin: 0px; left: 169px; position: absolute; top: 56px; width: 66px',
-                    html: '<div onclick="window.modernBot.autoHide.toggle()"><div class="left"></div><div class="right"></div><div class="caption js-caption"> Auto <div class="effect js-effect"></div></div><div>'
+                    html: '<div onclick="window.multBot.autoHide.toggle()"><div class="left"></div><div class="right"></div><div class="caption js-caption"> Auto <div class="effect js-effect"></div></div><div>'
                 });
                 box.prepend(butt);
                 this.updateSettings(uw.ITowns.getCurrentTown().id);
@@ -54,7 +54,7 @@ class AutoHide extends ModernUtil {
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
             <div id="auto_cave_title" style="cursor: pointer; filter: ${this.autogratis ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : ''
-            }" class="game_header bold" onclick="window.modernBot.autoHide.toggle()"> Auto Hide <span class="command_count"></span>
+            }" class="game_header bold" onclick="window.multBot.autoHide.toggle()"> Auto Hide <span class="command_count"></span>
                 <div style="position: absolute; right: 10px; top: 4px; font-size: 10px;"> (click to toggle) </div>
             </div>
             <div style="padding: 5px; font-weight: 600">

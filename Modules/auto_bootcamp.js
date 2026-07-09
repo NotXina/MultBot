@@ -1,4 +1,4 @@
-class AutoBootcamp extends ModernUtil {
+class AutoBootcamp extends MultUtil {
     constructor(console, storage) {
         super(console, storage);
 
@@ -13,7 +13,7 @@ class AutoBootcamp extends ModernUtil {
         if (this.storage.load('bootcamp_use_def', false)) this.triggerUseDef();
 
         // Attach the observer to the window open event
-        uw.$.Observer(uw.GameEvents.window.open).subscribe("modernAttackSpot", this.updateWindow);
+        uw.$.Observer(uw.GameEvents.window.open).subscribe("multAttackSpot", this.updateWindow);
     }
 
     updateWindow = (event, handler) => {

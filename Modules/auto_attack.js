@@ -15,10 +15,10 @@
 //     mesmo ataque duas vezes antes do jogo atualizar a contagem
 //     de tropas).
 //  2) O envio de ataque usa this.ajaxPostWithTimeout (herdado de
-//     ModernUtil) - evita Promise pendurada para sempre se a rede
+//     MultUtil) - evita Promise pendurada para sempre se a rede
 //     travar no meio do envio.
 //  3) _getTownName foi removido - usa this.getTownName (herdado
-//     de ModernUtil), eliminando a duplicacao dessa logica.
+//     de MultUtil), eliminando a duplicacao dessa logica.
 //  4) Suporte a envio de HEROI junto com o ataque. Payload real
 //     capturado via devtools (POST town_info?action=send_units):
 //       {"hoplite":9,"harpy":4,"heroes":"andromeda",
@@ -47,7 +47,7 @@
 //  Periodo de descanso (cooldown) por alvo, com jitter de +-10%,
 //  persistido em storage (sobrevive a reload).
 // ══════════════════════════════════════════════════════
-class AutoAttack extends ModernUtil {
+class AutoAttack extends MultUtil {
     CHECK_INTERVAL_MS = 20000;
     SEND_DELAY_MS = 800;
     JITTER_PERCENT = 0.10;
@@ -215,7 +215,7 @@ class AutoAttack extends ModernUtil {
         html += '<div style="width:60px;">';
         html += '<label style="font-size:11px;font-weight:bold;" title="Sempre envia TUDO que estiver disponivel dessa unidade no momento do ataque.">&nbsp;</label><br>';
         html += '<label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;padding:4px 0;">';
-        html += '<input type="checkbox" id="attack_qty_max" onchange="window.modernBot.autoAttack.toggleMaxQty()"> Max';
+        html += '<input type="checkbox" id="attack_qty_max" onchange="window.multBot.autoAttack.toggleMaxQty()"> Max';
         html += '</label>';
         html += '</div>';
         html += '<div>';
@@ -418,7 +418,7 @@ class AutoAttack extends ModernUtil {
         for (const u of this._stagingUnits) {
             html += '<span style="background:rgba(0,0,0,0.08);border-radius:3px;padding:2px 6px;display:inline-flex;align-items:center;gap:4px;">';
             html += this._formatUnitEntry(u);
-            html += '<span onclick="window.modernBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;">X</span>';
+            html += '<span onclick="window.multBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;">X</span>';
             html += '</span>';
         }
         html += '</div>';
@@ -585,7 +585,7 @@ class AutoAttack extends ModernUtil {
             html += '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px;" title="' + townName + ' [' + unitsLabel + '] -> ' + targetsLabel + restLabel + '">';
             html += '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + restLabel;
             html += '</div>';
-            html += '<span onclick="window.modernBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;flex-shrink:0;padding:0 4px;">X</span>';
+            html += '<span onclick="window.multBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;flex-shrink:0;padding:0 4px;">X</span>';
             html += '</div>';
         }
 

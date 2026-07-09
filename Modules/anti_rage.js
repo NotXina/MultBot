@@ -1,4 +1,4 @@
-class AntiRage extends ModernUtil {
+class AntiRage extends MultUtil {
 	GOODS_ICONS = {
 		athena: 'js-power-icon.animated_power_icon.animated_power_icon_45x45.power_icon45x45.power.strength_of_heroes',
 		zeus: 'js-power-icon.animated_power_icon.animated_power_icon_45x45.power_icon45x45.power.fair_wind',

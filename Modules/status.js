@@ -3,13 +3,13 @@
 //  Painel de status em tempo real de todos os módulos
 //
 //  PDCA - correcao desta rodada: _getTownName local removido,
-//  usa this.getTownName (herdado de ModernUtil).
+//  usa this.getTownName (herdado de MultUtil).
 //
 //  PDCA - nesta rodada: adicionadas linhas de Auto Ataque,
 //  Auto Fuga (Dodge), Sacrificio de Ares e Auto Pesquisa,
 //  que ja existiam no bot mas nao apareciam no painel.
 // ══════════════════════════════════════════════════════
-class StatusPanel extends ModernUtil {
+class StatusPanel extends MultUtil {
     constructor(c, s) {
         super(c, s);
         this._interval = null;
@@ -109,7 +109,7 @@ class StatusPanel extends ModernUtil {
 
     _render() {
         try {
-            const bot  = uw.modernBot;
+            const bot  = uw.multBot;
             const rows = [];
 
             const farmActive  = !!bot.autoFarm?.active;
@@ -155,7 +155,7 @@ class StatusPanel extends ModernUtil {
 
     _row(label, active, value, module, method) {
         const onclick = module && method
-            ? `window.modernBot.${module}.${method}()`
+            ? `window.multBot.${module}.${method}()`
             : null;
 
         const btn = onclick

@@ -1,4 +1,4 @@
-class AutoRuralLevel extends ModernUtil {
+class AutoRuralLevel extends MultUtil {
     constructor(c, s) {
         super(c, s);
 
@@ -10,7 +10,7 @@ class AutoRuralLevel extends ModernUtil {
     }
 
     startInterval() {
-        this.enable = setInterval(this.main.bind(this), 1500);
+        this.enable = this.createGuardedInterval(this.main, 1500);
     }
 
     settings = () => {
@@ -105,7 +105,7 @@ class AutoRuralLevel extends ModernUtil {
 
                     for (let relation of locked) {
                         if (farmtown.attributes.id != relation.attributes.farm_town_id) continue;
-                        this.unlockRural(town_id, relation.attributes.farm_town_id, relation.id);
+                        await this.unlockRural(town_id, relation.attributes.farm_town_id, relation.id);
                         this.console.log(`Island ${farmtown.attributes.island_xy}: unlocked ${farmtown.attributes.name}`);
                         return;
                     }
@@ -137,7 +137,7 @@ class AutoRuralLevel extends ModernUtil {
                                 continue;
                             }
                             if (relation.attributes.expansion_stage > level) continue;
-                            this.upgradeRural(town_id, relation.attributes.farm_town_id, relation.attributes.id);
+                            await this.upgradeRural(town_id, relation.attributes.farm_town_id, relation.attributes.id);
                             this.console.log(`Island ${farmtown.attributes.island_xy}: upgraded ${farmtown.attributes.name}`);
                             return;
                         }
@@ -155,27 +155,33 @@ class AutoRuralLevel extends ModernUtil {
     /* 
         Post requests
     */
-    unlockRural = (town_id, farm_town_id, relation_id) => {
-        let data = {
-            model_url: `FarmTownPlayerRelation/${relation_id}`,
-            action_name: 'unlock',
-            arguments: {
-                farm_town_id: farm_town_id,
-            },
-            town_id: town_id,
-        };
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
+    unlockRural = async (town_id, farm_town_id, relation_id) => {
+        try {
+            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+                model_url: `FarmTownPlayerRelation/${relation_id}`,
+                action_name: 'unlock',
+                arguments: {
+                    farm_town_id: farm_town_id,
+                },
+                town_id: town_id,
+            });
+        } catch (e) {
+            this.console.log('[AutoRuralLevel] Erro ao desbloquear rural: ' + e.message);
+        }
     };
 
-    upgradeRural = (town_id, farm_town_id, relation_id) => {
-        let data = {
-            model_url: `FarmTownPlayerRelation/${relation_id}`,
-            action_name: 'upgrade',
-            arguments: {
-                farm_town_id: farm_town_id,
-            },
-            town_id: town_id,
-        };
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
+    upgradeRural = async (town_id, farm_town_id, relation_id) => {
+        try {
+            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+                model_url: `FarmTownPlayerRelation/${relation_id}`,
+                action_name: 'upgrade',
+                arguments: {
+                    farm_town_id: farm_town_id,
+                },
+                town_id: town_id,
+            });
+        } catch (e) {
+            this.console.log('[AutoRuralLevel] Erro ao evoluir rural: ' + e.message);
+        }
     };
 }
