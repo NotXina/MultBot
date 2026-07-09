@@ -126,13 +126,13 @@ class AutoTrain extends MultUtil {
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
             <div class="game_header bold" style="position: relative; cursor: pointer"> 
-            <span style="z-index: 10; position: relative;"> Settings </span>
+            <span style="z-index: 10; position: relative;"> ${this.t('at_settings')} </span>
             <span class="command_count"></span></div>
 
             <div class="split_content">
                 <div style="padding: 5px;">
-                ${this.getButtonHtml('train_passive', 'Passive', this.handleSpell, 0)}
-                ${this.getButtonHtml('train_spell', 'Spell', this.handleSpell, 1)}
+                ${this.getButtonHtml('train_passive', this.t('at_passive'), this.handleSpell, 0)}
+                ${this.getButtonHtml('train_spell', this.t('at_spell'), this.handleSpell, 1)}
                 </div>
 
                 <div id="train_percentuals" style="padding: 5px;">
@@ -153,8 +153,8 @@ class AutoTrain extends MultUtil {
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
             <div id="auto_train_title" class="game_header bold" style="position: relative; cursor: pointer" onclick="window.multBot.autoTrain.trigger()"> 
-            <span style="z-index: 10; position: relative;">Auto Train </span>
-            <div style="position: absolute; right: 10px; top: 4px; font-size: 10px; z-index: 10"> (click to reset) </div>
+            <span style="z-index: 10; position: relative;">${this.t('at_title')} </span>
+            <div style="position: absolute; right: 10px; top: 4px; font-size: 10px; z-index: 10"> ${this.t('click_to_reset')} </div>
             <span class="command_count"></span></div>
             <div id="troops_lvl_buttons"></div>    
         </div>
@@ -579,7 +579,12 @@ class AutoTrain extends MultUtil {
             town_id: town_id,
         };
 
-        this.console.log(`${uw.ITowns.towns[town_id].getName()}: recrutando ${count}x ${this.getGameName('unit', unit)} (${endpoint})`);
+        this.console.log(this.t('at_recruiting_log', {
+            town: uw.ITowns.towns[town_id].getName(),
+            count,
+            unit: this.getGameName('unit', unit),
+            endpoint,
+        }));
 
         uw.gpAjax.ajaxPost(endpoint, 'build', data);
     };
