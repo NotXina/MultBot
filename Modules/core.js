@@ -144,6 +144,39 @@ class MultUtil {
         });
     };
 
+    /* Equivalente ao ajaxPostWithTimeout, mas pra chamadas ajaxGet.
+       Sem isso, uma chamada ajaxGet que nunca chama nem o sucesso nem
+       o erro (endpoint mudou, resposta inesperada, etc) deixa a
+       Promise pendurada PRA SEMPRE - o await nunca retorna, nao da
+       excecao nenhuma, e quem estiver esperando (ex: auto_farm.js)
+       trava silenciosamente sem nenhum log de erro. */
+    ajaxGetWithTimeout = (endpoint, action, data, timeoutMs = 15000) => {
+        return new Promise((resolve, reject) => {
+            let settled = false;
+
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                reject(new Error('Timeout de rede (' + timeoutMs + 'ms) em ' + endpoint + '/' + action));
+            }, timeoutMs);
+
+            uw.gpAjax.ajaxGet(endpoint, action, data, false,
+                (res) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    resolve(res);
+                },
+                (r, status, txt) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    reject(new Error('Erro de rede: ' + txt));
+                }
+            );
+        });
+    };
+
     createGuardedInterval = (fn, intervalMs) => {
         let processing = false;
         return setInterval(async () => {
