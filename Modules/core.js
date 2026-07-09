@@ -145,6 +145,12 @@ const MULT_I18N = {
 		mt_preset_applied: '✓ Building preset: {count} cities.',
 		mt_naval_applied: '✓ Colonize ship set up in {count} cities.',
 		mt_research_applied: '✓ Auto Research active in {count} cities.',
+		at_settings: 'Settings',
+		at_passive: 'Passive',
+		at_spell: 'Spell',
+		at_title: 'Auto Train',
+		click_to_reset: '(click to reset)',
+		at_recruiting_log: '{town}: recruiting {count}x {unit} ({endpoint})',
 	},
 	pt: {
 		active: 'Ativo',
@@ -197,6 +203,12 @@ const MULT_I18N = {
 		mt_preset_applied: '✓ Preset construções: {count} cidade(s).',
 		mt_naval_applied: '✓ Colonize ship configurado em {count} cidade(s).',
 		mt_research_applied: '✓ Auto Pesquisa ativo em {count} cidade(s).',
+		at_settings: 'Configurações',
+		at_passive: 'Passiva',
+		at_spell: 'Feitiço',
+		at_title: 'Auto Recrutamento',
+		click_to_reset: '(clique pra resetar)',
+		at_recruiting_log: '{town}: recrutando {count}x {unit} ({endpoint})',
 	},
 };
 
