@@ -14,11 +14,27 @@
 (function () {
     'use strict';
 
-    if (window.__multbot_index_running__) {
+    /* uw aponta pra janela REAL da pagina (unsafeWindow), igual ao
+       resto do projeto (core.js, multbot.js, etc). Isso importa aqui:
+       em alguns gerenciadores de userscript (ex: a extensao nativa
+       "UserScripts" do Firefox), o `window` do proprio script pode
+       rodar isolado da pagina real - um guard em `window` puro pode
+       nao "grudar" se o script for reinjetado sem reload completo
+       (ex: troca de tela dentro do Grepolis sem F5), causando SyntaxError
+       de redeclaracao de classe quando os modulos sao injetados de novo
+       em cima do que ja estava la. */
+    var uw;
+    if (typeof unsafeWindow == 'undefined') {
+        uw = window;
+    } else {
+        uw = unsafeWindow;
+    }
+
+    if (uw.__multbot_index_running__) {
         console.warn('[MultBot] ⚠ index.js já está rodando nesta página — execução duplicada ignorada.');
         return;
     }
-    window.__multbot_index_running__ = true;
+    uw.__multbot_index_running__ = true;
 
     const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main/Modules';
     const MAX_RETRIES = 2;
@@ -53,6 +69,17 @@
     let completed = 0;
 
     function injectAll() {
+        /* Segunda trava, agora bem na hora de injetar de fato no DOM
+           real da pagina - mesmo que o guard la em cima (uw.__multbot_index_running__)
+           tenha falhado por algum motivo (ex: sandbox reiniciado sem
+           persistir a flag), essa aqui impede o <script> de subir duas
+           vezes e recriar as classes em cima do que ja existe. */
+        if (uw.__multbot_modules_injected__) {
+            console.warn('[MultBot] ⚠ Módulos já haviam sido injetados nesta página — injeção duplicada bloqueada.');
+            return;
+        }
+        uw.__multbot_modules_injected__ = true;
+
         const fullCode = codes.join('\n\n');
         const script = document.createElement('script');
         script.textContent = fullCode;
