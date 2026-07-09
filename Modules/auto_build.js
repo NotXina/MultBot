@@ -24,9 +24,9 @@ class AutoBuild extends MultUtil {
         this.interval = setInterval(this.main.bind(this), 5000);
         /* Add listener that change the Senate look */
         try {
-            uw.$.Observer(uw.GameEvents.window.open).subscribe("modernSenate", this.updateSenate);
+            uw.$.Observer(uw.GameEvents.window.open).subscribe("multSenate", this.updateSenate);
         } catch(e) {
-            this.console.log('[AutoBuild] Observer error: ' + e.message);
+            this.console.log('[AutoBuild] ' + this.t('ab_observer_error', { msg: e.message }));
         }
     }
     startInterval() {
@@ -45,7 +45,7 @@ class AutoBuild extends MultUtil {
         const townName = town && town.getName ? town.getName() : ('#' + town_id);
         const buildingName = this.getGameName ? this.getGameName('building', building) : building;
         const minutes = Math.round(this.BUILD_ERROR_COOLDOWN_MS / 60000);
-        this.console.log('[AutoBuild] ' + townName + ': ' + buildingName + ' bloqueado por ' + minutes + 'min (requisitos nao atendidos) - pulando para a proxima construcao da composicao.');
+        this.console.log('[AutoBuild] ' + this.t('ab_blocked_log', { town: townName, building: buildingName, min: minutes }));
     }
     _isBuildBlocked(town_id, building) {
         const key = this._buildKey(town_id, building);
@@ -73,7 +73,7 @@ class AutoBuild extends MultUtil {
                     const attempt = self._lastBuildAttempt;
                     if (attempt && (Date.now() - attempt.at) < 3000) {
                         const buildingName = self.getGameName ? self.getGameName('building', attempt.building) : attempt.building;
-                        self.console.log('[AutoBuild] Aviso nativo do jogo: "' + message + '" ao tentar construir ' + buildingName + ' em ' + attempt.townName + '.');
+                        self.console.log('[AutoBuild] ' + self.t('ab_native_warning_log', { message, building: buildingName, town: attempt.townName }));
 
                         if (/requisit/i.test(message) && attempt.townId != null) {
                             self._blockBuilding(attempt.townId, attempt.building);
@@ -84,9 +84,9 @@ class AutoBuild extends MultUtil {
                 }
                 return original(message, ...rest);
             };
-            this.console.log('[AutoBuild] Interceptador de mensagens nativas de erro ativo.');
+            this.console.log('[AutoBuild] ' + this.t('ab_error_hook_active'));
         } catch (e) {
-            this.console.log('[AutoBuild] Nao foi possivel interceptar mensagens nativas: ' + e.message);
+            this.console.log('[AutoBuild] ' + this.t('ab_error_hook_failed', { msg: e.message }));
         }
     }
     settings = () => {
@@ -112,13 +112,13 @@ class AutoBuild extends MultUtil {
             <div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
-            <div id="auto_build_title" style="cursor: pointer; filter: ${this.interval ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : ''}" class="game_header bold" onclick="window.multBot.autoBuild.toggle()"> Auto Build <span class="command_count"></span>
-                <div style="position: absolute; right: 10px; top: 4px; font-size: 10px;"> (click to toggle) </div>
+            <div id="auto_build_title" style="cursor: pointer; filter: ${this.interval ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : ''}" class="game_header bold" onclick="window.multBot.autoBuild.toggle()"> ${this.t('ab_title')} <span class="command_count"></span>
+                <div style="position: absolute; right: 10px; top: 4px; font-size: 10px;"> ${this.t('click_to_toggle')} </div>
             </div>
             <div style="padding: 6px; display:flex; gap:6px; align-items:center; border-bottom: 1px solid rgba(0,0,0,0.1);">
-                <span style="font-size:11px;font-weight:bold;" title="Aplica somente na cidade atualmente ativa">Presets (cidade atual):</span>
-                ${this.getButtonHtml('auto_build_preset_naval', 'Preset Naval', this.applyNavalPreset)}
-                ${this.getButtonHtml('auto_build_preset_land', 'Preset Terrestre', this.applyLandPreset)}
+                <span style="font-size:11px;font-weight:bold;" title="${this.t('ab_presets_tooltip')}">${this.t('ab_presets_label')}</span>
+                ${this.getButtonHtml('auto_build_preset_naval', this.t('ab_preset_naval'), this.applyNavalPreset)}
+                ${this.getButtonHtml('auto_build_preset_land', this.t('ab_preset_land'), this.applyLandPreset)}
             </div>
             <div id="buildings_lvl_buttons"></div>
         </div> `;
@@ -148,10 +148,10 @@ class AutoBuild extends MultUtil {
             if (!this.interval) this.startInterval();
             this.setPolisInSettings(town_id);
             this.updateTitle();
-            const msg = 'Preset Naval aplicado em ' + town.getName() + '.';
+            const msg = this.t('ab_naval_applied', { town: town.getName() });
             this.console.log('[AutoBuild] ' + msg);
         } catch (e) {
-            this.console.log('[AutoBuild] Erro ao aplicar preset naval: ' + e.message);
+            this.console.log('[AutoBuild] ' + this.t('ab_naval_error', { msg: e.message }));
         }
     };
     /* Preset Terrestre: tudo no maximo, exceto porto=5 e muro=0.
@@ -165,10 +165,10 @@ class AutoBuild extends MultUtil {
             if (!this.interval) this.startInterval();
             this.setPolisInSettings(town_id);
             this.updateTitle();
-            const msg = 'Preset Terrestre aplicado em ' + town.getName() + '.';
+            const msg = this.t('ab_land_applied', { town: town.getName() });
             this.console.log('[AutoBuild] ' + msg);
         } catch (e) {
-            this.console.log('[AutoBuild] Erro ao aplicar preset terrestre: ' + e.message);
+            this.console.log('[AutoBuild] ' + this.t('ab_land_error', { msg: e.message }));
         }
     };
     /* API publica: aplica o mesmo preset de construcoes (overrides) em
@@ -320,7 +320,7 @@ class AutoBuild extends MultUtil {
     toggle = () => {
         let town = uw.ITowns.getCurrentTown();
         if (!(town.id.toString() in this.towns_buildings)) {
-            this.console.log(`${town.name}: Auto Build On`);
+            this.console.log(this.t('ab_on_log', { town: town.name }));
             this.towns_buildings[town.id] = {};
             let buildins = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
             buildins.forEach(e => {
@@ -331,7 +331,7 @@ class AutoBuild extends MultUtil {
         } else {
             delete this.towns_buildings[town.id];
             this.storage.save('buildings', this.towns_buildings);
-            this.console.log(`${town.name}: Auto Build Off`);
+            this.console.log(this.t('ab_off_log', { town: town.name }));
         }
         this.updateTitle();
     };
@@ -352,7 +352,7 @@ class AutoBuild extends MultUtil {
                     this.storage.save('buildings', this.towns_buildings);
                     this.updateTitle();
                     const town = uw.ITowns.getTown(town_id);
-                    this.console.log(`${town.name}: Auto Build Done`);
+                    this.console.log(this.t('ab_done_log', { town: town.name }));
                     return;
                 }
                 await this.getNextBuild(town_id);
@@ -383,9 +383,9 @@ class AutoBuild extends MultUtil {
         uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
             res => {
                 if (res && !res.error) {
-                    this.console.log(`[AutoBuild] ${town.getName()}: Build Up ${this.getGameName('building', type)}`);
+                    this.console.log('[AutoBuild] ' + this.t('ab_build_up_log', { town: town.getName(), building: this.getGameName('building', type) }));
                 } else {
-                    this.console.log(`[AutoBuild] ✗ ${town.getName()}: ${this.getGameName('building', type)} — ${res?.error ?? JSON.stringify(res)}`);
+                    this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: res?.error ?? JSON.stringify(res) }));
                 }
             }
         );
@@ -401,7 +401,7 @@ class AutoBuild extends MultUtil {
             town_id: town_id,
         };
         uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
-        this.console.log(`${town.getName()}: Build Down ${this.getGameName('building', type)}`);
+        this.console.log(this.t('ab_build_down_log', { town: town.getName(), building: this.getGameName('building', type) }));
         await this.sleep(1234);
     };
     /* return true if the quee is full */
