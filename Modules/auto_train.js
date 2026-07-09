@@ -5,6 +5,23 @@ class AutoTrain extends MultUtil {
     MYTHICAL_GROUND = ['minotaur', 'manticore', 'zyklop', 'harpy', 'medusa', 'centaur', 'cerberus', 'fury', 'griffin', 'calydonian_boar', 'satyr', 'spartoi', 'ladon', 'pegasus', 'godsent'];
     MYTHICAL_NAVAL  = ['sea_monster', 'siren'];
 
+    /* Depois que o primeiro lote grande esgota o que estava guardado
+       no armazem, sobra so a producao por hora entre um tick e outro
+       do bot (poucos segundos) - o suficiente pra 1 unidade, no
+       maximo. Sem essa trava, o bot manda uma ordem de "1 unidade" a
+       cada tick, enchendo a fila de pedidos minusculos em vez de
+       treinar em lotes maiores.
+       MIN_BATCH_RATIO = fracao do byStorage (o teto que o percentual
+       de armazem configurado permite) que precisa estar disponivel
+       AGORA pra a ordem valer a pena disparar. Ex: 0.3 = so dispara
+       quando der pra pagar pelo menos 30% do teto do armazem de uma
+       vez. Sobe esse numero pra lotes maiores (com esperas mais
+       longas entre ordens) ou desce pra reagir mais rapido (lotes
+       menores, mais ordens). Sempre dispara direto, ignorando essa
+       trava, quando o lote calculado ja fecha 100% da meta restante -
+       nesse caso nao ha motivo pra esperar mais. */
+    MIN_BATCH_RATIO = 0.3;
+
     // Mapeamento de fallback (usado so se GameData.units[troop].god_id nao existir
     // nesse mundo especifico). godsent nao precisa entrar aqui - seu god_id real
     // ("all") ja vem direto do GameData, sem precisar de fallback.
@@ -487,7 +504,21 @@ class AutoTrain extends MultUtil {
         } // godsent nao tem custo de recursos, entao nao ha limite de storage a aplicar
 
         const toRecruit = Math.min(count, byResources, byFavor, byPop, byStorage);
-        return toRecruit > 0 ? toRecruit : -1;
+        if (toRecruit <= 0) return -1;
+
+        /* So dispara quando o lote vale a pena (ver MIN_BATCH_RATIO
+           acima) - evita ficar mandando ordem de 1 unidade a cada
+           tick assim que o armazem esvazia depois do primeiro lote
+           grande. So se aplica a unidades com custo em recursos -
+           godsent (custo 0/0/0) sempre dispara direto, ja que nao
+           tem esse gargalo de "esperar acumular". Tambem dispara
+           direto se esse lote ja fecha 100% da meta restante. */
+        if (wood > 0 || stone > 0 || iron > 0) {
+            const minWorthwhile = Math.max(1, Math.floor(byStorage * this.MIN_BATCH_RATIO));
+            if (toRecruit < minWorthwhile && toRecruit < count) return -1;
+        }
+
+        return toRecruit;
     };
 
     /* Check the given town, for ground or naval - sem risco de loop infinito.
