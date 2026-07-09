@@ -67,8 +67,14 @@ class AutoRuralTrade extends ModernUtil {
 			this.total_trade = Object.keys(uw.ITowns.towns).length;
 			this.done_trade = 0;
 
-			/* Set the interval */
-			this.auto_trade_resouces_loop = setInterval(this.mainTradeLoop, 1500);
+			/* Set the interval - createGuardedInterval evita que uma
+			   execução de mainTradeLoop comece antes da anterior
+			   terminar. Sem isso, quando tradeWithRural demorava mais
+			   que 1500ms (varias trocas com sleep de 750ms cada), o
+			   setInterval cru disparava a proxima execucao em cima da
+			   anterior e done_trade avancava fora de ordem - pulando
+			   ou repetindo cidades. */
+			this.auto_trade_resouces_loop = this.createGuardedInterval(this.mainTradeLoop, 1500);
 		} else {
 			/* Clear the interval */
 			clearInterval(this.auto_trade_resouces_loop);
@@ -104,7 +110,7 @@ class AutoRuralTrade extends ModernUtil {
 				if (farmtown.attributes.id != relation.attributes.farm_town_id) continue;
 				if (relation.attributes.current_trade_ratio < this.ratio * 0.25) continue;
 				if (town.getAvailableTradeCapacity() < 3000) continue;
-				this.tradeRuralPost(relation.attributes.farm_town_id, relation.attributes.id, town.getAvailableTradeCapacity(), town.id);
+				await this.tradeRuralPost(relation.attributes.farm_town_id, relation.attributes.id, town.getAvailableTradeCapacity(), town.id);
 				await this.sleep(750);
 			}
 		}
@@ -127,14 +133,17 @@ class AutoRuralTrade extends ModernUtil {
 		this.done_trade += 1;
 	};
 
-	tradeRuralPost = (farm_town_id, relation_id, count, town_id) => {
+	tradeRuralPost = async (farm_town_id, relation_id, count, town_id) => {
 		if (count < 100) return;
-		const data = {
-			model_url: `FarmTownPlayerRelation/${relation_id}`,
-			action_name: 'trade',
-			arguments: { farm_town_id: farm_town_id, amount: count > 3000 ? 3000 : count },
-			town_id: town_id,
-		};
-		uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
+		try {
+			await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+				model_url: `FarmTownPlayerRelation/${relation_id}`,
+				action_name: 'trade',
+				arguments: { farm_town_id: farm_town_id, amount: count > 3000 ? 3000 : count },
+				town_id: town_id,
+			});
+		} catch (e) {
+			this.console.log('[AutoRuralTrade] Erro ao comerciar com rural: ' + e.message);
+		}
 	};
 }
