@@ -19,25 +19,25 @@ class MultTools extends MultUtil {
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
             <div class="game_header bold" style="position:relative;">
-                <span style="z-index:10;position:relative;">Preset de Construções</span>
+                <span style="z-index:10;position:relative;">${this.t('mt_title')}</span>
                 <span class="command_count"></span>
             </div>
             <div id="autoparty_types">
                 <div class="split_content">
                     <div style="padding:5px;">
-                        <p style="margin:0 0 4px;font-size:11px;font-weight:bold;">Construções</p>
-                        <p style="margin:0 0 6px;font-size:11px;color:#888;">Máximo em tudo. Quartel→5, Muro→0.</p>
-                        ${this.getButtonHtml('mult_preset_btn', '⚡ Aplicar', this.applyPreset)}
+                        <p style="margin:0 0 4px;font-size:11px;font-weight:bold;">${this.t('mt_buildings_label')}</p>
+                        <p style="margin:0 0 6px;font-size:11px;color:#888;">${this.t('mt_buildings_desc')}</p>
+                        ${this.getButtonHtml('mult_preset_btn', '⚡ ' + this.t('apply'), this.applyPreset)}
                     </div>
                     <div style="padding:5px;">
                         <p style="margin:0 0 4px;font-size:11px;font-weight:bold;">Colonize Ships</p>
-                        <p style="margin:0 0 6px;font-size:11px;color:#888;">Máximo de colonize_ship em todas.</p>
-                        ${this.getButtonHtml('mult_naval_btn', '⚓ Aplicar', this.applyNavalPreset)}
+                        <p style="margin:0 0 6px;font-size:11px;color:#888;">${this.t('mt_colonize_desc')}</p>
+                        ${this.getButtonHtml('mult_naval_btn', '⚓ ' + this.t('apply'), this.applyNavalPreset)}
                     </div>
                     <div style="padding:5px;">
-                        <p style="margin:0 0 4px;font-size:11px;font-weight:bold;">Auto Pesquisa</p>
-                        <p style="margin:0 0 6px;font-size:11px;color:#888;">Liga a pesquisa automática em todas.</p>
-                        ${this.getButtonHtml('mult_research_btn', '🔬 Aplicar', this.applyResearchPreset)}
+                        <p style="margin:0 0 4px;font-size:11px;font-weight:bold;">${this.t('mt_research_label')}</p>
+                        <p style="margin:0 0 6px;font-size:11px;color:#888;">${this.t('mt_research_desc')}</p>
+                        ${this.getButtonHtml('mult_research_btn', '🔬 ' + this.t('apply'), this.applyResearchPreset)}
                     </div>
                 </div>
                 <div style="padding:5px;">
@@ -54,17 +54,17 @@ class MultTools extends MultUtil {
     applyPreset = () => {
         try {
             const autoBuild = uw.multBot.autoBuild;
-            if (!autoBuild) { uw.$('#mult_status').text('Auto Build não encontrado.').css('color','#f87171'); return; }
+            if (!autoBuild) { uw.$('#mult_status').text(this.t('mt_module_not_found', { name: 'Auto Build' })).css('color','#f87171'); return; }
 
             const count = autoBuild.applyPresetToAllTowns({ barracks: 5, wall: 0 });
-            if (count === 0) { uw.$('#mult_status').text('Nenhuma cidade encontrada.').css('color','#f87171'); return; }
+            if (count === 0) { uw.$('#mult_status').text(this.t('mt_no_city_found')).css('color','#f87171'); return; }
 
-            const msg = '✓ Preset construções: ' + count + ' cidade(s).';
+            const msg = this.t('mt_preset_applied', { count });
             uw.$('#mult_status').text(msg).css('color','#4ade80');
             this.console.log('[MultTools] ' + msg);
         } catch (e) {
-            uw.$('#mult_status').text('Erro: ' + (e?.message ?? e)).css('color','#f87171');
-            this.console.log('[MultTools] Erro: ' + (e?.message ?? e));
+            uw.$('#mult_status').text(this.t('error') + ': ' + (e?.message ?? e)).css('color','#f87171');
+            this.console.log('[MultTools] ' + this.t('error') + ': ' + (e?.message ?? e));
         }
     };
 
@@ -76,10 +76,10 @@ class MultTools extends MultUtil {
     applyNavalPreset = () => {
         try {
             const autoTrain = uw.multBot.autoTrain;
-            if (!autoTrain) { uw.$('#mult_status').text('Auto Train não encontrado.').css('color','#f87171'); return; }
+            if (!autoTrain) { uw.$('#mult_status').text(this.t('mt_module_not_found', { name: 'Auto Train' })).css('color','#f87171'); return; }
 
             const townIds = Object.keys(uw.ITowns.towns);
-            if (townIds.length === 0) { uw.$('#mult_status').text('Nenhuma cidade encontrada.').css('color','#f87171'); return; }
+            if (townIds.length === 0) { uw.$('#mult_status').text(this.t('mt_no_city_found')).css('color','#f87171'); return; }
 
             let count = 0;
             for (const townId of townIds) {
@@ -99,12 +99,12 @@ class MultTools extends MultUtil {
                 count++;
             }
 
-            const msg = `✓ Colonize ship configurado em ${count} cidade(s).`;
+            const msg = this.t('mt_naval_applied', { count });
             uw.$('#mult_status').text(msg).css('color','#4ade80');
             this.console.log('[MultTools] ' + msg);
         } catch (e) {
-            uw.$('#mult_status').text('Erro: ' + (e?.message ?? e)).css('color','#f87171');
-            this.console.log('[MultTools] Erro: ' + (e?.message ?? e));
+            uw.$('#mult_status').text(this.t('error') + ': ' + (e?.message ?? e)).css('color','#f87171');
+            this.console.log('[MultTools] ' + this.t('error') + ': ' + (e?.message ?? e));
         }
     };
 
@@ -116,21 +116,21 @@ class MultTools extends MultUtil {
         try {
             const research = uw.multBot.autoResearch;
             if (!research) {
-                uw.$('#mult_status').text('Auto Pesquisa não encontrado.').css('color','#f87171');
+                uw.$('#mult_status').text(this.t('mt_module_not_found', { name: this.t('mt_research_label') })).css('color','#f87171');
                 return;
             }
 
             const townCount = Object.keys(uw.ITowns.towns).length;
-            if (townCount === 0) { uw.$('#mult_status').text('Nenhuma cidade encontrada.').css('color','#f87171'); return; }
+            if (townCount === 0) { uw.$('#mult_status').text(this.t('mt_no_city_found')).css('color','#f87171'); return; }
 
             research.ensureActive();
 
-            const msg = `✓ Auto Pesquisa ativo em ${townCount} cidade(s).`;
+            const msg = this.t('mt_research_applied', { count: townCount });
             uw.$('#mult_status').text(msg).css('color','#4ade80');
             this.console.log('[MultTools] ' + msg);
         } catch (e) {
-            uw.$('#mult_status').text('Erro: ' + (e?.message ?? e)).css('color','#f87171');
-            this.console.log('[MultTools] Erro: ' + (e?.message ?? e));
+            uw.$('#mult_status').text(this.t('error') + ': ' + (e?.message ?? e)).css('color','#f87171');
+            this.console.log('[MultTools] ' + this.t('error') + ': ' + (e?.message ?? e));
         }
     };
 }
