@@ -103,7 +103,10 @@ class ModernUtil {
         return '#' + ids;
     };
 
-    ajaxPostWithTimeout = (endpoint, action, data, timeoutMs = 15000) => {
+    /* extraFlag: alguns endpoints do jogo (ex: town_info/trade) esperam
+       `true` nesse 4o parametro do ajaxPost nativo. Default false
+       preserva o comportamento de todos os chamadores existentes. */
+    ajaxPostWithTimeout = (endpoint, action, data, timeoutMs = 15000, extraFlag = false) => {
         return new Promise((resolve, reject) => {
             let settled = false;
 
@@ -113,7 +116,7 @@ class ModernUtil {
                 reject(new Error('Timeout de rede (' + timeoutMs + 'ms) em ' + endpoint + '/' + action));
             }, timeoutMs);
 
-            uw.gpAjax.ajaxPost(endpoint, action, data, false,
+            uw.gpAjax.ajaxPost(endpoint, action, data, extraFlag,
                 (res) => {
                     if (settled) return;
                     settled = true;
