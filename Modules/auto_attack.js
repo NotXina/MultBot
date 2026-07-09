@@ -19,6 +19,23 @@
 //     travar no meio do envio.
 //  3) _getTownName foi removido - usa this.getTownName (herdado
 //     de ModernUtil), eliminando a duplicacao dessa logica.
+//  4) Suporte a envio de HEROI junto com o ataque. Payload real
+//     capturado via devtools (POST town_info?action=send_units):
+//       {"hoplite":9,"harpy":4,"heroes":"andromeda",
+//        "town_id":35715,"id":36896,"type":"attack","nl_init":true}
+//     -> o campo e "heroes" (essa e a key usada pelo jogo) e o
+//        valor e a KEY interna do heroi (ex: "andromeda"), igual
+//        as keys de GameData.units para unidades. town_id/id/type/
+//        nl_init ja eram tratados.
+//     O heroi e opcional por plano. Nao ha checagem automatica de
+//     disponibilidade do heroi na cidade (o jogo nao expõe isso da
+//     mesma forma que town.units()) - se o heroi selecionado nao
+//     estiver disponivel na hora do disparo, o pior caso e o ataque
+//     ser enviado sem o heroi ou a requisicao falhar (fica logado
+//     como FALHA e o bot segue para o proximo alvo normalmente).
+//     Um mesmo heroi so pode ir em UM envio por ciclo (fisicamente
+//     so pode estar em um exercito de cada vez) - por isso ele e
+//     anexado apenas ao primeiro alvo pronto do ciclo.
 //
 //  Nomes de unidade exibidos usam o nome traduzido do proprio
 //  GameData.units[id].name.
@@ -102,6 +119,11 @@ class AutoAttack extends ModernUtil {
                 }
             }
 
+            if (typeof migratedPlan.hero === 'undefined') {
+                migratedPlan.hero = null;
+                changed = true;
+            }
+
             newPlans.push(migratedPlan);
         }
 
@@ -114,6 +136,19 @@ class AutoAttack extends ModernUtil {
 
     _getUnitLabel(unitId) {
         return this.getGameName('unit', unitId);
+    }
+
+    _getHeroLabel(heroId) {
+        if (!heroId) return '';
+        try {
+            return this.getGameName('hero', heroId);
+        } catch (e) {
+            try {
+                return uw.GameData.heroes[heroId].name;
+            } catch (e2) {
+                return heroId;
+            }
+        }
     }
 
     _formatUnitEntry(u) {
@@ -154,6 +189,15 @@ class AutoAttack extends ModernUtil {
         html += '<div style="width:140px;">';
         html += '<label style="font-size:11px;font-weight:bold;" title="Espera antes de reatacar o mesmo alvo, +-10% de variacao. 0 = sem espera.">Descanso (min)</label><br>';
         html += '<input type="number" id="attack_rest_minutes" min="0" placeholder="0" style="width:100%;padding:3px;" value="0">';
+        html += '</div>';
+        html += '</div>';
+
+        html += '<div style="display:flex; gap:10px; align-items:flex-end; margin-top:6px; flex-wrap:wrap;">';
+        html += '<div style="flex:1; min-width:180px;">';
+        html += '<label style="font-size:11px;font-weight:bold;" title="Opcional. Envia esse heroi junto com o ataque, se ele estiver disponivel na cidade atacante no momento do disparo.">Heroi (opcional)</label><br>';
+        html += '<select id="attack_hero_select" style="width:100%;padding:3px;">';
+        html += this._getHeroOptionsHtml();
+        html += '</select>';
         html += '</div>';
         html += '</div>';
 
@@ -258,6 +302,33 @@ class AutoAttack extends ModernUtil {
             return html;
         } catch (e) {
             return '<option value="">Erro ao carregar unidades</option>';
+        }
+    }
+
+    /* Heroi e opcional - se GameData.heroes nao existir ou tiver um
+       formato diferente do esperado, cai num <select> so com "Nenhum"
+       (o resto do bot continua funcionando normalmente sem heroi). */
+    _getHeroOptionsHtml() {
+        try {
+            const heroes = uw.GameData.heroes;
+            const keys = Object.keys(heroes);
+
+            const self = this;
+            const items = keys.map(function (key) {
+                return { id: key, label: self._getHeroLabel(key) || key };
+            });
+
+            items.sort(function (a, b) {
+                return a.label.localeCompare(b.label);
+            });
+
+            let html = '<option value="">Nenhum</option>';
+            for (const item of items) {
+                html += '<option value="' + item.id + '">' + item.label + '</option>';
+            }
+            return html;
+        } catch (e) {
+            return '<option value="">Nenhum</option>';
         }
     }
 
@@ -393,6 +464,7 @@ class AutoAttack extends ModernUtil {
         const targetsRaw = (uw.$('#attack_targets').val() || '').trim();
         const restMinutesRaw = parseInt(uw.$('#attack_rest_minutes').val(), 10);
         const restMinutes = (!isNaN(restMinutesRaw) && restMinutesRaw > 0) ? restMinutesRaw : 0;
+        const hero = (uw.$('#attack_hero_select').val() || '').trim() || null;
 
         if (!originId) {
             this.console.log('[AutoAttack] Erro: nenhuma cidade atacante selecionada.');
@@ -430,6 +502,7 @@ class AutoAttack extends ModernUtil {
             targets: targets,
             restMinutes: restMinutes,
             nextAllowedAt: {},
+            hero: hero,
             enabled: true
         };
 
@@ -442,6 +515,7 @@ class AutoAttack extends ModernUtil {
         uw.$('#attack_origin_select').val('');
         uw.$('#attack_targets').val('');
         uw.$('#attack_rest_minutes').val('0');
+        uw.$('#attack_hero_select').val('');
 
         const originTown = uw.ITowns.towns[originId];
         const originName = originTown && originTown.getName ? originTown.getName() : ('#' + originId);
@@ -453,7 +527,8 @@ class AutoAttack extends ModernUtil {
         }
 
         const restLabel = restMinutes > 0 ? (', descanso ' + restMinutes + 'min') : '';
-        this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s)' + restLabel + '.');
+        const heroLabel = hero ? (', heroi: ' + this._getHeroLabel(hero)) : '';
+        this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s)' + restLabel + heroLabel + '.');
         uw.$('#attack_log').text('Plano adicionado com sucesso!').css('color', '#1a6b2a');
     };
 
@@ -486,6 +561,10 @@ class AutoAttack extends ModernUtil {
             for (let i = 0; i < plan.units.length; i++) {
                 if (i > 0) unitsLabel += ', ';
                 unitsLabel += this._formatUnitEntry(plan.units[i]);
+            }
+
+            if (plan.hero) {
+                unitsLabel += ' + heroi ' + this._getHeroLabel(plan.hero);
             }
 
             let targetsLabel = '';
@@ -594,6 +673,8 @@ class AutoAttack extends ModernUtil {
                 remaining[u.unit] = available[u.unit] || 0;
             }
 
+            let heroAlreadySent = false;
+
             for (const targetId of readyTargets) {
                 let stillEnough = true;
                 for (const u of plan.units) {
@@ -620,9 +701,18 @@ class AutoAttack extends ModernUtil {
                     sendSummary += sendUnits[i].quantity + 'x ' + this._getUnitLabel(sendUnits[i].unit);
                 }
 
+                // O heroi so pode ir num unico envio por ciclo (um heroi
+                // fisico so pode estar em um exercito de cada vez), entao
+                // ele e incluido apenas no primeiro alvo pronto do ciclo.
+                const heroForThisSend = (plan.hero && !heroAlreadySent) ? plan.hero : null;
+                if (heroForThisSend) {
+                    sendSummary += ' + heroi ' + this._getHeroLabel(heroForThisSend);
+                }
+
                 const targetName = this.getTownName(targetId);
                 try {
-                    await this._sendAttack(plan.originId, targetId, sendUnits);
+                    await this._sendAttack(plan.originId, targetId, sendUnits, heroForThisSend);
+                    if (heroForThisSend) heroAlreadySent = true;
                     this.console.log('[AutoAttack] OK: ' + townName + ' -> ' + targetName + ': ataque com [' + sendSummary + '] enviado!');
                     uw.$('#attack_log').text('OK: ' + townName + ' atacou ' + targetName + ' [' + sendSummary + ']').css('color', '#1a6b2a');
                     if (uw.HumanMessage) {
@@ -659,7 +749,7 @@ class AutoAttack extends ModernUtil {
         }
     }
 
-    _sendAttack(fromTownId, toTownId, unitsList) {
+    _sendAttack(fromTownId, toTownId, unitsList, heroKey) {
         return this._withTownId(fromTownId, () => {
             const data = {
                 id: parseInt(toTownId, 10),
@@ -669,6 +759,10 @@ class AutoAttack extends ModernUtil {
 
             for (const u of unitsList) {
                 data[u.unit] = u.quantity;
+            }
+
+            if (heroKey) {
+                data.heroes = heroKey;
             }
 
             return this.ajaxPostWithTimeout('town_info', 'send_units', data, 15000);
