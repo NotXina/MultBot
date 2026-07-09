@@ -42,7 +42,7 @@ class AutoTrade extends ModernUtil {
                 if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) break;
 
                 amount = await this._trade(target, troop, amount);
-                if (amount > 0) await this._sleep(30000);
+                if (amount > 0) await this.sleep(30000);
             } while (amount > 0);
 
             this.console.log('[AutoTrade] Trade concluído.');
@@ -143,7 +143,7 @@ class AutoTrade extends ModernUtil {
         return Math.min(byRes, byTrade);
     };
 
-    _sendTradeRequest = (from_id, target_id, troop, count) => {
+    _sendTradeRequest = async (from_id, target_id, troop, count) => {
         const cost = uw.GameData.units[troop].resources;
         const data = {
             id:       target_id,
@@ -153,13 +153,8 @@ class AutoTrade extends ModernUtil {
             town_id:  from_id,
             nl_init:  true,
         };
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('sendTradeRequest timeout')), 15000);
-            uw.gpAjax.ajaxPost('town_info', 'trade', data, true, () => {
-                clearTimeout(timeout);
-                setTimeout(resolve, 500);
-            });
-        });
+        await this.ajaxPostWithTimeout('town_info', 'trade', data, 15000, true);
+        await this.sleep(500);
     };
 
     _sendBalance = async (from_id, target_id, troop, count) => {
@@ -178,5 +173,5 @@ class AutoTrade extends ModernUtil {
         return Math.max(0, count - batch);
     };
 
-    _sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    /* sleep vem herdado de ModernUtil (core.js) — não precisa duplicar aqui */
 }
