@@ -1,12 +1,12 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: core.js
-//  Infraestrutura compartilhada do MultBot (NotXina/MultBot).
-//  Este arquivo é buscado em tempo de execução pelo index.js
-//  e concatenado com os demais módulos - não é ele quem o
-//  Tampermonkey gerencia como script (isso é o index.js).
-//  Projeto inspirado no ModernBot original (Sau1707), mas
-//  totalmente independente dele: fetch de módulos, ícones e
-//  storage não dependem mais do repositório dele.
+//  Shared infrastructure for MultBot (NotXina/MultBot).
+//  This file is fetched at runtime by index.js and
+//  concatenated with the other modules - it's not the one
+//  Tampermonkey manages as a script (that's index.js).
+//  Project inspired by the original ModernBot (Sau1707),
+//  but fully independent from it: module fetching, icons,
+//  and storage no longer depend on that repository.
 // ══════════════════════════════════════════════════════
 
 var uw;
@@ -15,6 +15,102 @@ if (typeof unsafeWindow == 'undefined') {
 } else {
 	uw = unsafeWindow;
 }
+
+/* ══════════════════════════════════════════════════════
+   i18n: language detection + dictionary
+   Runs ONCE when core.js loads (module-level, not per-instance),
+   since every module would otherwise redo this detection on its
+   own constructor.
+
+   Detection order (first one that resolves wins):
+   1) Game.locale, if it exists (most reliable when available)
+   2) Grepolis hostname market prefix (e.g. "br147.grepolis.com" -> "br")
+      This is the most consistently available signal - it doesn't
+      depend on the Game object being ready yet.
+   3) document.documentElement.lang
+   4) 'en' as final fallback
+
+   MARKET_LANG_MAP covers the market codes Grepolis has historically
+   used as subdomain prefixes. Anything not in this map (or not
+   matched at all) falls back to 'en'. */
+const MULT_MARKET_LANG_MAP = {
+	br: 'pt', pt: 'pt',
+	de: 'de', at: 'de', ch: 'de',
+	us: 'en', en: 'en', uk: 'en', gb: 'en', 'int': 'en',
+	fr: 'fr',
+	it: 'it',
+	es: 'es',
+	nl: 'nl',
+	pl: 'pl',
+	tr: 'tr',
+	gr: 'el',
+	ru: 'ru',
+	se: 'sv',
+	no: 'no',
+	dk: 'da',
+	fi: 'fi',
+	cz: 'cs',
+	sk: 'sk',
+	hu: 'hu',
+	ro: 'ro',
+	bg: 'bg',
+	hr: 'hr',
+	rs: 'sr',
+	si: 'sl',
+	lt: 'lt',
+	lv: 'lv',
+	ee: 'et',
+};
+
+const MULT_LANG = (() => {
+	try {
+		if (uw.Game && uw.Game.locale) {
+			const short = String(uw.Game.locale).toLowerCase().split(/[_-]/)[0];
+			if (short) return short;
+		}
+	} catch (e) {}
+
+	try {
+		const host = (typeof location !== 'undefined' ? location.hostname : '') || '';
+		const match = host.match(/^([a-z]+?)\d*\.grepolis\.com$/i);
+		if (match) {
+			const code = match[1].toLowerCase();
+			if (MULT_MARKET_LANG_MAP[code]) return MULT_MARKET_LANG_MAP[code];
+		}
+	} catch (e) {}
+
+	try {
+		if (typeof document !== 'undefined' && document.documentElement.lang) {
+			const short = document.documentElement.lang.toLowerCase().split(/[_-]/)[0];
+			if (short) return short;
+		}
+	} catch (e) {}
+
+	return 'en';
+})();
+
+/* Dictionary. Keys are plain English (also the fallback dict), so
+   any key missing from a non-English language just shows the
+   English text instead of breaking. Add new languages here as
+   {code: {key: value, ...}} - no other file needs to change. */
+const MULT_I18N = {
+	en: {
+		active: 'Active',
+		stopped: 'Stopped',
+		apply: 'Apply',
+		error: 'Error',
+		none_found: 'None found',
+	},
+	pt: {
+		active: 'Ativo',
+		stopped: 'Parado',
+		apply: 'Aplicar',
+		error: 'Erro',
+		none_found: 'Nenhuma encontrada',
+	},
+};
+
+console.log(`[MultBot] i18n: detected language "${MULT_LANG}" (hostname: ${typeof location !== 'undefined' ? location.hostname : 'n/a'})`);
 
 var style = document.createElement("style");
 style.textContent = `.auto_build_up_arrow{background:url(https://gpit.innogamescdn.com/images/game/academy/up.png) no-repeat -2px -2px;width:18px;height:18px;position:absolute;right:-2px;bottom:12px;transform:scale(.8);cursor:pointer}.auto_build_down_arrow{background:url(https://gpit.innogamescdn.com/images/game/academy/up.png) no-repeat -2px -2px;width:18px;height:18px;position:absolute;right:-2px;bottom:-3px;transform:scale(.8) rotate(180deg);cursor:pointer}.auto_build_box{background:url(https://gpit.innogamescdn.com/images/game/academy/tech_frame.png) no-repeat 0 0;width:58px;height:59px;position:relative;overflow:hidden;display:inline-block;vertical-align:middle}.auto_build_building{position:absolute;top:4px;left:4px;width:50px;height:50px;background:url(https://gpit.innogamescdn.com/images/game/main/buildings_sprite_50x50.png) no-repeat 0 0}.auto_build_lvl{position:absolute;bottom:3px;left:3px;margin:0;font-weight:700;font-size:12px;color:#fff;text-shadow:0 0 2px #000,1px 1px 2px #000,0 2px 2px #000}#buildings_lvl_buttons{padding:5px;max-height:400px;user-select:none}#troops_lvl_buttons{padding:5px;max-height:400px;user-select:none}.progress_bar_auto{position:absolute;z-index:1;height:100%;left:0;top:0;background-image:url(https://gpit.innogamescdn.com/images/game/border/header.png);background-position:0 -1px;filter:brightness(100%) saturate(186%) hue-rotate(241deg)}.mult_bot_settings{z-index:10;position:absolute;top:52px!important;right:116px!important}.console_multbot{width:100%;height:100%;background-color:#000;color:#fff;font-family:monospace;font-size:16px;padding:20px;box-sizing:border-box;overflow-y:scroll;display:flex;flex-direction:column-reverse}#MULT_BOT_content{height:100%;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;padding-right:4px}.console_multbot p{margin:1px}.population_icon_bot{background:url(https://gpit.innogamescdn.com/images/game/autogenerated/layout/layout_095495a.png) no-repeat -697px -647px;width:25px;height:20px;position:absolute;right:2px}.population_icon_bot p{text-align:end;position:absolute;right:30px;padding:0;margin:0;color:#000;font-weight:700}.split_content{width:100%;display:inline-flex;justify-content:space-between}@keyframes rotateForever{from{transform:rotate(0)}to{transform:rotate(360deg)}}.rotate-forever{animation:rotateForever 5s linear infinite;transform-origin:16px 15px;filter:hue-rotate(72deg) saturate(2.5)}.enabled .game_header{filter:brightness(100%) saturate(186%) hue-rotate(241deg)}.auto_build_box .unit_icon50x50{position:absolute!important;top:4px!important;left:4px!important;width:50px!important;height:50px!important;margin:0!important}`;
@@ -44,13 +140,25 @@ class MultUtil {
         this.storage = storage;
     }
 
-    /* Retorna o nome TRADUZIDO de uma unidade, construcao, pesquisa,
-       deus ou HEROI, direto dos dados nativos do jogo (uw.GameData) -
-       bate sempre com o idioma configurado no cliente, sem dicionario
-       manual. Categorias: 'unit', 'building', 'research', 'god', 'hero'.
-       Fallback seguro para o proprio ID se o dado nao existir.
-       Confirmado: uw.GameData.heroes[id].name existe e vem traduzido
-       (ex: "andromeda" -> "Andrômeda"). */
+    /* Translation helper, available on every module (all of them
+       extend MultUtil). Usage: this.t('active') -> "Active" or
+       "Ativo" depending on the detected client language. Falls back
+       to English if the key doesn't exist in the detected language,
+       and to the key itself if it doesn't exist in English either
+       (so a missing translation never breaks rendering - worst case
+       you see the raw key instead of a crash). */
+    t = (key) => {
+        const dict = MULT_I18N[MULT_LANG] || MULT_I18N.en;
+        return dict[key] ?? MULT_I18N.en[key] ?? key;
+    };
+
+    /* Returns the TRANSLATED name of a unit, building, research,
+       god, or HERO, straight from the game's native data (uw.GameData) -
+       always matches the client's configured language, no manual
+       dictionary. Categories: 'unit', 'building', 'research', 'god', 'hero'.
+       Safe fallback to the ID itself if the data doesn't exist.
+       Confirmed: uw.GameData.heroes[id].name exists and comes translated
+       (e.g. "andromeda" -> "Andromeda"). */
     getGameName = (category, id) => {
         try {
             if (category === 'unit') {
@@ -75,14 +183,15 @@ class MultUtil {
         return id;
     };
 
-    /* FONTE UNICA para "nome de exibicao de uma cidade a partir do ID".
-       3 fontes em ordem: 1) uw.ITowns.towns (cidades do proprio jogador,
-       mais rapido); 2) Backbone Town collection (pega cidades de outros
-       jogadores que ja passaram pelo cache do jogo, ex: alvos de ataque/
-       colonizacao); 3) uw.WMap.towns como ultimo fallback legado.
-       A fonte 2 foi incorporada aqui depois de nascer duplicada dentro
-       do colonize_ship_sender.js — resolvia nomes que as fontes 1 e 3
-       nao pegavam (cidades-alvo que nao sao do jogador). */
+    /* SINGLE SOURCE for "display name of a town from its ID".
+       3 sources in order: 1) uw.ITowns.towns (the player's own towns,
+       fastest); 2) Backbone Town collection (catches other players'
+       towns that already passed through the game's cache, e.g.
+       attack/colonization targets); 3) uw.WMap.towns as a last,
+       legacy fallback.
+       Source 2 was folded in here after it was born duplicated inside
+       colonize_ship_sender.js — it resolved names that sources 1 and 3
+       couldn't (target towns that aren't the player's own). */
     getTownName = (townId) => {
         if (!townId) return String(townId);
 
@@ -114,9 +223,9 @@ class MultUtil {
         return '#' + ids;
     };
 
-    /* extraFlag: alguns endpoints do jogo (ex: town_info/trade) esperam
-       `true` nesse 4o parametro do ajaxPost nativo. Default false
-       preserva o comportamento de todos os chamadores existentes. */
+    /* extraFlag: some game endpoints (e.g. town_info/trade) expect
+       `true` in this 4th parameter of the native ajaxPost. Default
+       false preserves the behavior of all existing callers. */
     ajaxPostWithTimeout = (endpoint, action, data, timeoutMs = 15000, extraFlag = false) => {
         return new Promise((resolve, reject) => {
             let settled = false;
@@ -124,7 +233,7 @@ class MultUtil {
             const timer = setTimeout(() => {
                 if (settled) return;
                 settled = true;
-                reject(new Error('Timeout de rede (' + timeoutMs + 'ms) em ' + endpoint + '/' + action));
+                reject(new Error('Network timeout (' + timeoutMs + 'ms) on ' + endpoint + '/' + action));
             }, timeoutMs);
 
             uw.gpAjax.ajaxPost(endpoint, action, data, extraFlag,
@@ -138,18 +247,18 @@ class MultUtil {
                     if (settled) return;
                     settled = true;
                     clearTimeout(timer);
-                    reject(new Error('Erro de rede: ' + txt));
+                    reject(new Error('Network error: ' + txt));
                 }
             );
         });
     };
 
-    /* Equivalente ao ajaxPostWithTimeout, mas pra chamadas ajaxGet.
-       Sem isso, uma chamada ajaxGet que nunca chama nem o sucesso nem
-       o erro (endpoint mudou, resposta inesperada, etc) deixa a
-       Promise pendurada PRA SEMPRE - o await nunca retorna, nao da
-       excecao nenhuma, e quem estiver esperando (ex: auto_farm.js)
-       trava silenciosamente sem nenhum log de erro. */
+    /* Equivalent to ajaxPostWithTimeout, but for ajaxGet calls.
+       Without this, an ajaxGet call that never calls either the
+       success or the error callback (endpoint changed, unexpected
+       response, etc) leaves the Promise hanging FOREVER - the await
+       never returns, no exception is thrown, and whoever is waiting
+       (e.g. auto_farm.js) hangs silently with no error log. */
     ajaxGetWithTimeout = (endpoint, action, data, timeoutMs = 15000) => {
         return new Promise((resolve, reject) => {
             let settled = false;
@@ -157,7 +266,7 @@ class MultUtil {
             const timer = setTimeout(() => {
                 if (settled) return;
                 settled = true;
-                reject(new Error('Timeout de rede (' + timeoutMs + 'ms) em ' + endpoint + '/' + action));
+                reject(new Error('Network timeout (' + timeoutMs + 'ms) on ' + endpoint + '/' + action));
             }, timeoutMs);
 
             uw.gpAjax.ajaxGet(endpoint, action, data, false,
@@ -171,7 +280,7 @@ class MultUtil {
                     if (settled) return;
                     settled = true;
                     clearTimeout(timer);
-                    reject(new Error('Erro de rede: ' + txt));
+                    reject(new Error('Network error: ' + txt));
                 }
             );
         });
@@ -185,7 +294,7 @@ class MultUtil {
             try {
                 await fn();
             } catch (e) {
-                // erros ja devem ser tratados dentro de fn; isso e so rede de seguranca
+                // errors should already be handled inside fn; this is just a safety net
             } finally {
                 processing = false;
             }
@@ -370,10 +479,10 @@ class MultUtil {
 
 }
 
-/* A classe About (checagem de versão contra o repo do ModernBot
-   original) foi removida daqui - nunca era instanciada por
-   multbot.js (dead code) e era a última chamada de rede que
-   dependia do repositório do Sau1707. */
+/* The About class (version check against the original ModernBot
+   repo) was removed from here - it was never instantiated by
+   multbot.js (dead code) and was the last network call that
+   depended on Sau1707's repository. */
 
 class BotConsole {
 	MAX_ENTRIES = 200;
@@ -693,12 +802,12 @@ class MultStorage extends Compressor {
 		const newKey = `${worldId}_multBot`;
 		let savedValue = localStorage.getItem(newKey);
 
-		/* Migracao automatica e unica: se a chave nova ainda nao tem
-		   nada mas a chave antiga (_modernBot, de antes do rename das
-		   classes) tem dados, copia pra chave nova. A chave antiga NAO
-		   e apagada - fica la como backup inerte, so por seguranca.
-		   Sem isso, todo mundo perderia planos de ataque/presets/etc
-		   salvos assim que essa atualizacao entrasse no ar. */
+		/* Automatic, one-time migration: if the new key still has
+		   nothing but the old key (_modernBot, from before the class
+		   rename) has data, copy it to the new key. The old key is NOT
+		   deleted - it stays there as an inert backup, just in case.
+		   Without this, everyone would lose their saved attack
+		   plans/presets/etc as soon as this update went live. */
 		if (savedValue === null || savedValue === undefined) {
 			const legacyKey = `${worldId}_modernBot`;
 			const legacyValue = localStorage.getItem(legacyKey);
@@ -706,7 +815,7 @@ class MultStorage extends Compressor {
 				savedValue = legacyValue;
 				try {
 					localStorage.setItem(newKey, legacyValue);
-					console.log('[MultBot] Configuracoes migradas de ' + legacyKey + ' para ' + newKey + '.');
+					console.log('[MultBot] Settings migrated from ' + legacyKey + ' to ' + newKey + '.');
 				} catch (e) {}
 			}
 		}
