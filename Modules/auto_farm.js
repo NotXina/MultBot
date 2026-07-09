@@ -353,7 +353,7 @@ class AutoFarm extends MultUtil {
     };
 
     /* Claim resources from a single polis */
-    claimSingle = (town_id, farm_town_id, relation_id, option = 1) => {
+    claimSingle = async (town_id, farm_town_id, relation_id, option = 1) => {
         const data = {
             model_url: `FarmTownPlayerRelation/${relation_id}`,
             action_name: 'claim',
@@ -364,57 +364,75 @@ class AutoFarm extends MultUtil {
             },
             town_id: town_id,
         };
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
+        try {
+            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+        } catch (e) {
+            this.console.log('[AutoFarm] Erro ao coletar rural: ' + (e?.message ?? e));
+        }
     };
 
     /* Claim resources from multiple polis */
-    claimMultiple = (base = 300, boost = 600) =>
-        new Promise((myResolve, myReject) => {
-            const polis_list = this.generateList();
-            let data = {
-                towns: polis_list,
-                time_option_base: base,
-                time_option_booty: boost,
-                claim_factor: 'normal',
-            };
-            uw.gpAjax.ajaxPost('farm_town_overviews', 'claim_loads_multiple', data, false, () => myResolve());
-        });
+    claimMultiple = async (base = 300, boost = 600) => {
+        const polis_list = this.generateList();
+        const data = {
+            towns: polis_list,
+            time_option_base: base,
+            time_option_booty: boost,
+            claim_factor: 'normal',
+        };
+        try {
+            await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data);
+        } catch (e) {
+            this.console.log('[AutoFarm] Erro em claimMultiple: ' + (e?.message ?? e));
+            throw e;
+        }
+    };
 
     /* Pretend that the window it's opening */
-    fakeOpening = () =>
-        new Promise((myResolve, myReject) => {
-            uw.gpAjax.ajaxGet('farm_town_overviews', 'index', {}, false, async () => {
-                await this.sleep(10);
-                await this.fakeUpdate();
-                myResolve();
-            });
-        });
+    fakeOpening = async () => {
+        try {
+            await this.ajaxGetWithTimeout('farm_town_overviews', 'index', {});
+            await this.sleep(10);
+            await this.fakeUpdate();
+        } catch (e) {
+            this.console.log('[AutoFarm] Erro em fakeOpening: ' + (e?.message ?? e));
+            throw e;
+        }
+    };
 
     /* Fake the user selecting the list */
-    fakeSelectAll = () =>
-        new Promise((myResolve, myReject) => {
-            const data = {
-                town_ids: this.polis_list,
-            };
-            uw.gpAjax.ajaxGet('farm_town_overviews', 'get_farm_towns_from_multiple_towns', data, false, () => myResolve());
-        });
+    fakeSelectAll = async () => {
+        const data = {
+            town_ids: this.polis_list,
+        };
+        try {
+            await this.ajaxGetWithTimeout('farm_town_overviews', 'get_farm_towns_from_multiple_towns', data);
+        } catch (e) {
+            this.console.log('[AutoFarm] Erro em fakeSelectAll: ' + (e?.message ?? e));
+            throw e;
+        }
+    };
 
     /* Fake the window update*/
-    fakeUpdate = () =>
-        new Promise((myResolve, myReject) => {
-            const town = uw.ITowns.getCurrentTown();
-            const { attributes: booty } = town.getResearches();
-            const { attributes: trade_office } = town.getBuildings();
-            const data = {
-                island_x: town.getIslandCoordinateX(),
-                island_y: town.getIslandCoordinateY(),
-                current_town_id: town.id,
-                booty_researched: booty ? 1 : 0,
-                diplomacy_researched: '',
-                trade_office: trade_office ? 1 : 0,
-            };
-            uw.gpAjax.ajaxGet('farm_town_overviews', 'get_farm_towns_for_town', data, false, () => myResolve());
-        });
+    fakeUpdate = async () => {
+        const town = uw.ITowns.getCurrentTown();
+        const { attributes: booty } = town.getResearches();
+        const { attributes: trade_office } = town.getBuildings();
+        const data = {
+            island_x: town.getIslandCoordinateX(),
+            island_y: town.getIslandCoordinateY(),
+            current_town_id: town.id,
+            booty_researched: booty ? 1 : 0,
+            diplomacy_researched: '',
+            trade_office: trade_office ? 1 : 0,
+        };
+        try {
+            await this.ajaxGetWithTimeout('farm_town_overviews', 'get_farm_towns_for_town', data);
+        } catch (e) {
+            this.console.log('[AutoFarm] Erro em fakeUpdate: ' + (e?.message ?? e));
+            throw e;
+        }
+    };
 
     /* Fake the gui update */
     fakeGuiUpdate = () =>
