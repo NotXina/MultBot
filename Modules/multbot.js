@@ -179,7 +179,11 @@ class MultBot {
 
         uw.$('.gods_area_buttons').append(`
             <div class='circle_button mult_bot_settings' onclick='window.multBot.settingsFactory.openWindow()'>
-                <div style='width: 27px; height: 27px; display:flex; align-items:center; justify-content:center; font-size:18px;' class='icon js-caption' title='MultBot'>⚙️</div>
+                <div style='width: 27px; height: 27px; display:flex; align-items:center; justify-content:center;' class='icon js-caption' title='MultBot'>
+                    <img src="https://github.com/NotXina.png?size=64" width="25" height="25"
+                         style="border-radius:50%; object-fit:cover; border:1px solid rgba(0,0,0,0.4); box-shadow:0 0 2px rgba(0,0,0,0.6);"
+                         onerror="this.replaceWith(Object.assign(document.createElement('div'), {innerHTML: '⚙️'}).firstChild || '⚙️')" />
+                </div>
             </div>
         `);
 
