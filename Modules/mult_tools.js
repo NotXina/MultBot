@@ -47,26 +47,19 @@ class MultTools extends ModernUtil {
         </div>`;
     };
 
+    /* Preset em massa: aplica em TODAS as cidades via a API publica
+       do AutoBuild (applyPresetToAllTowns), em vez de ler/escrever
+       uw.modernBot.autoBuild.towns_buildings diretamente. Se o AutoBuild
+       nao inicializou, avisa em vez de estourar exceção. */
     applyPreset = () => {
         try {
-            const buildings = ['main','storage','farm','academy','temple','barracks','docks','market','hide','lumber','stoner','ironer','wall'];
-            const townIds   = Object.keys(uw.ITowns.towns);
-            if (townIds.length === 0) { uw.$('#mult_status').text('Nenhuma cidade encontrada.').css('color','#f87171'); return; }
+            const autoBuild = uw.modernBot.autoBuild;
+            if (!autoBuild) { uw.$('#mult_status').text('Auto Build não encontrado.').css('color','#f87171'); return; }
 
-            let townsBuildings = uw.modernBot.autoBuild.towns_buildings;
-            for (const townId of townIds) {
-                const preset = {};
-                for (const b of buildings) {
-                    const maxLevel = uw.GameData.buildings[b]?.max_level ?? 45;
-                    preset[b] = (b === 'barracks') ? 5 : (b === 'wall') ? 0 : maxLevel;
-                }
-                townsBuildings[townId] = preset;
-            }
-            uw.modernBot.autoBuild.towns_buildings = townsBuildings;
-            uw.modernBot.autoBuild.storage.save('buildings', townsBuildings);
-            if (!uw.modernBot.autoBuild.interval) uw.modernBot.autoBuild.startInterval();
+            const count = autoBuild.applyPresetToAllTowns({ barracks: 5, wall: 0 });
+            if (count === 0) { uw.$('#mult_status').text('Nenhuma cidade encontrada.').css('color','#f87171'); return; }
 
-            const msg = '✓ Preset construções: ' + townIds.length + ' cidade(s).';
+            const msg = '✓ Preset construções: ' + count + ' cidade(s).';
             uw.$('#mult_status').text(msg).css('color','#4ade80');
             this.console.log('[MultTools] ' + msg);
         } catch (e) {
@@ -75,8 +68,16 @@ class MultTools extends ModernUtil {
         }
     };
 
+    /* Preset em massa de colonize_ship: a elegibilidade (doca >= 10,
+       pesquisa colonize_ship feita) continua checada aqui, cidade a
+       cidade, mas a escrita da quantidade-alvo vai pela API publica
+       setTroopTarget do AutoTrain, em vez de mexer em city_troops
+       diretamente. */
     applyNavalPreset = () => {
         try {
+            const autoTrain = uw.modernBot.autoTrain;
+            if (!autoTrain) { uw.$('#mult_status').text('Auto Train não encontrado.').css('color','#f87171'); return; }
+
             const townIds = Object.keys(uw.ITowns.towns);
             if (townIds.length === 0) { uw.$('#mult_status').text('Nenhuma cidade encontrada.').css('color','#f87171'); return; }
 
@@ -89,21 +90,14 @@ class MultTools extends ModernUtil {
                 if (!researches?.colonize_ship) continue;
 
                 // Max colonize_ship = população total da cidade / custo de população
-                // Usa getTotalPopulation do AutoTrain para consistência
-                const totalPop = uw.modernBot.autoTrain.getTotalPopulation(townId);
+                const totalPop = autoTrain.getTotalPopulation(townId);
                 const popCost  = uw.GameData.units['colonize_ship']?.population ?? 170;
                 const maxQty   = Math.floor(totalPop / popCost);
                 if (maxQty <= 0) continue;
 
-                // Seta no AutoTrain
-                if (!uw.modernBot.autoTrain.city_troops[townId]) {
-                    uw.modernBot.autoTrain.city_troops[townId] = {};
-                }
-                uw.modernBot.autoTrain.city_troops[townId]['colonize_ship'] = maxQty;
+                autoTrain.setTroopTarget(townId, 'colonize_ship', maxQty);
                 count++;
             }
-
-            uw.modernBot.autoTrain.storage.save('troops', uw.modernBot.autoTrain.city_troops);
 
             const msg = `✓ Colonize ship configurado em ${count} cidade(s).`;
             uw.$('#mult_status').text(msg).css('color','#4ade80');
@@ -116,8 +110,8 @@ class MultTools extends ModernUtil {
 
     /* Liga o Auto Pesquisa (AutoResearch) para todas as cidades de uma vez.
        O módulo em si já roda automaticamente em todas as cidades do jogador
-       assim que ativo — aqui só garantimos que está ligado, sem precisar
-       abrir a aba Train pra clicar manualmente. */
+       assim que ativo — aqui só garantimos que está ligado, via a API
+       publica ensureActive(), sem precisar checar _active/_tick aqui. */
     applyResearchPreset = () => {
         try {
             const research = uw.modernBot.autoResearch;
@@ -129,12 +123,7 @@ class MultTools extends ModernUtil {
             const townCount = Object.keys(uw.ITowns.towns).length;
             if (townCount === 0) { uw.$('#mult_status').text('Nenhuma cidade encontrada.').css('color','#f87171'); return; }
 
-            if (!research._active) {
-                research.start();
-            } else {
-                // Já estava ativo — força uma varredura imediata em vez de esperar o próximo tick de 30s
-                research._tick();
-            }
+            research.ensureActive();
 
             const msg = `✓ Auto Pesquisa ativo em ${townCount} cidade(s).`;
             uw.$('#mult_status').text(msg).css('color','#4ade80');
