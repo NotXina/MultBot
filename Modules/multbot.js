@@ -39,42 +39,42 @@ class MultBot {
             size: [845, 560],
             tabs: [
                 {
-                    title: 'Status',
+                    title: multT('tab_status'),
                     id: 'status',
                     render: this.settingsStatus,
                 },
                 {
-                    title: 'Farm',
+                    title: multT('tab_farm'),
                     id: 'farm',
                     render: this.settingsFarm,
                 },
                 {
-                    title: 'Build',
+                    title: multT('tab_build'),
                     id: 'build',
                     render: this.settingsBuild,
                 },
                 {
-                    title: 'Train',
+                    title: multT('tab_train'),
                     id: 'train',
                     render: this.settingsTrain,
                 },
                 {
-                    title: 'Mix',
+                    title: multT('tab_mix'),
                     id: 'mix',
                     render: this.settingsMix,
                 },
                 {
-                    title: 'Attack',
+                    title: multT('tab_attack'),
                     id: 'attack',
                     render: this.settingsAttack,
                 },
                 {
-                    title: 'Mult',
+                    title: multT('tab_mult'),
                     id: 'mult',
                     render: this.settingsMult,
                 },
                 {
-                    title: 'Console',
+                    title: multT('tab_console'),
                     id: 'console',
                     render: this.console.renderSettings,
                 },
@@ -85,16 +85,17 @@ class MultBot {
         this.setup();
     }
 
-    /* Instancia um módulo isolado de falha: se o construtor de um módulo
-       lançar exceção, o erro vai pro console (do jogo + BotConsole) e
-       os módulos seguintes continuam sendo instanciados normalmente.
-       Sem isso, um módulo quebrado matava a inicialização de TODOS os
-       módulos declarados depois dele no construtor. */
+    /* Instantiates a module isolated from failure: if a module's
+       constructor throws an exception, the error goes to the console
+       (game console + BotConsole) and the following modules keep
+       getting instantiated normally. Without this, one broken module
+       would kill the initialization of ALL modules declared after it
+       in the constructor. */
     _safeInit = (name, factory) => {
         try {
             return factory();
         } catch (e) {
-            const msg = `[MultBot] ✗ Falha ao inicializar módulo "${name}": ${e?.message ?? e}`;
+            const msg = `[MultBot] ✗ Failed to initialize module "${name}": ${e?.message ?? e}`;
             console.error(msg, e);
             try {
                 if (this.console && typeof this.console.log === 'function') this.console.log(msg);
@@ -144,10 +145,10 @@ class MultBot {
         return html;
     };
 
-    /* Colonize Ships agora renderiza aqui dentro, na aba Mult,
-       junto com os presets, Auto Pesquisa e Auto Sacrificio.
-       A aba Ships separada foi removida - era ela que estava
-       quebrada por causa do this._getTownName. */
+    /* Colonize Ships now renders here, inside the Mult tab,
+       alongside the presets, Auto Research and Auto Sacrifice.
+       The separate Ships tab was removed - it was the one that
+       was broken because of this._getTownName. */
     settingsMult = () => {
         let html = '';
         html += this.multTools ? this.multTools.settings() : this._missingModuleHtml('Mult Tools');
@@ -163,13 +164,13 @@ class MultBot {
         return html;
     };
 
-    /* HTML simples mostrado no lugar de um módulo que falhou ao
-       inicializar, pra deixar claro na UI (em vez de estourar
-       exceção ao renderizar a aba). */
+    /* Simple HTML shown in place of a module that failed to
+       initialize, to make it clear in the UI (instead of throwing
+       an exception when rendering the tab). */
     _missingModuleHtml = (name) => {
         return `<div class="game_border" style="margin-bottom:20px;">
             <div style="padding:8px;font-size:11px;color:#f87171;">
-                ⚠ Módulo "${name}" falhou ao carregar. Veja o console (F12) ou a aba Console do MultBot.
+                ⚠ ${multT('module_failed', { name })}
             </div>
         </div>`;
     };
@@ -197,9 +198,9 @@ class MultBot {
             const oldRender = townController.controller.town_groups_list_view.render;
             townController.controller.town_groups_list_view.render = function () {
                 oldRender.call(this);
-                const both = `<div style='position: absolute; display:flex; align-items:center; justify-content:center; font-size:13px; margin: 1px; position: absolute; height: 20px; width: 25px; right: 18px;' title='Construção + Recrutamento'>🔨🔧</div>`;
-                const build = `<div style='display:flex; align-items:center; justify-content:center; font-size:14px; margin: 1px; position: absolute; height: 20px; width: 25px; right: 18px;' title='Construção'>🔨</div>`;
-                const troop = `<div style='display:flex; align-items:center; justify-content:center; font-size:14px; margin: 1px; position: absolute; height: 20px; width: 25px; right: 18px;' title='Recrutamento'>🔧</div>`;
+                const both = `<div style='position: absolute; display:flex; align-items:center; justify-content:center; font-size:13px; margin: 1px; position: absolute; height: 20px; width: 25px; right: 18px;' title='${multT('tooltip_build_and_train')}'>🔨🔧</div>`;
+                const build = `<div style='display:flex; align-items:center; justify-content:center; font-size:14px; margin: 1px; position: absolute; height: 20px; width: 25px; right: 18px;' title='${multT('tooltip_build')}'>🔨</div>`;
+                const troop = `<div style='display:flex; align-items:center; justify-content:center; font-size:14px; margin: 1px; position: absolute; height: 20px; width: 25px; right: 18px;' title='${multT('tooltip_train')}'>🔧</div>`;
                 const townIds = uw.multBot.autoBuild ? Object.keys(uw.multBot.autoBuild.towns_buildings) : [];
                 const troopsIds = uw.multBot.autoTrain ? uw.multBot.autoTrain.getActiveList().map(entry => entry.toString()) : [];
                 uw.$('.town_group_town').each(function () {
