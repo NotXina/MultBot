@@ -88,7 +88,7 @@ class AutoBootcamp extends ModernUtil {
 
     toggle = () => {
         if (!this.enable_auto_bootcamp) {
-            this.enable_auto_bootcamp = setInterval(this.main, 4000);
+            this.enable_auto_bootcamp = this.createGuardedInterval(this.main, 4000);
         } else {
             clearInterval(this.enable_auto_bootcamp);
             this.enable_auto_bootcamp = null;
@@ -97,7 +97,7 @@ class AutoBootcamp extends ModernUtil {
         this.updateSettings();
     };
 
-    attackBootcamp = () => {
+    attackBootcamp = async () => {
         let cooldown = uw.MM.getModelByNameAndPlayerId('PlayerAttackSpot').getCooldownDuration();
         if (cooldown > 0) return false;
 
@@ -134,12 +134,12 @@ class AutoBootcamp extends ModernUtil {
         if (Object.keys(units).length === 0) return false;
 
         // Send the attack
-        this.postAttackBootcamp(units);
+        await this.postAttackBootcamp(units);
 
         return true;
     };
 
-    rewardBootcamp = () => {
+    rewardBootcamp = async () => {
         let model = uw.MM.getModelByNameAndPlayerId('PlayerAttackSpot');
 
         // Stop if level is not found
@@ -155,52 +155,62 @@ class AutoBootcamp extends ModernUtil {
         // Check if the reward is instant
         let reward = model.getReward();
         if (reward.power_id.includes('instant') && !reward.power_id.includes('favor')) {
-            this.useBootcampReward();
+            await this.useBootcampReward();
             return true;
         }
 
         // Check if the reward is stashable
-        if (reward.stashable) this.stashBootcampReward();
-        else this.useBootcampReward();
+        if (reward.stashable) await this.stashBootcampReward();
+        else await this.useBootcampReward();
 
         return true;
     };
 
     /* Main function, call in loop */
-    main = () => {
-        if (this.rewardBootcamp()) return;
-        if (this.attackBootcamp()) return;
+    main = async () => {
+        if (await this.rewardBootcamp()) return;
+        if (await this.attackBootcamp()) return;
     };
 
     /* Send post request to attack with the given units */
-    postAttackBootcamp = units => {
-        const data = {
-            model_url: `PlayerAttackSpot/${uw.Game.player_id}`,
-            action_name: 'attack',
-            arguments: units,
-        };
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
+    postAttackBootcamp = async units => {
+        try {
+            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+                model_url: `PlayerAttackSpot/${uw.Game.player_id}`,
+                action_name: 'attack',
+                arguments: units,
+            });
+        } catch (e) {
+            this.console.log('[AutoBootcamp] Erro ao atacar o campo de treinamento: ' + e.message);
+        }
     };
 
     /* Send requesto to the server to use the reward */
-    useBootcampReward = () => {
-        const data = {
-            model_url: `PlayerAttackSpot/${uw.Game.player_id}`,
-            action_name: 'useReward',
-            arguments: {},
-        };
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
+    useBootcampReward = async () => {
+        try {
+            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+                model_url: `PlayerAttackSpot/${uw.Game.player_id}`,
+                action_name: 'useReward',
+                arguments: {},
+            });
+        } catch (e) {
+            this.console.log('[AutoBootcamp] Erro ao usar a recompensa: ' + e.message);
+        }
     };
 
-    /* Send request to the server to stash the reward */
-    stashBootcampReward = () => {
-        const data = {
-            model_url: `PlayerAttackSpot/${uw.Game.player_id}`,
-            action_name: 'stashReward',
-            arguments: {},
-        };
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, 0, {
-            error: this.useBootcampReward,
-        });
+    /* Send request to the server to stash the reward. Se falhar,
+       tenta usar a recompensa direto (mesmo fallback que existia
+       antes via callback de erro do ajaxPost legado). */
+    stashBootcampReward = async () => {
+        try {
+            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+                model_url: `PlayerAttackSpot/${uw.Game.player_id}`,
+                action_name: 'stashReward',
+                arguments: {},
+            });
+        } catch (e) {
+            this.console.log('[AutoBootcamp] Erro ao guardar a recompensa, tentando usar direto: ' + e.message);
+            await this.useBootcampReward();
+        }
     };
 }
