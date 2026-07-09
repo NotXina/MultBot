@@ -198,7 +198,15 @@ class AutoFarm extends MultUtil {
 
     /* return the time before the next collection */
     getNextCollection = () => {
-        const { models } = uw.MM.getCollections().FarmTownPlayerRelation[0];
+        /* FIX: antes acessava via uw.MM.getCollections().FarmTownPlayerRelation[0],
+           diferente do padrão usado no resto do arquivo/projeto
+           (getOnlyCollectionByName) e sem nenhuma proteção - se essa
+           collection viesse undefined (conta nova, timing de carregamento
+           da página, etc), o acesso [0].models estourava exceção sem
+           try/catch, travando o main() inteiro a cada tick, silenciosamente. */
+        const collection = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation');
+        const models = collection?.models ?? [];
+        if (models.length === 0) return 0;
 
         const lootCounts = {};
         for (const model of models) {
@@ -309,32 +317,39 @@ class AutoFarm extends MultUtil {
 
     main = async () => {
         if (window.__multbot_captcha_active) return;
-        // Check that the timer is not too high
-        const next_collection = this.getNextCollection();
-        if (next_collection && (this.timer > next_collection + 60 * 1_000 || this.timer < next_collection)) {
-            this.timer = next_collection + Math.floor(Math.random() * 20_000) + 10_000;
+        try {
+            // Check that the timer is not too high
+            const next_collection = this.getNextCollection();
+            if (next_collection && (this.timer > next_collection + 60 * 1_000 || this.timer < next_collection)) {
+                this.timer = next_collection + Math.floor(Math.random() * 20_000) + 10_000;
+            }
+
+            // Claim resources when timer has passed
+            if (this.timer < 1) {
+                // Generate the list of polis and claim resources
+                this.polis_list = this.generateList();
+
+                // Claim the resources, stop the interval and restart it
+                clearInterval(this.active);
+                this.active = null;
+
+                await this.claim();
+                this.active = setInterval(this.main, 5000);
+
+                // Set the new timer 
+                const rand = Math.floor(Math.random() * 20_000) + 10_000;
+                this.timer = this.timing + rand;
+                if (this.timer < next_collection) this.timer = next_collection + rand;
+            }
+
+            // update the timer
+            this.updateTimer();
+        } catch (e) {
+            this.console.log('[AutoFarm] Erro no main(): ' + (e?.message ?? e));
+            // Garante que o interval nao fica travado (parado) se o erro
+            // aconteceu depois do clearInterval mas antes de recria-lo.
+            if (!this.active) this.active = setInterval(this.main, 5000);
         }
-
-        // Claim resources when timer has passed
-        if (this.timer < 1) {
-            // Generate the list of polis and claim resources
-            this.polis_list = this.generateList();
-
-            // Claim the resources, stop the interval and restart it
-            clearInterval(this.active);
-            this.active = null;
-
-            await this.claim();
-            this.active = setInterval(this.main, 5000);
-
-            // Set the new timer 
-            const rand = Math.floor(Math.random() * 20_000) + 10_000;
-            this.timer = this.timing + rand;
-            if (this.timer < next_collection) this.timer = next_collection + rand;
-        }
-
-        // update the timer
-        this.updateTimer();
     };
 
     /* Claim resources from a single polis */
