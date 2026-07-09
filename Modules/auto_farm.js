@@ -245,24 +245,46 @@ class AutoFarm extends MultUtil {
 
         // If the captain is active, claim all the resources at once and fake the opening
         if (isCaptainActive && !this.gui) {
-            await this.fakeOpening();
-            await this.sleep(Math.random() * 2000 + 1000); // random between 1 second and 3
-            await this.fakeSelectAll();
-            await this.sleep(Math.random() * 2000 + 1000);
-            if (this.timing <= 600_000) await this.claimMultiple(300, 600);
-            if (this.timing > 600_000) await this.claimMultiple(1200, 2400);
-            await this.fakeUpdate();
+            try {
+                await this.fakeOpening();
+                await this.sleep(Math.random() * 2000 + 1000); // random between 1 second and 3
+                await this.fakeSelectAll();
+                await this.sleep(Math.random() * 2000 + 1000);
+                if (this.timing <= 600_000) await this.claimMultiple(300, 600);
+                if (this.timing > 600_000) await this.claimMultiple(1200, 2400);
+                await this.fakeUpdate();
 
-            setTimeout(() => uw.WMap.removeFarmTownLootCooldownIconAndRefreshLootTimers(), 2000);
-            return;
+                setTimeout(() => uw.WMap.removeFarmTownLootCooldownIconAndRefreshLootTimers(), 2000);
+                return;
+            } catch (e) {
+                /* Se o caminho do Captain (claim em massa) falhar por
+                   qualquer motivo (timeout, erro do servidor, etc), cai
+                   pro caminho de coleta individual abaixo em vez de
+                   ficar preso repetindo o mesmo erro pra sempre a cada
+                   ciclo - assim o farm continua funcionando (mais
+                   devagar) mesmo quando o caminho em massa está com
+                   problema. */
+                this.console.log('[AutoFarm] Caminho do Captain falhou (' + (e?.message ?? e) + '), usando coleta individual como alternativa.');
+            }
         }
 
         if (isCaptainActive && this.gui) {
-            await this.fakeGuiUpdate();
-            return;
+            try {
+                await this.fakeGuiUpdate();
+                return;
+            } catch (e) {
+                this.console.log('[AutoFarm] Caminho do Captain (GUI) falhou (' + (e?.message ?? e) + '), usando coleta individual como alternativa.');
+            }
         }
 
-        // If the captain is not active, claim the resources one by one, but limit the number of claims
+        // If the captain is not active (or the captain path failed above), claim the resources one by one, but limit the number of claims
+        await this._claimOneByOne(polis_list);
+    };
+
+    /* Coleta cidade a cidade, respeitando o limite de 60 por ciclo.
+       Usado quando o Captain não está ativo, e também como fallback
+       quando o caminho em massa (claimMultiple) falha. */
+    _claimOneByOne = async (polis_list) => {
         let max = 60;
         const { models: player_relation_models } = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation');
         const { models: farm_town_models } = uw.MM.getOnlyCollectionByName('FarmTown');
