@@ -160,8 +160,7 @@ class AutoParty extends ModernUtil {
         if (available < 300) return;
 
         let triumph = this.getCelebrationsList('triumph');
-        if (!this.single) {
-            // single and multiple are swapped...
+        if (this.single) {
             for (let town_id in uw.ITowns.towns) {
                 if (triumph.includes(parseInt(town_id))) continue;
                 this.makeCelebration('triumph', town_id);
