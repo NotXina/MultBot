@@ -46,6 +46,13 @@ class ModernUtil {
         this.storage = storage;
     }
 
+    /* Retorna o nome TRADUZIDO de uma unidade, construcao, pesquisa,
+       deus ou HEROI, direto dos dados nativos do jogo (uw.GameData) -
+       bate sempre com o idioma configurado no cliente, sem dicionario
+       manual. Categorias: 'unit', 'building', 'research', 'god', 'hero'.
+       Fallback seguro para o proprio ID se o dado nao existir.
+       Confirmado: uw.GameData.heroes[id].name existe e vem traduzido
+       (ex: "andromeda" -> "Andrômeda"). */
     getGameName = (category, id) => {
         try {
             if (category === 'unit') {
@@ -61,11 +68,18 @@ class ModernUtil {
                 const gods = uw.GameData.gods;
                 const d = gods ? gods[id] : null;
                 if (d && d.name) return d.name;
+            } else if (category === 'hero') {
+                const heroes = uw.GameData.heroes;
+                const d = heroes ? heroes[id] : null;
+                if (d && d.name) return d.name;
             }
         } catch (e) {}
         return id;
     };
 
+    /* FONTE UNICA para "nome de exibicao de uma cidade a partir do ID".
+       Simples e leve de proposito: so consulta uw.ITowns.towns (suas
+       proprias cidades) e uw.WMap.towns como fallback legado. */
     getTownName = (townId) => {
         if (!townId) return String(townId);
 
