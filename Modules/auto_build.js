@@ -123,21 +123,27 @@ class AutoBuild extends ModernUtil {
             <div id="buildings_lvl_buttons"></div>
         </div> `;
     };
+    /* Monta o objeto de preset de construcoes: nivel maximo em tudo,
+       exceto os overrides passados (ex: {barracks:5, wall:0}).
+       Usado pelos presets de cidade unica (naval/terrestre) abaixo e
+       por applyPresetToAllTowns(), pra nao duplicar a lista de
+       construcoes e a busca de max_level em varios lugares. */
+    _buildBuildingsPreset = (overrides = {}) => {
+        const buildings = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
+        const preset = {};
+        for (const b of buildings) {
+            const maxLevel = uw.GameData.buildings[b]?.max_level ?? 45;
+            preset[b] = overrides.hasOwnProperty(b) ? overrides[b] : maxLevel;
+        }
+        return preset;
+    };
     /* Preset Naval: tudo no maximo, exceto quartel=5 e muro=0.
        Aplica SOMENTE na cidade atualmente ativa no jogo. */
     applyNavalPreset = () => {
         try {
             const town = uw.ITowns.getCurrentTown();
             const town_id = town.getId();
-            const buildings = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
-            const preset = {};
-            for (const b of buildings) {
-                const maxLevel = uw.GameData.buildings[b]?.max_level ?? 45;
-                if (b === 'barracks') preset[b] = 5;
-                else if (b === 'wall') preset[b] = 0;
-                else preset[b] = maxLevel;
-            }
-            this.towns_buildings[town_id] = preset;
+            this.towns_buildings[town_id] = this._buildBuildingsPreset({ barracks: 5, wall: 0 });
             this.storage.save('buildings', this.towns_buildings);
             if (!this.interval) this.startInterval();
             this.setPolisInSettings(town_id);
@@ -154,15 +160,7 @@ class AutoBuild extends ModernUtil {
         try {
             const town = uw.ITowns.getCurrentTown();
             const town_id = town.getId();
-            const buildings = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
-            const preset = {};
-            for (const b of buildings) {
-                const maxLevel = uw.GameData.buildings[b]?.max_level ?? 45;
-                if (b === 'docks') preset[b] = 5;
-                else if (b === 'wall') preset[b] = 0;
-                else preset[b] = maxLevel;
-            }
-            this.towns_buildings[town_id] = preset;
+            this.towns_buildings[town_id] = this._buildBuildingsPreset({ docks: 5, wall: 0 });
             this.storage.save('buildings', this.towns_buildings);
             if (!this.interval) this.startInterval();
             this.setPolisInSettings(town_id);
@@ -172,6 +170,22 @@ class AutoBuild extends ModernUtil {
         } catch (e) {
             this.console.log('[AutoBuild] Erro ao aplicar preset terrestre: ' + e.message);
         }
+    };
+    /* API publica: aplica o mesmo preset de construcoes (overrides) em
+       TODAS as cidades do jogador de uma vez. Criado pra o MultTools
+       (aba Mult) nao precisar mais ler/escrever this.towns_buildings
+       diretamente - agora ele so chama esse metodo. Retorna quantas
+       cidades foram afetadas. */
+    applyPresetToAllTowns = (overrides = {}) => {
+        const townIds = Object.keys(uw.ITowns.towns);
+        if (townIds.length === 0) return 0;
+        const preset = this._buildBuildingsPreset(overrides);
+        for (const townId of townIds) {
+            this.towns_buildings[townId] = { ...preset };
+        }
+        this.storage.save('buildings', this.towns_buildings);
+        if (!this.interval) this.startInterval();
+        return townIds.length;
     };
     /* Update the senate view */
     updateSenate = (event, handler) => {
