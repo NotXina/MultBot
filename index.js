@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         MultBot
 // @author       NotXina
-// @description  ModernBot aprimorado com módulos adicionais para Grepolis
-// @version      1.3.1
+// @description  Automação modular para Grepolis: construção, recrutamento, ataque, defesa, farm e mais.
+// @version      1.4.0
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -58,7 +58,7 @@
         script.textContent = fullCode;
         document.head.appendChild(script);
         script.remove();
-        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.3.0)');
+        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.4.0)');
     }
 
     async function fetchModule(index, attempt = 0) {
