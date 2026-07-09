@@ -7,31 +7,33 @@ class ModernBot {
         this.$menu = this.createModernMenu();
         const $divider = uw.$('<div class="divider"></div>');
 
-        this.autoFarm = new AutoFarm(this.console, this.storage);
-        this.$menu.append(this.autoFarm.$activity)
-        this.$ui.append(this.autoFarm.$popup)
+        this.autoFarm = this._safeInit('AutoFarm', () => new AutoFarm(this.console, this.storage));
+        if (this.autoFarm) {
+            this.$menu.append(this.autoFarm.$activity);
+            this.$ui.append(this.autoFarm.$popup);
+        }
 
-        this.autoGratis = new AutoGratis(this.console, this.storage);
-        this.autoRuralLevel = new AutoRuralLevel(this.console, this.storage);
-        this.autoBuild = new AutoBuild(this.console, this.storage);
-        this.autoRuralTrade = new AutoRuralTrade(this.console, this.storage);
-        this.autoBootcamp = new AutoBootcamp(this.console, this.storage);
-        this.autoParty = new AutoParty(this.console, this.storage);
-        this.autoTrain = new AutoTrain(this.console, this.storage);
-        this.autoHide = new AutoHide(this.console, this.storage);
-        this.antiRage = new AntiRage(this.console, this.storage);
-        this.autoTrade = new AutoTrade(this.console, this.storage);
-        this.colonizeShipSender = new ColonizeShipSender(this.console, this.storage);
-        this.multTools    = new MultTools(this.console, this.storage);
-        this.autoMilitia      = new AutoMilitia(this.console, this.storage);
-        this.autoDodge        = new AutoDodge(this.console, this.storage);
-        this.autoAttack       = new AutoAttack(this.console, this.storage);
-        this.autoAresSacrifice = new AutoAresSacrifice(this.console, this.storage);
-        this.autoResearch     = new AutoResearch(this.console, this.storage);
-        this.autoSendResources = new AutoSendResources(this.console, this.storage);
-        this.statusPanel  = new StatusPanel(this.console, this.storage);
+        this.autoGratis         = this._safeInit('AutoGratis', () => new AutoGratis(this.console, this.storage));
+        this.autoRuralLevel     = this._safeInit('AutoRuralLevel', () => new AutoRuralLevel(this.console, this.storage));
+        this.autoBuild          = this._safeInit('AutoBuild', () => new AutoBuild(this.console, this.storage));
+        this.autoRuralTrade     = this._safeInit('AutoRuralTrade', () => new AutoRuralTrade(this.console, this.storage));
+        this.autoBootcamp       = this._safeInit('AutoBootcamp', () => new AutoBootcamp(this.console, this.storage));
+        this.autoParty          = this._safeInit('AutoParty', () => new AutoParty(this.console, this.storage));
+        this.autoTrain          = this._safeInit('AutoTrain', () => new AutoTrain(this.console, this.storage));
+        this.autoHide           = this._safeInit('AutoHide', () => new AutoHide(this.console, this.storage));
+        this.antiRage           = this._safeInit('AntiRage', () => new AntiRage(this.console, this.storage));
+        this.autoTrade          = this._safeInit('AutoTrade', () => new AutoTrade(this.console, this.storage));
+        this.colonizeShipSender = this._safeInit('ColonizeShipSender', () => new ColonizeShipSender(this.console, this.storage));
+        this.multTools          = this._safeInit('MultTools', () => new MultTools(this.console, this.storage));
+        this.autoMilitia        = this._safeInit('AutoMilitia', () => new AutoMilitia(this.console, this.storage));
+        this.autoDodge          = this._safeInit('AutoDodge', () => new AutoDodge(this.console, this.storage));
+        this.autoAttack         = this._safeInit('AutoAttack', () => new AutoAttack(this.console, this.storage));
+        this.autoAresSacrifice  = this._safeInit('AutoAresSacrifice', () => new AutoAresSacrifice(this.console, this.storage));
+        this.autoResearch       = this._safeInit('AutoResearch', () => new AutoResearch(this.console, this.storage));
+        this.autoSendResources  = this._safeInit('AutoSendResources', () => new AutoSendResources(this.console, this.storage));
+        this.statusPanel        = this._safeInit('StatusPanel', () => new StatusPanel(this.console, this.storage));
 
-        this.settingsFactory = new createGrepoWindow({
+        this.settingsFactory = this._safeInit('SettingsWindow', () => new createGrepoWindow({
             id: 'MODERN_BOT',
             title: 'ModernBot (MultBot)',
             size: [845, 560],
@@ -78,49 +80,67 @@ class ModernBot {
                 },
             ],
             start_tab: 0,
-        });
+        }));
 
         this.setup();
     }
 
+    /* Instancia um módulo isolado de falha: se o construtor de um módulo
+       lançar exceção, o erro vai pro console (do jogo + BotConsole) e
+       os módulos seguintes continuam sendo instanciados normalmente.
+       Sem isso, um módulo quebrado matava a inicialização de TODOS os
+       módulos declarados depois dele no construtor. */
+    _safeInit = (name, factory) => {
+        try {
+            return factory();
+        } catch (e) {
+            const msg = `[MultBot] ✗ Falha ao inicializar módulo "${name}": ${e?.message ?? e}`;
+            console.error(msg, e);
+            try {
+                if (this.console && typeof this.console.log === 'function') this.console.log(msg);
+            } catch (_) {}
+            return null;
+        }
+    };
+
     settingsStatus = () => {
-        return this.statusPanel.settings();
+        return this.statusPanel ? this.statusPanel.settings() : this._missingModuleHtml('Status');
     };
 
     settingsFarm = () => {
         let html = '';
-        html += this.autoRuralLevel.settings();
-        html += this.autoRuralTrade.settings();
-        html += this.autoSendResources.settings();
+        html += this.autoRuralLevel ? this.autoRuralLevel.settings() : this._missingModuleHtml('Auto Rural Level');
+        html += this.autoRuralTrade ? this.autoRuralTrade.settings() : this._missingModuleHtml('Auto Rural Trade');
+        html += this.autoSendResources ? this.autoSendResources.settings() : this._missingModuleHtml('Auto Send Resources');
         return html;
     };
 
     settingsBuild = () => {
         let html = '';
-        html += this.autoGratis.settings();
-        html += this.autoBuild.settings();
+        html += this.autoGratis ? this.autoGratis.settings() : this._missingModuleHtml('Auto Gratis');
+        html += this.autoBuild ? this.autoBuild.settings() : this._missingModuleHtml('Auto Build');
         return html;
     };
 
     settingsMix = () => {
         let html = '';
-        html += this.autoBootcamp.settings();
-        html += this.autoParty.settings();
-        html += this.autoHide.settings();
-        html += this.autoMilitia.settings();
-        html += this.autoDodge.settings();
+        html += this.autoBootcamp ? this.autoBootcamp.settings() : this._missingModuleHtml('Auto Bootcamp');
+        html += this.autoParty ? this.autoParty.settings() : this._missingModuleHtml('Auto Party');
+        html += this.autoHide ? this.autoHide.settings() : this._missingModuleHtml('Auto Hide');
+        html += this.autoMilitia ? this.autoMilitia.settings() : this._missingModuleHtml('Auto Militia');
+        html += this.autoDodge ? this.autoDodge.settings() : this._missingModuleHtml('Auto Dodge');
         return html;
     };
 
     settingsAttack = () => {
         let html = '';
-        html += this.autoAttack.settings();
+        html += this.autoAttack ? this.autoAttack.settings() : this._missingModuleHtml('Auto Attack');
         return html;
     };
 
     settingsTrain = () => {
         let html = '';
-        html += this.autoTrain.settings();
+        html += this.autoTrain ? this.autoTrain.settings() : this._missingModuleHtml('Auto Train');
         return html;
     };
 
@@ -130,21 +150,32 @@ class ModernBot {
        quebrada por causa do this._getTownName. */
     settingsMult = () => {
         let html = '';
-        html += this.multTools.settings();
-        html += this.colonizeShipSender.settings();
-        html += this.autoResearch.settings();
-        html += this.autoAresSacrifice.settings();
+        html += this.multTools ? this.multTools.settings() : this._missingModuleHtml('Mult Tools');
+        html += this.colonizeShipSender ? this.colonizeShipSender.settings() : this._missingModuleHtml('Colonize Ship Sender');
+        html += this.autoResearch ? this.autoResearch.settings() : this._missingModuleHtml('Auto Research');
+        html += this.autoAresSacrifice ? this.autoAresSacrifice.settings() : this._missingModuleHtml('Auto Ares Sacrifice');
         return html;
     };
 
     settingsTrade = () => {
         let html = ``;
-        html += this.autoTrade.settings();
+        html += this.autoTrade ? this.autoTrade.settings() : this._missingModuleHtml('Auto Trade');
         return html;
     };
 
+    /* HTML simples mostrado no lugar de um módulo que falhou ao
+       inicializar, pra deixar claro na UI (em vez de estourar
+       exceção ao renderizar a aba). */
+    _missingModuleHtml = (name) => {
+        return `<div class="game_border" style="margin-bottom:20px;">
+            <div style="padding:8px;font-size:11px;color:#f87171;">
+                ⚠ Módulo "${name}" falhou ao carregar. Veja o console (F12) ou a aba Console do MultBot.
+            </div>
+        </div>`;
+    };
+
     setup = () => {
-        this.settingsFactory.activate();
+        if (this.settingsFactory) this.settingsFactory.activate();
 
         uw.$('.gods_area_buttons').append(`
             <div class='circle_button modern_bot_settings' onclick='window.modernBot.settingsFactory.openWindow()'>
@@ -165,8 +196,8 @@ class ModernBot {
                 const both = `<div style='position: absolute; background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/hammer_wrench.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
                 const build = `<div style='background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/hammer_only.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
                 const troop = `<div style='background-image: url(https://raw.githubusercontent.com/Sau1707/ModernBot/main/img/wrench.png); background-size: 19px 19px; margin: 1px; background-repeat: no-repeat; position: absolute; height: 20px; width: 25px; right: 18px;'></div>`;
-                const townIds = Object.keys(uw.modernBot.autoBuild.towns_buildings);
-                const troopsIds = uw.modernBot.autoTrain.getActiveList().map(entry => entry.toString());
+                const townIds = uw.modernBot.autoBuild ? Object.keys(uw.modernBot.autoBuild.towns_buildings) : [];
+                const troopsIds = uw.modernBot.autoTrain ? uw.modernBot.autoTrain.getActiveList().map(entry => entry.toString()) : [];
                 uw.$('.town_group_town').each(function () {
                     const townId = parseInt(uw.$(this).attr('data-townid'));
                     const is_build = townIds.includes(townId.toString());
