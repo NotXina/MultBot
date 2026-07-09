@@ -112,6 +112,16 @@ class AutoResearch extends ModernUtil {
         this.console.log('[AutoPesquisa] Parado.');
     }
 
+    /* API publica: garante que o Auto Pesquisa esta ativo. Se ja
+       estava ativo, forca uma varredura imediata (_tick) em vez de
+       esperar o proximo ciclo de 30s. Criado pra o MultTools (aba
+       Mult) nao precisar mais checar this._active nem chamar
+       this._tick() diretamente. */
+    ensureActive() {
+        if (!this._active) this.start();
+        else this._tick();
+    }
+
     _updateTitle() {
         uw.$('#ares_title').css('filter', this._active
             ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
