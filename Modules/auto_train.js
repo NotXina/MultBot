@@ -369,6 +369,21 @@ class AutoTrain extends ModernUtil {
         this.storage.save('troops', this.city_troops);
     };
 
+    /* API publica: seta a quantidade ALVO (valor absoluto, nao
+       incremental) de uma unidade numa cidade. Diferente de
+       editTroopCount (que e feito pra UI: soma/subtrai com base no
+       shift e mexe no DOM do painel de configuracoes), esse metodo
+       nao depende de nada estar renderizado na tela. Criado pra o
+       MultTools (aba Mult) configurar colonize_ship em massa sem
+       tocar em this.city_troops diretamente. */
+    setTroopTarget = (town_id, troop, count) => {
+        if (!this.city_troops[town_id]) this.city_troops[town_id] = {};
+        if (count > 0) this.city_troops[town_id][troop] = count;
+        else delete this.city_troops[town_id][troop];
+        if (uw.$.isEmptyObject(this.city_troops[town_id])) delete this.city_troops[town_id];
+        this.storage.save('troops', this.city_troops);
+    };
+
     updatePolisInSettings = town_id => {
         const { units } = uw.GameData;
         const cityTroops = this.city_troops[town_id];
