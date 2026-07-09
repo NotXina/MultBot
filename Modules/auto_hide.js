@@ -4,7 +4,7 @@ class AutoHide extends ModernUtil {
 
         this.activePolis = this.storage.load('autohide_active', 0);
 
-        setInterval(this.main.bind(this), 5000)
+        this.createGuardedInterval(this.main, 5000);
 
         const addButton = () => {
             let box = uw.$('.order_count');
@@ -92,26 +92,28 @@ class AutoHide extends ModernUtil {
         }
     }
 
-    main = () => {
+    main = async () => {
         if (this.activePolis == 0) return;
         const town = uw.ITowns.towns[this.activePolis];
         const { iron } = town.resources()
         if (iron > 15000) {
-            this.storeIron(this.activePolis, iron)
+            await this.storeIron(this.activePolis, iron)
         }
     }
 
-    storeIron = (town_id, count) => {
-        const data = {
-            "model_url": "BuildingHide",
-            "action_name": "storeIron",
-            "arguments": {
-                "iron_to_store": count
-            },
-            "town_id": town_id,
+    storeIron = async (town_id, count) => {
+        try {
+            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+                "model_url": "BuildingHide",
+                "action_name": "storeIron",
+                "arguments": {
+                    "iron_to_store": count
+                },
+                "town_id": town_id,
+            });
+        } catch (e) {
+            this.console.log('[AutoHide] Erro ao guardar ferro: ' + e.message);
         }
-
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
     }
 
 }
