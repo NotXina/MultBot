@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  Automação modular para Grepolis: construção, recrutamento, ataque, defesa, farm e mais.
-// @version      1.5.0
+// @version      1.6.0
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -62,6 +62,7 @@
         'auto_send_resources.js',
         'colonize_ship_sender.js',
         'mult_tools.js',
+        'auto_quest.js',
         'multbot.js',
     ];
 
@@ -114,7 +115,7 @@
         try {
             const runBundle = new Function(fullCode);
             runBundle();
-            console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.4.3)');
+            console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.6.0)');
         } catch (e) {
             /* Se AINDA ASSIM colidir (ex: essa PRIMEIRA tentativa real
                esbarrando em lixo de uma sessao anterior preservada pelo
