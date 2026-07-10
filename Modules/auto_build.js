@@ -1,4 +1,4 @@
-class AutoBuild extends MultUtil {
+var AutoBuild = class extends MultUtil {
     /* Quando o jogo rejeita uma construcao por requisitos nao
        atendidos (ex: Porto precisa de outro predio num nivel
        minimo), esse predio fica "bloqueado" por esse tempo antes
@@ -451,4 +451,4 @@ class AutoBuild extends MultUtil {
             }
         }
     };
-}
+};

@@ -4,7 +4,7 @@
 //  entrante. Endpoint: building_farm / request_militia
 //  Payload exato do Noct AutoMilitia.
 // ══════════════════════════════════════════════════════
-class AutoMilitia extends MultUtil {
+var AutoMilitia = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
 
@@ -149,4 +149,4 @@ class AutoMilitia extends MultUtil {
             this.console.log('[AutoMilícia] Exceção: ' + e?.message);
         }
     }
-}
+};

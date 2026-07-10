@@ -3,7 +3,7 @@
 //  Placeholder — funcionalidade de trade manual via autoTradeBot
 //  A classe AutoTrade existe para ser instanciada pelo multbot.js
 // ══════════════════════════════════════════════════════
-class AutoTrade extends MultUtil {
+var AutoTrade = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
     }
@@ -174,4 +174,4 @@ class AutoTrade extends MultUtil {
     };
 
     /* sleep vem herdado de MultUtil (core.js) — não precisa duplicar aqui */
-}
+};

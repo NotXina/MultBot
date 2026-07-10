@@ -47,7 +47,7 @@
 //  Periodo de descanso (cooldown) por alvo, com jitter de +-10%,
 //  persistido em storage (sobrevive a reload).
 // ══════════════════════════════════════════════════════
-class AutoAttack extends MultUtil {
+var AutoAttack = class extends MultUtil {
     CHECK_INTERVAL_MS = 20000;
     SEND_DELAY_MS = 800;
     JITTER_PERCENT = 0.10;
@@ -783,4 +783,4 @@ class AutoAttack extends MultUtil {
             uw.Game.town_id = origStr;
         }
     }
-}
+};

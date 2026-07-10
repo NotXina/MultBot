@@ -9,7 +9,7 @@
 //  Auto Fuga (Dodge), Sacrificio de Ares e Auto Pesquisa,
 //  que ja existiam no bot mas nao apareciam no painel.
 // ══════════════════════════════════════════════════════
-class StatusPanel extends MultUtil {
+var StatusPanel = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
         this._interval = null;
@@ -190,4 +190,4 @@ class StatusPanel extends MultUtil {
         } catch(e) {}
         return result;
     }
-}
+};

@@ -1,4 +1,4 @@
-class AutoTrain extends MultUtil {
+var AutoTrain = class extends MultUtil {
     POWER_LIST = ['call_of_the_ocean', 'spartan_training', 'fertility_improvement'];
     GROUND_ORDER    = ['catapult', 'sword', 'archer', 'hoplite', 'slinger', 'rider', 'chariot'];
     NAVAL_ORDER     = ['small_transporter', 'bireme', 'trireme', 'attack_ship', 'big_transporter', 'demolition_ship', 'colonize_ship'];
@@ -610,4 +610,4 @@ class AutoTrain extends MultUtil {
             }
         });
     };
-}
+};

@@ -1,4 +1,4 @@
-class AutoGratis extends MultUtil {
+var AutoGratis = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
 
@@ -119,4 +119,4 @@ class AutoGratis extends MultUtil {
         uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
     };
     
-}
+};

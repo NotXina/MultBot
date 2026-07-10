@@ -2,7 +2,7 @@
 //  MODULE: MultTools
 //  Ferramentas em massa para todas as cidades
 // ══════════════════════════════════════════════════════
-class MultTools extends MultUtil {
+var MultTools = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
     }
@@ -133,4 +133,4 @@ class MultTools extends MultUtil {
             this.console.log('[MultTools] ' + this.t('error') + ': ' + (e?.message ?? e));
         }
     };
-}
+};

@@ -1,4 +1,4 @@
-class AntiRage extends MultUtil {
+var AntiRage = class extends MultUtil {
 	GOODS_ICONS = {
 		athena: 'js-power-icon.animated_power_icon.animated_power_icon_45x45.power_icon45x45.power.strength_of_heroes',
 		zeus: 'js-power-icon.animated_power_icon.animated_power_icon_45x45.power_icon45x45.power.fair_wind',
@@ -127,10 +127,10 @@ class AntiRage extends MultUtil {
                             <div class="temple_power_popup ">
                                 <div class="temple_power_popup_image power_icon86x86 transformation" style="filter: brightness(70%) sepia(104%) hue-rotate(14deg) saturate(1642%) contrast(0.8)"></div>
                                 <div class="temple_power_popup_info">
-                                    <h4>Enchanted Rage</h4>
-                                    <p> An Enchanted version of the normal rage </p> 
-                                    <p> Made for who try to troll with the autoclick </p>
-                                    <p><b> Cast Purification and Rage at the same time </b></p>
+                                    <h4>${this.t('ager_title')}</h4>
+                                    <p> ${this.t('ager_desc1')} </p> 
+                                    <p> ${this.t('ager_desc2')} </p>
+                                    <p><b> ${this.t('ager_desc3')} </b></p>
                                     <div class="favor_cost_info">
                                         <div class="resource_icon favor"></div>
                                         <span>300 zeus + 200 artemis</span>
@@ -273,4 +273,4 @@ class AntiRage extends MultUtil {
 		};
 		uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
 	};
-}
+};

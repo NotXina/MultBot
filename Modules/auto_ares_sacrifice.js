@@ -24,7 +24,7 @@
 //  model_url: "CastedPowers", action_name: "cast",
 //  arguments: { power_id: "ares_sacrifice", target_id: <town_id> }
 // ══════════════════════════════════════════════════════
-class AutoAresSacrifice extends MultUtil {
+var AutoAresSacrifice = class extends MultUtil {
     GOD_ID = 'ares';
     FAVOR_COST = 100;
     MAX_FURY = 5000;
@@ -318,4 +318,4 @@ class AutoAresSacrifice extends MultUtil {
             );
         });
     }
-}
+};

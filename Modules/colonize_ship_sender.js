@@ -3,7 +3,7 @@
 //  Envia colonize_ships de todas as cidades como apoio
 //  para uma cidade-alvo configurada pelo usuário.
 // ══════════════════════════════════════════════════════
-class ColonizeShipSender extends MultUtil {
+var ColonizeShipSender = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
         this._running    = false;
@@ -242,4 +242,4 @@ class ColonizeShipSender extends MultUtil {
     _log(message, type = 'info') {
         this.console.log('[ColonizeShipSender] ' + message);
     }
-}
+};

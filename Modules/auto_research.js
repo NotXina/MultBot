@@ -9,7 +9,7 @@
 //  bem sucedida); sem a guarda, o proximo tick podia comecar
 //  em cima do anterior ainda rodando.
 // ══════════════════════════════════════════════════════
-class AutoResearch extends MultUtil {
+var AutoResearch = class extends MultUtil {
     DEFAULT_ORDER = [
         'town_guard',
         'meteorology',
@@ -236,4 +236,4 @@ class AutoResearch extends MultUtil {
             );
         });
     }
-}
+};

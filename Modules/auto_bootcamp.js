@@ -1,11 +1,11 @@
-class AutoBootcamp extends MultUtil {
+var AutoBootcamp = class extends MultUtil {
     constructor(console, storage) {
         super(console, storage);
 
         // Create the buttons for the settings
-        this.$title = this.createTitle('auto_autobootcamp', 'Auto Bootcamp', this.toggle, '(click to toggle)');
-        this.$button_only_off = this.createButton('autobootcamp_off', 'Only off', this.triggerUseDef);
-        this.$button_off_def = this.createButton('autobootcamp_def', 'Off & Def', this.triggerUseDef);
+        this.$title = this.createTitle('auto_autobootcamp', this.t('abc_title'), this.toggle, this.t('click_to_toggle'));
+        this.$button_only_off = this.createButton('autobootcamp_off', this.t('abc_only_off'), this.triggerUseDef);
+        this.$button_off_def = this.createButton('autobootcamp_def', this.t('abc_off_def'), this.triggerUseDef);
         this.$settings = this.createSettingsHtml();
 
         // Save the state of the auto bootcamp
@@ -181,7 +181,7 @@ class AutoBootcamp extends MultUtil {
                 arguments: units,
             });
         } catch (e) {
-            this.console.log('[AutoBootcamp] Erro ao atacar o campo de treinamento: ' + e.message);
+            this.console.log('[AutoBootcamp] ' + this.t('abc_attack_error', { msg: e.message }));
         }
     };
 
@@ -194,7 +194,7 @@ class AutoBootcamp extends MultUtil {
                 arguments: {},
             });
         } catch (e) {
-            this.console.log('[AutoBootcamp] Erro ao usar a recompensa: ' + e.message);
+            this.console.log('[AutoBootcamp] ' + this.t('abc_use_reward_error', { msg: e.message }));
         }
     };
 
@@ -209,8 +209,8 @@ class AutoBootcamp extends MultUtil {
                 arguments: {},
             });
         } catch (e) {
-            this.console.log('[AutoBootcamp] Erro ao guardar a recompensa, tentando usar direto: ' + e.message);
+            this.console.log('[AutoBootcamp] ' + this.t('abc_stash_error', { msg: e.message }));
             await this.useBootcampReward();
         }
     };
-}
+};

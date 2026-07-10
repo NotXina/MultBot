@@ -23,7 +23,7 @@
 //  4) _getTownName foi removido - usa this.getTownName (herdado de
 //     MultUtil), eliminando a duplicacao dessa logica.
 // ══════════════════════════════════════════════════════
-class AutoDodge extends MultUtil {
+var AutoDodge = class extends MultUtil {
     EVACUATE_LEAD_SECONDS = 15;
     RECALL_BUFFER_SECONDS = 20;
     CAPTURE_DELAY_MS = 2500;
@@ -609,4 +609,4 @@ class AutoDodge extends MultUtil {
             uw.Game.town_id = origStr;
         }
     }
-}
+};

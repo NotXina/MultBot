@@ -1,4 +1,4 @@
-class AutoFarm extends MultUtil {
+var AutoFarm = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
 
@@ -486,4 +486,4 @@ class AutoFarm extends MultUtil {
             uw.$(".icon_right.icon_type_speed.ui-dialog-titlebar-close").trigger("click")
             myResolve();
         });
-}
+};

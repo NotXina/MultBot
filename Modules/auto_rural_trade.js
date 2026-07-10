@@ -1,4 +1,4 @@
-class AutoRuralTrade extends MultUtil {
+var AutoRuralTrade = class extends MultUtil {
 	constructor(c, s) {
 		super(c, s);
 
@@ -146,4 +146,4 @@ class AutoRuralTrade extends MultUtil {
 			this.console.log('[AutoRuralTrade] ' + this.t('artr_trade_error', { msg: e.message }));
 		}
 	};
-}
+};

@@ -1,4 +1,4 @@
-class MultBot {
+var MultBot = class {
     constructor() {
         this.console = new BotConsole();
         this.storage = new MultStorage();
@@ -237,7 +237,7 @@ class MultBot {
         return $middle
     }
 
-}
+};
 
 if (!window.__multbot_loaded__) {
     window.__multbot_loaded__ = true;

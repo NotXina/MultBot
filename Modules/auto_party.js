@@ -1,4 +1,4 @@
-class AutoParty extends MultUtil {
+var AutoParty = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
 
@@ -221,4 +221,4 @@ class AutoParty extends MultUtil {
             uw.gpAjax.ajaxPost('building_place', 'start_celebration', data);
         }
     };
-}
+};

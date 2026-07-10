@@ -1,4 +1,4 @@
-class AutoHide extends MultUtil {
+var AutoHide = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
 
@@ -116,4 +116,4 @@ class AutoHide extends MultUtil {
         }
     }
 
-}
+};
