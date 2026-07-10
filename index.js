@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  Automação modular para Grepolis: construção, recrutamento, ataque, defesa, farm e mais.
-// @version      1.4.0
+// @version      1.4.1
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -80,12 +80,25 @@
         }
         uw.__multbot_modules_injected__ = true;
 
-        const fullCode = codes.join('\n\n');
+        /* Envolve o bundle inteiro numa IIFE: cada "class X" declarada
+           por um modulo fica LOCAL a essa execucao especifica, em vez
+           de virar um identificador global. Mesmo que injectAll() acabe
+           rodando mais de uma vez por qualquer motivo (ex: o guard acima
+           nao persistir por causa de isolamento de sandbox especifico
+           de algum gerenciador de userscript), duas execucoes nunca mais
+           colidem entre si com "Identifier X ja foi declarado" - cada
+           uma tem seu proprio escopo de classes. O que precisa vazar pra
+           fora (uw.multBot = new MultBot(), guardado por
+           window.__multbot_loaded__ dentro do proprio multbot.js) continua
+           funcionando normalmente, ja que "uw"/"window" dentro da IIFE
+           ainda apontam pro escopo global de verdade - so as declaracoes
+           de classe passam a ser locais. */
+        const fullCode = '(function () {\n' + codes.join('\n\n') + '\n})();';
         const script = document.createElement('script');
         script.textContent = fullCode;
         document.head.appendChild(script);
         script.remove();
-        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.4.0)');
+        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.4.1)');
     }
 
     async function fetchModule(index, attempt = 0) {
