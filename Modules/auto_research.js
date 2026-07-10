@@ -47,9 +47,9 @@ class AutoResearch extends MultUtil {
             <div class="game_border_left"></div><div class="game_border_right"></div>
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            ${this.getTitleHtml('ares_title', 'Auto Pesquisa', this.toggle, '', this._active)}
+            ${this.getTitleHtml('ares_title', this.t('ar_title'), this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
-                Pesquisa automaticamente as proximas tecnologias disponiveis em todas as cidades. Verifica a cada 30s.
+                ${this.t('ar_desc')}
             </div>
             <div id="ares_status" style="padding:2px 10px;font-size:11px;color:#5a3a0a;"></div>
             <div id="ares_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
@@ -64,7 +64,7 @@ class AutoResearch extends MultUtil {
             });
             this._townSwitchSubscribed = true;
         } catch (e) {
-            this.console.log('[AutoPesquisa] Aviso: nao foi possivel inscrever no evento de troca de cidade: ' + (e?.message ?? e));
+            this.console.log('[AutoPesquisa] ' + this.t('ar_subscribe_warning', { msg: e?.message ?? e }));
         }
     }
 
@@ -83,8 +83,8 @@ class AutoResearch extends MultUtil {
 
             uw.$('#ares_status').html(
                 `<span style="color:#3a2a0a;font-weight:bold;">${townName}</span><br>` +
-                `<span style="color:#1a6b2a;">Concluidas: ${doneNames}</span><br>` +
-                `<span style="color:#5a3a0a;">Pendentes: ${pendingNames}</span>`
+                `<span style="color:#1a6b2a;">${this.t('ar_done_label')} ${doneNames}</span><br>` +
+                `<span style="color:#5a3a0a;">${this.t('ar_pending_label')} ${pendingNames}</span>`
             );
         } catch (e) {}
     }
@@ -99,7 +99,7 @@ class AutoResearch extends MultUtil {
         this._active = true;
         this.storage.save('ares_active', true);
         this._updateTitle();
-        this.console.log('[AutoPesquisa] Iniciado.');
+        this.console.log('[AutoPesquisa] ' + this.t('ar_started'));
         this._tick();
         this._interval = this.createGuardedInterval(() => this._tick(), 30000);
     }
@@ -109,7 +109,7 @@ class AutoResearch extends MultUtil {
         this.storage.save('ares_active', false);
         if (this._interval) { clearInterval(this._interval); this._interval = null; }
         this._updateTitle();
-        this.console.log('[AutoPesquisa] Parado.');
+        this.console.log('[AutoPesquisa] ' + this.t('ar_stopped_log'));
     }
 
     /* API publica: garante que o Auto Pesquisa esta ativo. Se ja
@@ -195,7 +195,7 @@ class AutoResearch extends MultUtil {
 
             return false;
         } catch (e) {
-            this.console.log(`[AutoPesquisa] Erro: ${e?.message}`);
+            this.console.log(`[AutoPesquisa] ${this.t('error')}: ${e?.message}`);
             return false;
         }
     }
@@ -224,7 +224,7 @@ class AutoResearch extends MultUtil {
             uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
                 res => {
                     if (res && !res.error) {
-                        const msg = `${townName}: ${this.getGameName('research', tech)} iniciado`;
+                        const msg = this.t('ar_research_started', { town: townName, tech: this.getGameName('research', tech) });
                         this.console.log(`[AutoPesquisa] ✓ ${msg}`);
                         uw.$('#ares_log').text(`✓ ${msg}`).css('color', '#1a6b2a');
                         resolve(true);
