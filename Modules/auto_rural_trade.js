@@ -143,7 +143,7 @@ class AutoRuralTrade extends MultUtil {
 				town_id: town_id,
 			});
 		} catch (e) {
-			this.console.log('[AutoRuralTrade] Erro ao comerciar com rural: ' + e.message);
+			this.console.log('[AutoRuralTrade] ' + this.t('artr_trade_error', { msg: e.message }));
 		}
 	};
 }
