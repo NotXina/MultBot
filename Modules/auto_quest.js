@@ -101,13 +101,13 @@ class AutoQuest extends MultUtil {
        so um lado existir, trata como missao normal (sem decidir
        nada), pra nao arriscar chamar "decide" em algo que nao
        precisa.
-       IMPORTANTE: so decide automaticamente quando o lado "Bem"
-       NAO tem custo nenhum (nem recursos, nem tropas) - ou seja,
-       so as missoes de tempo/espera (progress vazio ou so com
-       wait_till). Se a bifurcacao pedir recursos ou tropas, fica
-       de fora - decisao fica pra voce fazer manualmente no jogo,
-       ja que decidir provavelmente tranca o lado oposto. */
-    _getUndecidedGoodForks() {
+       IMPORTANTE: nao tem preferencia por Bem ou Mal - escolhe
+       QUALQUER lado que nao tenha custo (nem recursos, nem
+       tropas), ou seja, so as missoes de tempo/espera. Se os
+       DOIS lados pedirem algo, fica de fora - decisao fica pra
+       voce fazer manualmente no jogo, ja que decidir
+       provavelmente tranca o lado oposto. */
+    _getUndecidedFreeForks() {
         try {
             const collection = uw.MM.getOnlyCollectionByName('IslandQuest');
             const models = collection?.models ?? [];
@@ -136,11 +136,20 @@ class AutoQuest extends MultUtil {
                 const g = groups[base];
                 if (!g.good || !g.evil) continue;
 
-                const name = g.good.attributes.progressable_id;
-                if (this._decidedThisSession.has(name)) continue;
-                if (this._hasCost(g.good)) continue; // pede recurso/tropa - fica de fora
+                const goodFree = !this._hasCost(g.good);
+                const evilFree = !this._hasCost(g.evil);
 
-                result.push(name);
+                // Prefere "Bem" quando os dois sao de graca (tanto faz,
+                // mas precisa escolher um); senao pega o que for de graca.
+                let chosen, decision;
+                if (goodFree) { chosen = g.good; decision = 'good'; }
+                else if (evilFree) { chosen = g.evil; decision = 'evil'; }
+                else continue; // os dois tem custo - fica de fora
+
+                const name = chosen.attributes.progressable_id;
+                if (this._decidedThisSession.has(name)) continue;
+
+                result.push({ name, decision });
             }
             return result;
         } catch (e) {
@@ -161,7 +170,7 @@ class AutoQuest extends MultUtil {
     _renderStatus() {
         try {
             const quests = this._getSatisfiedQuests();
-            const forks = this._getUndecidedGoodForks();
+            const forks = this._getUndecidedFreeForks();
             let html = this.t('aq_ready_count', { count: quests.length });
             if (forks.length > 0) html += this.t('aq_pending_forks', { count: forks.length });
             uw.$('#aq_status').html(html);
@@ -192,13 +201,15 @@ class AutoQuest extends MultUtil {
                 await this.sleep(500);
             }
 
-            // 2. Decide bifurcacoes Bem/Mal pendentes, sempre escolhendo "Bem"
-            const forks = this._getUndecidedGoodForks();
-            for (const name of forks) {
-                const success = await this._decideQuest(townId, name);
+            // 2. Decide bifurcacoes pendentes que tenham um lado de graca
+            //    (tempo/espera) - escolhe Bem ou Mal, o que for de graca.
+            const forks = this._getUndecidedFreeForks();
+            for (const fork of forks) {
+                const success = await this._decideQuest(townId, fork.name, fork.decision);
                 if (success) {
-                    this._decidedThisSession.add(name);
-                    const msg = this.t('aq_decided_log', { name });
+                    this._decidedThisSession.add(fork.name);
+                    const side = this.t(fork.decision === 'good' ? 'aq_side_good' : 'aq_side_evil');
+                    const msg = this.t('aq_decided_log', { name: fork.name, side });
                     this.console.log('[AutoQuest] ' + msg);
                     uw.$('#aq_log').text(msg).css('color', '#1a6b2a');
                 }
@@ -241,19 +252,20 @@ class AutoQuest extends MultUtil {
     };
 
     /* Confirmado via captura real de rede: quando existe uma
-       bifurcacao Bem/Mal pendente, escolher um lado e feito via
-       model_url "IslandQuests", action_name "decide", arguments:
-       { decision: "good"|"evil", progressable_name: <nome> }.
+       bifurcacao pendente com um lado de graca, escolher esse
+       lado e feito via model_url "IslandQuests", action_name
+       "decide", arguments: { decision: "good"|"evil",
+       progressable_name: <nome> }.
        Repara que aqui e "progressable_name", nao "progressable_id"
        como no claimReward - nomes de campo diferentes confirmados
        em capturas separadas. */
-    _decideQuest = async (townId, progressableName) => {
+    _decideQuest = async (townId, progressableName, decision) => {
         const data = {
             model_url: 'IslandQuests',
             action_name: 'decide',
             captcha: null,
             arguments: {
-                decision: 'good',
+                decision: decision,
                 progressable_name: progressableName,
             },
             town_id: townId,
