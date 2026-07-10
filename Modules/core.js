@@ -287,6 +287,11 @@ const MULT_I18N = {
 		aq_decide_fail_log: '✗ Failed to decide {name}: {reason}',
 		aq_decide_network_error: '✗ Network error deciding {name}: {msg}',
 		aq_pending_forks: ', {count} choice(s) pending',
+		mt_rename_label: 'City Names',
+		mt_rename_desc: 'Renames all cities as OCxx-NN (ocean + sequence, ordered by city ID).',
+		mt_renamed_log: '✓ {town}: renamed to {name}',
+		mt_rename_error: '✗ {town}: rename failed - {msg}',
+		mt_rename_complete: '✓ {count} cities renamed.',
 	},
 	pt: {
 		active: 'Ativo',
@@ -481,6 +486,11 @@ const MULT_I18N = {
 		aq_decide_fail_log: '✗ Falha ao decidir {name}: {reason}',
 		aq_decide_network_error: '✗ Erro de rede ao decidir {name}: {msg}',
 		aq_pending_forks: ', {count} escolha(s) pendente(s)',
+		mt_rename_label: 'Nomes das Cidades',
+		mt_rename_desc: 'Renomeia todas as cidades como OCxx-NN (oceano + sequência, ordenado por ID da cidade).',
+		mt_renamed_log: '✓ {town}: renomeado para {name}',
+		mt_rename_error: '✗ {town}: falha ao renomear - {msg}',
+		mt_rename_complete: '✓ {count} cidade(s) renomeada(s).',
 	},
 };
 
