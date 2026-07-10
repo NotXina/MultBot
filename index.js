@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  Automação modular para Grepolis: construção, recrutamento, ataque, defesa, farm e mais.
-// @version      1.4.2
+// @version      1.5.0
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -82,22 +82,23 @@
 
         /* Envolve o bundle inteiro numa IIFE: cada "class X" declarada
            por um modulo fica LOCAL a essa execucao especifica, em vez
-           de virar um identificador global. Alem disso, uma checagem
-           bem no topo do bundle (de DENTRO do proprio codigo injetado,
-           nao so aqui fora em index.js) confere se uw.multBot ja existe
-           antes de declarar qualquer classe - se existir, e sinal de
-           que uma injecao anterior ja rodou com sucesso nesta mesma
-           pagina/janela (ex: navegacao "leve" via History API que o
-           gerenciador de userscript trata como pagina nova sem
-           realmente recarregar o documento), entao aborta sem tentar
-           redeclarar nada. */
+           de virar um identificador global. A flag __multbot_classes_declared__
+           e marcada como a PRIMEIRA linha executada, ANTES de qualquer
+           "class" - diferente de checar uw.multBot (que so existe
+           depois que TODA a inicializacao termina, deixando uma janela
+           de corrida de segundos onde duas execucoes quase simultaneas
+           passam pela checagem antes de qualquer uma declarar algo).
+           Com a flag marcada primeiro, a segunda tentativa - mesmo que
+           comece so alguns milissegundos depois - ja encontra a flag
+           true e aborta ANTES de tentar declarar qualquer classe. */
         const fullCode =
             '(function () {\n' +
             '  var __uw = (typeof unsafeWindow == "undefined") ? window : unsafeWindow;\n' +
-            '  if (__uw.multBot) {\n' +
-            '    console.warn("[MultBot] \\u26a0 MultBot ja estava rodando nesta pagina - reinjecao abortada antes de declarar qualquer classe.");\n' +
+            '  if (__uw.__multbot_classes_declared__) {\n' +
+            '    console.warn("[MultBot] \\u26a0 Classes ja declaradas nesta pagina - reinjecao abortada antes de declarar qualquer classe.");\n' +
             '    return;\n' +
             '  }\n' +
+            '  __uw.__multbot_classes_declared__ = true;\n' +
             codes.join('\n\n') +
             '\n})();';
 
@@ -113,9 +114,18 @@
         try {
             const runBundle = new Function(fullCode);
             runBundle();
-            console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.4.2)');
+            console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.4.3)');
         } catch (e) {
-            console.warn('[MultBot] ⚠ Falha ao injetar o bundle (provavelmente uma reinjeção tardia): ' + (e?.message ?? e));
+            /* Se AINDA ASSIM colidir (ex: essa PRIMEIRA tentativa real
+               esbarrando em lixo de uma sessao anterior preservada pelo
+               bfcache do navegador, ou uma extensao que reinjeta o
+               userscript sem recarregar a pagina de verdade), nao tem
+               como "desdeclarar" uma classe ja existente no ambiente JS
+               em tempo de execucao - a unica saida real e um reload
+               completo da pagina (Ctrl+Shift+R). Deixamos isso bem
+               explicito no aviso, em vez de so logar o erro tecnico. */
+            console.warn('[MultBot] ⚠ Falha ao injetar o bundle: ' + (e?.message ?? e));
+            console.warn('[MultBot] ⚠ Se o bot não carregou, dê um refresh completo na página (Ctrl+Shift+R) — o ambiente JS desta aba ficou com resíduo de uma execução anterior que não dá pra limpar sem recarregar.');
         }
     }
 
