@@ -15,9 +15,9 @@ class AutoTrade extends MultUtil {
             <div class="game_border_left"></div><div class="game_border_right"></div>
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            <div class="game_header bold">Auto Trade</div>
+            <div class="game_header bold">${this.t('at_trade_title')}</div>
             <div style="padding:8px;font-size:11px;color:#5a3a0a;">
-                Use <code>autoTradeBot</code> no console do navegador para acionar manualmente.
+                ${this.t('at_trade_desc')}
             </div>
         </div>`;
     };
@@ -26,7 +26,7 @@ class AutoTrade extends MultUtil {
 
     tradeUntilComplete = async (target = 'active', troop = 'bireme') => {
         if (target === 'active') target = uw.ITowns.getCurrentTown().id;
-        this.console.log(`[AutoTrade] Iniciando trade para ${target} (${troop})`);
+        this.console.log(`[AutoTrade] ${this.t('at_starting_trade', { target, troop })}`);
 
         let attempts = 0;
         const MAX_ATTEMPTS = 20;
@@ -35,7 +35,7 @@ class AutoTrade extends MultUtil {
             let amount;
             do {
                 if (attempts++ >= MAX_ATTEMPTS) {
-                    this.console.log('[AutoTrade] Limite de tentativas atingido — abortando.');
+                    this.console.log('[AutoTrade] ' + this.t('at_max_attempts'));
                     break;
                 }
                 amount = await this._calculateAmount(target, troop);
@@ -45,9 +45,9 @@ class AutoTrade extends MultUtil {
                 if (amount > 0) await this.sleep(30000);
             } while (amount > 0);
 
-            this.console.log('[AutoTrade] Trade concluído.');
+            this.console.log('[AutoTrade] ' + this.t('at_trade_complete'));
         } catch (e) {
-            this.console.log(`[AutoTrade] Erro: ${e.message}`);
+            this.console.log(`[AutoTrade] ${this.t('error')}: ${e.message}`);
             console.error('[AutoTrade] tradeUntilComplete error:', e);
         }
     };
@@ -58,7 +58,7 @@ class AutoTrade extends MultUtil {
 
         do {
             if (safetyCounter++ > 50) {
-                this.console.log('[AutoTrade] Safety break no loop de trade.');
+                this.console.log('[AutoTrade] ' + this.t('at_safety_break'));
                 break;
             }
             current = amount;
@@ -68,7 +68,7 @@ class AutoTrade extends MultUtil {
                 try {
                     amount = await this._sendBalance(town.id, target, troop, amount);
                 } catch (e) {
-                    this.console.log(`[AutoTrade] Erro ao enviar de ${town.getName()}: ${e.message}`);
+                    this.console.log(`[AutoTrade] ${this.t('at_send_error', { town: town.getName(), msg: e.message })}`);
                 }
             }
         } while (current > amount);
@@ -127,7 +127,7 @@ class AutoTrade extends MultUtil {
                 );
             }
         } catch (e) {
-            this.console.log(`[AutoTrade] Não foi possível obter trades em trânsito: ${e.message}`);
+            this.console.log(`[AutoTrade] ${this.t('at_transit_trade_error', { msg: e.message })}`);
         }
 
         return Math.max(0, todo);
