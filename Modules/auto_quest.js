@@ -20,6 +20,7 @@ class AutoQuest extends MultUtil {
         super(c, s);
         this._active = false;
         this._interval = null;
+        this._decidedThisSession = new Set();
 
         if (this.storage.load('aq_active', false)) {
             setTimeout(() => this.start(), 2500);
@@ -88,21 +89,93 @@ class AutoQuest extends MultUtil {
         }
     }
 
+    /* Algumas missoes de ilha vem em pares "Bem" (Good) e "Mal"
+       (Evil) pro mesmo evento (ex: AllJustAnExploitGoodIslandQuest
+       / AllJustAnExploitEvilIslandQuest). Confirmado via captura
+       real: enquanto nenhum lado foi escolhido, os DOIS aparecem
+       com state "viable" ao mesmo tempo. Escolher e feito via
+       model_url "IslandQuests", action_name "decide", arguments:
+       { decision: "good"|"evil", progressable_name: <nome> }.
+       So considera que existe uma bifurcacao pendente quando os
+       DOIS lados (Bem e Mal) aparecem juntos como "viable" - se
+       so um lado existir, trata como missao normal (sem decidir
+       nada), pra nao arriscar chamar "decide" em algo que nao
+       precisa.
+       IMPORTANTE: so decide automaticamente quando o lado "Bem"
+       NAO tem custo nenhum (nem recursos, nem tropas) - ou seja,
+       so as missoes de tempo/espera (progress vazio ou so com
+       wait_till). Se a bifurcacao pedir recursos ou tropas, fica
+       de fora - decisao fica pra voce fazer manualmente no jogo,
+       ja que decidir provavelmente tranca o lado oposto. */
+    _getUndecidedGoodForks() {
+        try {
+            const collection = uw.MM.getOnlyCollectionByName('IslandQuest');
+            const models = collection?.models ?? [];
+            const viable = models.filter(m => m.attributes?.state === 'viable');
+
+            const GOOD_SUFFIX = 'GoodIslandQuest';
+            const EVIL_SUFFIX = 'EvilIslandQuest';
+            const groups = {};
+
+            for (const m of viable) {
+                const name = m.attributes?.progressable_id;
+                if (!name) continue;
+                if (name.endsWith(GOOD_SUFFIX)) {
+                    const base = name.slice(0, -GOOD_SUFFIX.length);
+                    if (!groups[base]) groups[base] = {};
+                    groups[base].good = m;
+                } else if (name.endsWith(EVIL_SUFFIX)) {
+                    const base = name.slice(0, -EVIL_SUFFIX.length);
+                    if (!groups[base]) groups[base] = {};
+                    groups[base].evil = m;
+                }
+            }
+
+            const result = [];
+            for (const base in groups) {
+                const g = groups[base];
+                if (!g.good || !g.evil) continue;
+
+                const name = g.good.attributes.progressable_id;
+                if (this._decidedThisSession.has(name)) continue;
+                if (this._hasCost(g.good)) continue; // pede recurso/tropa - fica de fora
+
+                result.push(name);
+            }
+            return result;
+        } catch (e) {
+            return [];
+        }
+    }
+
+    /* Verdadeiro se a missao pede recursos ou tropas pra progredir
+       (ou seja, NAO e uma missao de tempo/espera pura). */
+    _hasCost(model) {
+        const progress = model.attributes?.progress;
+        if (!progress) return false;
+        if (progress.resources && Object.values(progress.resources).some(v => v > 0)) return true;
+        if (progress.units && Object.values(progress.units).some(v => v > 0)) return true;
+        return false;
+    }
+
     _renderStatus() {
         try {
             const quests = this._getSatisfiedQuests();
-            uw.$('#aq_status').html(this.t('aq_ready_count', { count: quests.length }));
+            const forks = this._getUndecidedGoodForks();
+            let html = this.t('aq_ready_count', { count: quests.length });
+            if (forks.length > 0) html += this.t('aq_pending_forks', { count: forks.length });
+            uw.$('#aq_status').html(html);
         } catch (e) {}
     }
 
     async _tick() {
         if (window.__multbot_captcha_active) return;
         try {
+            const townId = uw.ITowns.getCurrentTown().id;
+
+            // 1. Reivindica missoes ja prontas
             const quests = this._getSatisfiedQuests();
             this._renderStatus();
-            if (quests.length === 0) return;
-
-            const townId = uw.ITowns.getCurrentTown().id;
 
             for (const quest of quests) {
                 const progressableId = quest.attributes?.progressable_id;
@@ -116,6 +189,19 @@ class AutoQuest extends MultUtil {
                 }
 
                 // Pequena pausa entre reivindicacoes pra nao sobrecarregar
+                await this.sleep(500);
+            }
+
+            // 2. Decide bifurcacoes Bem/Mal pendentes, sempre escolhendo "Bem"
+            const forks = this._getUndecidedGoodForks();
+            for (const name of forks) {
+                const success = await this._decideQuest(townId, name);
+                if (success) {
+                    this._decidedThisSession.add(name);
+                    const msg = this.t('aq_decided_log', { name });
+                    this.console.log('[AutoQuest] ' + msg);
+                    uw.$('#aq_log').text(msg).css('color', '#1a6b2a');
+                }
                 await this.sleep(500);
             }
 
@@ -150,6 +236,37 @@ class AutoQuest extends MultUtil {
             return false;
         } catch (e) {
             this.console.log('[AutoQuest] ' + this.t('aq_claim_network_error', { name: progressableId, msg: e?.message ?? e }));
+            return false;
+        }
+    };
+
+    /* Confirmado via captura real de rede: quando existe uma
+       bifurcacao Bem/Mal pendente, escolher um lado e feito via
+       model_url "IslandQuests", action_name "decide", arguments:
+       { decision: "good"|"evil", progressable_name: <nome> }.
+       Repara que aqui e "progressable_name", nao "progressable_id"
+       como no claimReward - nomes de campo diferentes confirmados
+       em capturas separadas. */
+    _decideQuest = async (townId, progressableName) => {
+        const data = {
+            model_url: 'IslandQuests',
+            action_name: 'decide',
+            captcha: null,
+            arguments: {
+                decision: 'good',
+                progressable_name: progressableName,
+            },
+            town_id: townId,
+            nl_init: true,
+        };
+
+        try {
+            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+            if (res && !res.error) return true;
+            this.console.log('[AutoQuest] ' + this.t('aq_decide_fail_log', { name: progressableName, reason: res?.error ?? '?' }));
+            return false;
+        } catch (e) {
+            this.console.log('[AutoQuest] ' + this.t('aq_decide_network_error', { name: progressableName, msg: e?.message ?? e }));
             return false;
         }
     };
