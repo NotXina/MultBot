@@ -29,18 +29,18 @@ class AutoParty extends MultUtil {
 
         return `
             <div class="game_border" style="margin-bottom: 20px">
-                ${this.getTitleHtml('auto_party_title', 'Auto Party', this.toggle, '', this.enable)}
+                ${this.getTitleHtml('auto_party_title', this.t('ap_title'), this.toggle, '', this.enable)}
 
                 <div id="autoparty_types" class="split_content">
                     <div style="padding: 5px;">
-                    ${this.getButtonHtml('autoparty_festival', 'Festa', this.triggerType, 'festival')}
-                    ${this.getButtonHtml('autoparty_procession', 'Desfile', this.triggerType, 'procession')}
-                    ${this.getButtonHtml('autoparty_theater', 'Teatro', this.triggerType, 'theater')}
+                    ${this.getButtonHtml('autoparty_festival', this.t('ap_festival'), this.triggerType, 'festival')}
+                    ${this.getButtonHtml('autoparty_procession', this.t('ap_procession'), this.triggerType, 'procession')}
+                    ${this.getButtonHtml('autoparty_theater', this.t('ap_theater'), this.triggerType, 'theater')}
                     </div>
 
                     <div style="padding: 5px;">
-                    ${this.getButtonHtml('autoparty_single', 'Single', this.triggerSingle, 0)}
-                    ${this.getButtonHtml('autoparty_multiple', 'All', this.triggerSingle, 1)}
+                    ${this.getButtonHtml('autoparty_single', this.t('ap_single'), this.triggerSingle, 0)}
+                    ${this.getButtonHtml('autoparty_multiple', this.t('ap_all'), this.triggerSingle, 1)}
                     </div>
                 </div>
 
@@ -54,7 +54,7 @@ class AutoParty extends MultUtil {
         try {
             const models = uw.MM.getModels().Celebration;
             if (!models) {
-                uw.$('#autoparty_active').html('<span style="color:#7a5c2a;">Nenhuma celebração ativa</span>');
+                uw.$('#autoparty_active').html(`<span style="color:#7a5c2a;">${this.t('ap_none_active')}</span>`);
                 return;
             }
             const counts = { party: 0, theater: 0, triumph: 0 };
@@ -64,13 +64,13 @@ class AutoParty extends MultUtil {
             }
             const total = counts.party + counts.theater + counts.triumph;
             if (total === 0) {
-                uw.$('#autoparty_active').html('<span style="color:#7a5c2a;">Nenhuma celebração ativa</span>');
+                uw.$('#autoparty_active').html(`<span style="color:#7a5c2a;">${this.t('ap_none_active')}</span>`);
                 return;
             }
             const parts = [];
-            if (counts.party)   parts.push(`🎉 <b>${counts.party}</b> festa(s)`);
-            if (counts.theater) parts.push(`🎭 <b>${counts.theater}</b> teatro(s)`);
-            if (counts.triumph) parts.push(`🏆 <b>${counts.triumph}</b> triunfo(s)`);
+            if (counts.party)   parts.push(this.t('ap_count_party', { n: counts.party }));
+            if (counts.theater) parts.push(this.t('ap_count_theater', { n: counts.theater }));
+            if (counts.triumph) parts.push(this.t('ap_count_triumph', { n: counts.triumph }));
             uw.$('#autoparty_active').html(
                 `<span style="color:#1a4a1a;font-weight:bold;">${parts.join(' &nbsp;|&nbsp; ')}</span>`
             );
