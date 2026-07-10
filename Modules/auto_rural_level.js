@@ -1,187 +1,216 @@
-class AutoRuralLevel extends MultUtil {
-    constructor(c, s) {
-        super(c, s);
+class AutoBootcamp extends MultUtil {
+    constructor(console, storage) {
+        super(console, storage);
 
-        this.rural_level = this.storage.load('enable_autorural_level', 1);
+        // Create the buttons for the settings
+        this.$title = this.createTitle('auto_autobootcamp', this.t('abc_title'), this.toggle, this.t('click_to_toggle'));
+        this.$button_only_off = this.createButton('autobootcamp_off', this.t('abc_only_off'), this.triggerUseDef);
+        this.$button_off_def = this.createButton('autobootcamp_def', this.t('abc_off_def'), this.triggerUseDef);
+        this.$settings = this.createSettingsHtml();
 
-        if (this.storage.load('enable_autorural_level_active')) {
-            this.startInterval();
-        }
+        // Save the state of the auto bootcamp
+        if (this.storage.load('ab_active', false)) this.toggle();
+        if (this.storage.load('bootcamp_use_def', false)) this.triggerUseDef();
+
+        // Attach the observer to the window open event
+        uw.$.Observer(uw.GameEvents.window.open).subscribe("multAttackSpot", this.updateWindow);
     }
 
-    startInterval() {
-        this.enable = this.createGuardedInterval(this.main, 1500);
+    updateWindow = (event, handler) => {
+        if (!handler.attributes || handler.attributes.window_type !== 'attack_spot') return
+
+        const cid = handler.cid;
+        const $window = uw.$(`#window_${cid}`);
+
+        // Add height to the window
+        $window.css('height', '660px');
+
+        // Wait for the content to be loaded
+        const interval = setInterval(() => {
+            const $content = $window.find('.window_content');
+            if ($content.length === 0) return;
+            clearInterval(interval);
+            $content.append(this.$settings);
+        }, 100);
     }
 
+    // Add the settings to the window, keep this for backwards compatibility
     settings = () => {
-        requestAnimationFrame(() => {
-            this.setRuralLevel(this.rural_level);
+        return ""
+    }
+
+    createSettingsHtml = () => {
+        // Create the settings box
+        const $div = uw.$('<div>')
+        $div.css({
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '10px',
         });
 
-        return `
-        <div class="game_border" style="margin-bottom: 20px;">
-            ${this.getTitleHtml('auto_rural_level', this.t('arl_title'), this.toggle, '', this.enable)}
-            
-            <div id="rural_lvl_buttons" style="padding: 5px">
-                ${this.getButtonHtml('rural_lvl_1', 'lvl 1', this.setRuralLevel, 1)}
-                ${this.getButtonHtml('rural_lvl_2', 'lvl 2', this.setRuralLevel, 2)}
-                ${this.getButtonHtml('rural_lvl_3', 'lvl 3', this.setRuralLevel, 3)}
-                ${this.getButtonHtml('rural_lvl_4', 'lvl 4', this.setRuralLevel, 4)}
-                ${this.getButtonHtml('rural_lvl_5', 'lvl 5', this.setRuralLevel, 5)}
-                ${this.getButtonHtml('rural_lvl_6', 'lvl 6', this.setRuralLevel, 6)}
-            </div>
-        </div>`;
+        // Add the buttons to the settings box
+        $div.append(this.$button_only_off);
+        $div.append(this.$button_off_def);
+
+        // Create the box
+        const $box = uw.$('<div>')
+        $box.addClass('game_border')
+        $box.css({
+            margin: '20px',
+        });
+        $box.append(this.$title)
+        $box.append($div);
+
+        return $box;
     };
 
-    /* generate the list containing 1 polis per island */
-    generateList = () => {
-        let islands_list = [];
-        let polis_list = [];
-
-        let town_list = uw.MM.getOnlyCollectionByName('Town').models;
-
-        for (let town of town_list) {
-            if (town.attributes.on_small_island) continue;
-            let { island_id, id } = town.attributes;
-            if (!islands_list.includes(island_id)) {
-                islands_list.push(island_id);
-                polis_list.push(id);
-            }
+    /* Update the settings title and buttons */
+    updateSettings = () => {
+        if (this.use_def) {
+            this.$button_only_off.addClass('disabled');
+            this.$button_off_def.removeClass('disabled');
+        } else {
+            this.$button_off_def.addClass('disabled');
+            this.$button_only_off.removeClass('disabled');
         }
 
-        return polis_list;
-    };
+        if (this.enable_auto_bootcamp) this.$title.addClass('enabled');
+        else this.$title.removeClass('enabled');
+    }
 
-    setRuralLevel = n => {
-        uw.$('#rural_lvl_buttons .button_new').addClass('disabled');
-        uw.$(`#rural_lvl_${n}`).removeClass('disabled');
-
-        if (this.rural_level != n) {
-            this.rural_level = n;
-            this.storage.save('enable_autorural_level', this.rural_level);
-        }
+    // Toggle the use of def units
+    triggerUseDef = () => {
+        this.use_def = !this.use_def;
+        this.storage.save('bootcamp_use_def', this.use_def);
+        this.updateSettings();
     };
 
     toggle = () => {
-        if (!this.enable) {
-            uw.$('#auto_rural_level').css('filter', 'brightness(100%) saturate(186%) hue-rotate(241deg)');
-            this.startInterval();
+        if (!this.enable_auto_bootcamp) {
+            this.enable_auto_bootcamp = this.createGuardedInterval(this.main, 4000);
         } else {
-            uw.$('#auto_rural_level').css('filter', '');
-            clearInterval(this.enable);
-            this.enable = null;
+            clearInterval(this.enable_auto_bootcamp);
+            this.enable_auto_bootcamp = null;
         }
-        this.storage.save('enable_autorural_level_active', !!this.enable);
+        this.storage.save('ab_active', !!this.enable_auto_bootcamp);
+        this.updateSettings();
     };
 
+    attackBootcamp = async () => {
+        let cooldown = uw.MM.getModelByNameAndPlayerId('PlayerAttackSpot').getCooldownDuration();
+        if (cooldown > 0) return false;
+
+        let { MovementsUnits } = uw.MM.getModels();
+
+        // Check if there is already an active attack
+        if (MovementsUnits != null) {
+            if (Object.keys(MovementsUnits).length > 0) {
+                var attack_list = Object.keys(MovementsUnits);
+                for (var i = 0; i < Object.keys(MovementsUnits).length; i++) {
+                    if (MovementsUnits[attack_list[i]].attributes.destination_is_attack_spot) return false;
+                    if (MovementsUnits[attack_list[i]].attributes.origin_is_attack_spot) return false;
+                }
+            }
+        }
+
+        // Get the units
+        var units = { ...uw.ITowns.towns[uw.Game.townId].units() };
+        delete units.militia;
+
+        // Remove naval units
+        for (let unit in units) {
+            if (uw.GameData.units[unit].is_naval) delete units[unit];
+        }
+
+        // Remove def units if the setting is off
+        if (!this.use_def) {
+            delete units.sword;
+            delete units.archer;
+        }
+
+        // If there are not enough units, return
+        // TODO: here check if the units are enough to attack
+        if (Object.keys(units).length === 0) return false;
+
+        // Send the attack
+        await this.postAttackBootcamp(units);
+
+        return true;
+    };
+
+    rewardBootcamp = async () => {
+        let model = uw.MM.getModelByNameAndPlayerId('PlayerAttackSpot');
+
+        // Stop if level is not found
+        if (typeof model.getLevel() == 'undefined') {
+            this.toggle();
+            return true;
+        }
+
+        // Check if there is a reward
+        let hasReward = model.hasReward();
+        if (!hasReward) return false;
+
+        // Check if the reward is instant
+        let reward = model.getReward();
+        if (reward.power_id.includes('instant') && !reward.power_id.includes('favor')) {
+            await this.useBootcampReward();
+            return true;
+        }
+
+        // Check if the reward is stashable
+        if (reward.stashable) await this.stashBootcampReward();
+        else await this.useBootcampReward();
+
+        return true;
+    };
+
+    /* Main function, call in loop */
     main = async () => {
-        if (window.__multbot_captcha_active) return;
-        let player_relation_models = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation').models;
-        let farm_town_models = uw.MM.getOnlyCollectionByName('FarmTown').models;
-        let killpoints = uw.MM.getModelByNameAndPlayerId('PlayerKillpoints').attributes;
-
-        /* Get array with all locked rurals */
-        const locked = player_relation_models.filter(model => model.attributes.relation_status === 0);
-
-        /* Get killpoints */
-        let available = killpoints.att + killpoints.def - killpoints.used;
-        let unlocked = player_relation_models.length - locked.length;
-
-        /* If some rurals still have to be unlocked */
-        if (locked.length > 0) {
-            /* The first 5 rurals have discount */
-            const discounts = [2, 8, 10, 30, 50, 100];
-            if (unlocked < discounts.length && available < discounts[unlocked]) return;
-            else if (available < 100) return;
-
-            let towns = this.generateList();
-            for (let town_id of towns) {
-                let town = uw.ITowns.towns[town_id];
-                let x = town.getIslandCoordinateX(),
-                    y = town.getIslandCoordinateY();
-
-                for (let farmtown of farm_town_models) {
-                    if (farmtown.attributes.island_x != x || farmtown.attributes.island_y != y) continue;
-
-                    for (let relation of locked) {
-                        if (farmtown.attributes.id != relation.attributes.farm_town_id) continue;
-                        await this.unlockRural(town_id, relation.attributes.farm_town_id, relation.id);
-                        this.console.log(`Island ${farmtown.attributes.island_xy}: unlocked ${farmtown.attributes.name}`);
-                        return;
-                    }
-                }
-            }
-        } else {
-            /* else check each level once at the time */
-            let towns = this.generateList();
-            let expansion = false;
-            const levelCosts = [1, 5, 25, 50, 100];
-            for (let level = 1; level < this.rural_level; level++) {
-                if (available < levelCosts[level - 1]) return;
-
-                for (let town_id of towns) {
-                    let town = uw.ITowns.towns[town_id];
-                    let x = town.getIslandCoordinateX();
-                    let y = town.getIslandCoordinateY();
-
-                    for (let farmtown of farm_town_models) {
-                        if (farmtown.attributes.island_x != x) continue;
-                        if (farmtown.attributes.island_y != y) continue;
-
-                        for (let relation of player_relation_models) {
-                            if (farmtown.attributes.id != relation.attributes.farm_town_id) {
-                                continue;
-                            }
-                            if (relation.attributes.expansion_at) {
-                                expansion = true;
-                                continue;
-                            }
-                            if (relation.attributes.expansion_stage > level) continue;
-                            await this.upgradeRural(town_id, relation.attributes.farm_town_id, relation.attributes.id);
-                            this.console.log(`Island ${farmtown.attributes.island_xy}: upgraded ${farmtown.attributes.name}`);
-                            return;
-                        }
-                    }
-                }
-            }
-
-            if (expansion) return;
-        }
-
-        /* Auto turn off when the level is reached */
-        this.toggle();
+        if (await this.rewardBootcamp()) return;
+        if (await this.attackBootcamp()) return;
     };
 
-    /* 
-        Post requests
-    */
-    unlockRural = async (town_id, farm_town_id, relation_id) => {
+    /* Send post request to attack with the given units */
+    postAttackBootcamp = async units => {
         try {
             await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
-                model_url: `FarmTownPlayerRelation/${relation_id}`,
-                action_name: 'unlock',
-                arguments: {
-                    farm_town_id: farm_town_id,
-                },
-                town_id: town_id,
+                model_url: `PlayerAttackSpot/${uw.Game.player_id}`,
+                action_name: 'attack',
+                arguments: units,
             });
         } catch (e) {
-            this.console.log('[AutoRuralLevel] ' + this.t('arl_unlock_error', { msg: e.message }));
+            this.console.log('[AutoBootcamp] ' + this.t('abc_attack_error', { msg: e.message }));
         }
     };
 
-    upgradeRural = async (town_id, farm_town_id, relation_id) => {
+    /* Send requesto to the server to use the reward */
+    useBootcampReward = async () => {
         try {
             await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
-                model_url: `FarmTownPlayerRelation/${relation_id}`,
-                action_name: 'upgrade',
-                arguments: {
-                    farm_town_id: farm_town_id,
-                },
-                town_id: town_id,
+                model_url: `PlayerAttackSpot/${uw.Game.player_id}`,
+                action_name: 'useReward',
+                arguments: {},
             });
         } catch (e) {
-            this.console.log('[AutoRuralLevel] ' + this.t('arl_upgrade_error', { msg: e.message }));
+            this.console.log('[AutoBootcamp] ' + this.t('abc_use_reward_error', { msg: e.message }));
+        }
+    };
+
+    /* Send request to the server to stash the reward. Se falhar,
+       tenta usar a recompensa direto (mesmo fallback que existia
+       antes via callback de erro do ajaxPost legado). */
+    stashBootcampReward = async () => {
+        try {
+            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+                model_url: `PlayerAttackSpot/${uw.Game.player_id}`,
+                action_name: 'stashReward',
+                arguments: {},
+            });
+        } catch (e) {
+            this.console.log('[AutoBootcamp] ' + this.t('abc_stash_error', { msg: e.message }));
+            await this.useBootcampReward();
         }
     };
 }
