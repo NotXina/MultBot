@@ -39,6 +39,11 @@ var MultTools = class extends MultUtil {
                         <p style="margin:0 0 6px;font-size:11px;color:#888;">${this.t('mt_research_desc')}</p>
                         ${this.getButtonHtml('mult_research_btn', '🔬 ' + this.t('apply'), this.applyResearchPreset)}
                     </div>
+                    <div style="padding:5px;">
+                        <p style="margin:0 0 4px;font-size:11px;font-weight:bold;">${this.t('mt_rename_label')}</p>
+                        <p style="margin:0 0 6px;font-size:11px;color:#888;">${this.t('mt_rename_desc')}</p>
+                        ${this.getButtonHtml('mult_rename_btn', '🏷️ ' + this.t('apply'), this.renameCities)}
+                    </div>
                 </div>
                 <div style="padding:5px;">
                     <span id="mult_status" style="font-size:11px;color:#4ade80;"></span>
@@ -126,6 +131,83 @@ var MultTools = class extends MultUtil {
             research.ensureActive();
 
             const msg = this.t('mt_research_applied', { count: townCount });
+            uw.$('#mult_status').text(msg).css('color','#4ade80');
+            this.console.log('[MultTools] ' + msg);
+        } catch (e) {
+            uw.$('#mult_status').text(this.t('error') + ': ' + (e?.message ?? e)).css('color','#f87171');
+            this.console.log('[MultTools] ' + this.t('error') + ': ' + (e?.message ?? e));
+        }
+    };
+
+    /* Calcula o oceano a partir da coordenada da ilha. Confirmado
+       com 2 pontos reais capturados no jogo:
+       (568,411) -> oceano 54 ; (560,393) -> oceano 53
+       Formula: primeiro digito = X/100 (pra baixo), segundo
+       digito = Y/100 (pra baixo). */
+    getOceanNumber = (x, y) => {
+        const tens = Math.floor(x / 100);
+        const units = Math.floor(y / 100);
+        return String(tens) + String(units);
+    };
+
+    /* Renomeia TODAS as cidades do jogador no formato OCxx-NN
+       (oceano + sequencial dentro do oceano). A ordem sequencial
+       dentro de cada oceano e pelo ID da cidade (proxy da ordem
+       de fundacao) - se quiser outro criterio de ordenacao, e so
+       trocar o sort abaixo.
+       Confirmado via captura real de rede: model_url "Town/{id}",
+       action_name "setTownName", arguments: { town_name }. */
+    renameCities = async () => {
+        try {
+            const towns = Object.values(uw.ITowns.towns);
+            if (towns.length === 0) { uw.$('#mult_status').text(this.t('mt_no_city_found')).css('color','#f87171'); return; }
+
+            // Agrupa por oceano, ordenando dentro de cada grupo pelo ID da cidade
+            const byOcean = {};
+            for (const town of towns) {
+                const x = town.getIslandCoordinateX();
+                const y = town.getIslandCoordinateY();
+                const ocean = this.getOceanNumber(x, y);
+                if (!byOcean[ocean]) byOcean[ocean] = [];
+                byOcean[ocean].push(town);
+            }
+            for (const ocean in byOcean) {
+                byOcean[ocean].sort((a, b) => a.id - b.id);
+            }
+
+            let count = 0;
+            for (const ocean in byOcean) {
+                let seq = 1;
+                for (const town of byOcean[ocean]) {
+                    const name = 'OC' + ocean + '-' + String(seq).padStart(2, '0');
+                    seq++;
+
+                    try {
+                        const data = {
+                            model_url: 'Town/' + town.id,
+                            action_name: 'setTownName',
+                            captcha: null,
+                            arguments: { town_name: name },
+                            town_id: town.id,
+                            nl_init: true,
+                        };
+                        const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+                        if (res && !res.error) {
+                            const msg = this.t('mt_renamed_log', { town: town.getName(), name });
+                            this.console.log('[MultTools] ' + msg);
+                            count++;
+                        } else {
+                            this.console.log('[MultTools] ' + this.t('mt_rename_error', { town: town.getName(), msg: res?.error ?? '?' }));
+                        }
+                    } catch (e) {
+                        this.console.log('[MultTools] ' + this.t('mt_rename_error', { town: town.getName(), msg: e?.message ?? e }));
+                    }
+
+                    await this.sleep(400);
+                }
+            }
+
+            const msg = this.t('mt_rename_complete', { count });
             uw.$('#mult_status').text(msg).css('color','#4ade80');
             this.console.log('[MultTools] ' + msg);
         } catch (e) {
