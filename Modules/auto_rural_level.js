@@ -20,7 +20,7 @@ class AutoRuralLevel extends MultUtil {
 
         return `
         <div class="game_border" style="margin-bottom: 20px;">
-            ${this.getTitleHtml('auto_rural_level', 'Auto Rural level', this.toggle, '', this.enable)}
+            ${this.getTitleHtml('auto_rural_level', this.t('arl_title'), this.toggle, '', this.enable)}
             
             <div id="rural_lvl_buttons" style="padding: 5px">
                 ${this.getButtonHtml('rural_lvl_1', 'lvl 1', this.setRuralLevel, 1)}
@@ -166,7 +166,7 @@ class AutoRuralLevel extends MultUtil {
                 town_id: town_id,
             });
         } catch (e) {
-            this.console.log('[AutoRuralLevel] Erro ao desbloquear rural: ' + e.message);
+            this.console.log('[AutoRuralLevel] ' + this.t('arl_unlock_error', { msg: e.message }));
         }
     };
 
@@ -181,7 +181,7 @@ class AutoRuralLevel extends MultUtil {
                 town_id: town_id,
             });
         } catch (e) {
-            this.console.log('[AutoRuralLevel] Erro ao evoluir rural: ' + e.message);
+            this.console.log('[AutoRuralLevel] ' + this.t('arl_upgrade_error', { msg: e.message }));
         }
     };
 }
