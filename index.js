@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  Automação modular para Grepolis: construção, recrutamento, ataque, defesa, farm e mais.
-// @version      1.4.1
+// @version      1.4.2
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -82,23 +82,41 @@
 
         /* Envolve o bundle inteiro numa IIFE: cada "class X" declarada
            por um modulo fica LOCAL a essa execucao especifica, em vez
-           de virar um identificador global. Mesmo que injectAll() acabe
-           rodando mais de uma vez por qualquer motivo (ex: o guard acima
-           nao persistir por causa de isolamento de sandbox especifico
-           de algum gerenciador de userscript), duas execucoes nunca mais
-           colidem entre si com "Identifier X ja foi declarado" - cada
-           uma tem seu proprio escopo de classes. O que precisa vazar pra
-           fora (uw.multBot = new MultBot(), guardado por
-           window.__multbot_loaded__ dentro do proprio multbot.js) continua
-           funcionando normalmente, ja que "uw"/"window" dentro da IIFE
-           ainda apontam pro escopo global de verdade - so as declaracoes
-           de classe passam a ser locais. */
-        const fullCode = '(function () {\n' + codes.join('\n\n') + '\n})();';
-        const script = document.createElement('script');
-        script.textContent = fullCode;
-        document.head.appendChild(script);
-        script.remove();
-        console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.4.1)');
+           de virar um identificador global. Alem disso, uma checagem
+           bem no topo do bundle (de DENTRO do proprio codigo injetado,
+           nao so aqui fora em index.js) confere se uw.multBot ja existe
+           antes de declarar qualquer classe - se existir, e sinal de
+           que uma injecao anterior ja rodou com sucesso nesta mesma
+           pagina/janela (ex: navegacao "leve" via History API que o
+           gerenciador de userscript trata como pagina nova sem
+           realmente recarregar o documento), entao aborta sem tentar
+           redeclarar nada. */
+        const fullCode =
+            '(function () {\n' +
+            '  var __uw = (typeof unsafeWindow == "undefined") ? window : unsafeWindow;\n' +
+            '  if (__uw.multBot) {\n' +
+            '    console.warn("[MultBot] \\u26a0 MultBot ja estava rodando nesta pagina - reinjecao abortada antes de declarar qualquer classe.");\n' +
+            '    return;\n' +
+            '  }\n' +
+            codes.join('\n\n') +
+            '\n})();';
+
+        /* Usa new Function(...) em vez de um <script> tag: um <script>
+           injetado executa como um "top-level script" a parte - se der
+           SyntaxError (ex: redeclaracao de classe, apesar de tudo
+           acima), esse erro NAO pode ser capturado por nenhum try/catch
+           nosso, aparecendo sempre como "Uncaught" no console mesmo com
+           todas as protecoes. new Function() parseia o codigo de forma
+           sincrona e catchavel - se por algum motivo ainda assim colidir
+           com algo ja declarado na pagina, viramos um aviso tratado em
+           vez de deixar estourar solto pro usuario. */
+        try {
+            const runBundle = new Function(fullCode);
+            runBundle();
+            console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.4.2)');
+        } catch (e) {
+            console.warn('[MultBot] ⚠ Falha ao injetar o bundle (provavelmente uma reinjeção tardia): ' + (e?.message ?? e));
+        }
     }
 
     async function fetchModule(index, attempt = 0) {
