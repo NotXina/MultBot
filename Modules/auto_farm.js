@@ -403,7 +403,13 @@ var AutoFarm = class extends MultUtil {
             claim_factor: 'normal',
         };
         try {
-            await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data);
+            /* Timeout aumentado de 15s (default) pra 45s: esse endpoint
+               processa TODAS as cidades de uma vez no servidor (ao
+               contrario das outras chamadas do bot, que sao rapidas e
+               pontuais) - com muitas cidades, 15s pode simplesmente nao
+               ser tempo suficiente pra resposta chegar, mesmo que o
+               pedido esteja correto e vá dar certo. */
+            await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data, 45000);
         } catch (e) {
             this.console.log('[AutoFarm] Erro em claimMultiple: ' + (e?.message ?? e));
             throw e;
