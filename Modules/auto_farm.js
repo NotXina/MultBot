@@ -401,6 +401,12 @@ var AutoFarm = class extends MultUtil {
             time_option_base: base,
             time_option_booty: boost,
             claim_factor: 'normal',
+            /* Somado (mesmo padrão confirmado por captura nas outras 2
+               chamadas dessa janela - fakeOpening/fakeSelectAll). Ainda
+               não temos captura da chamada de claim em si, mas town_id +
+               nl_init:true parecem ser exigidos em toda a sequência. */
+            town_id: uw.ITowns.getCurrentTown().id,
+            nl_init: true,
         };
         try {
             /* Timeout aumentado de 15s (default) pra 45s: esse endpoint
@@ -419,7 +425,13 @@ var AutoFarm = class extends MultUtil {
     /* Pretend that the window it's opening */
     fakeOpening = async () => {
         try {
-            await this.ajaxGetWithTimeout('farm_town_overviews', 'index', {});
+            /* Confirmado via captura real de rede: a chamada nativa de
+               'index' manda {town_id, nl_init:true} - antes mandavamos
+               um objeto vazio {}, o que pode nao inicializar o contexto
+               certo no servidor pros passos seguintes (select_all,
+               update, claim_loads_multiple). */
+            const town_id = uw.ITowns.getCurrentTown().id;
+            await this.ajaxGetWithTimeout('farm_town_overviews', 'index', { town_id: town_id, nl_init: true });
             await this.sleep(10);
             await this.fakeUpdate();
         } catch (e) {
@@ -430,8 +442,12 @@ var AutoFarm = class extends MultUtil {
 
     /* Fake the user selecting the list */
     fakeSelectAll = async () => {
+        /* Confirmado via captura real de rede: faltavam town_id (cidade
+           atual) e nl_init:true - mandavamos só town_ids antes. */
         const data = {
             town_ids: this.polis_list,
+            town_id: uw.ITowns.getCurrentTown().id,
+            nl_init: true,
         };
         try {
             await this.ajaxGetWithTimeout('farm_town_overviews', 'get_farm_towns_from_multiple_towns', data);
@@ -453,6 +469,12 @@ var AutoFarm = class extends MultUtil {
             booty_researched: booty ? 1 : 0,
             diplomacy_researched: '',
             trade_office: trade_office ? 1 : 0,
+            /* Somado (não confirmado por captura específica desta chamada,
+               mas presente nas outras 2 chamadas da mesma janela que já
+               capturamos - town_id + nl_init:true parecem ser um padrão
+               comum a toda a sequência do farm_town_overviews). */
+            town_id: town.id,
+            nl_init: true,
         };
         try {
             await this.ajaxGetWithTimeout('farm_town_overviews', 'get_farm_towns_for_town', data);
