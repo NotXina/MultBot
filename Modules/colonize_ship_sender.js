@@ -34,28 +34,28 @@ class ColonizeShipSender extends MultUtil {
             <div class="game_border_left"></div><div class="game_border_right"></div>
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            ${this.getTitleHtml('css_title', 'Navio Colonizador', this.toggle, '', this._running)}
+            ${this.getTitleHtml('css_title', this.t('css_title'), this.toggle, '', this._running)}
             <div id="autoparty_types">
                 <div class="split_content">
                     <div style="padding:5px 8px;">
-                        <label style="font-weight:bold;font-size:11px;">Destino (ID ou [town]...[/town])</label><br>
+                        <label style="font-weight:bold;font-size:11px;">${this.t('css_target_label')}</label><br>
                         <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
-                            <input id="css_target_town" type="text" placeholder="ID da cidade"
+                            <input id="css_target_town" type="text" placeholder="${this.t('css_target_placeholder')}"
                                 value="${cfg.targetTownId || ''}"
                                 style="width:120px;padding:2px 5px;" />
-                            ${this.getButtonHtml('css_save_target', 'Salvar', this._saveTarget)}
+                            ${this.getButtonHtml('css_save_target', this.t('css_save'), this._saveTarget)}
                         </div>
                         <div id="css_target_status" style="font-size:11px;color:#5a3a0a;margin-top:3px;">
-                            ${cfg.targetTownId ? '✓ ' + this.getTownName(cfg.targetTownId) : 'Nenhum destino'}
+                            ${cfg.targetTownId ? '✓ ' + this.getTownName(cfg.targetTownId) : this.t('css_none_target')}
                         </div>
                     </div>
                     <div style="padding:5px 8px;">
-                        <label style="font-weight:bold;font-size:11px;">Intervalo (min)</label><br>
+                        <label style="font-weight:bold;font-size:11px;">${this.t('css_interval_label')}</label><br>
                         <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
                             <input id="css_interval" type="number" min="1" max="120"
                                 value="${cfg.intervalMinutes || 5}"
                                 style="width:55px;padding:2px 5px;" />
-                            ${this.getButtonHtml('css_save_interval', 'Salvar', this._saveInterval)}
+                            ${this.getButtonHtml('css_save_interval', this.t('css_save'), this._saveInterval)}
                         </div>
                     </div>
                 </div>
@@ -86,26 +86,27 @@ class ColonizeShipSender extends MultUtil {
             uw.$('#css_start_btn').removeClass('disabled');
             uw.$('#css_stop_btn').addClass('disabled');
         }
-        uw.$('#css_status').text(this._running ? '● Rodando' : '○ Parado')
+        uw.$('#css_status').text(this._running ? this.t('css_running') : this.t('css_stopped_status'))
             .css('color', this._running ? '#4ade80' : '#94a3b8');
     }
 
     _saveTarget = () => {
         const raw = (uw.$('#css_target_town').val() || '').trim();
         const id  = this._parseTownId(raw);
-        if (!id) { uw.$('#css_target_status').text('ID inválido.').css('color','#f87171'); return; }
+        if (!id) { uw.$('#css_target_status').text(this.t('css_invalid_id')).css('color','#f87171'); return; }
         this.config.targetTownId = id;
         this._saveConfig();
-        uw.$('#css_target_status').text('✓ Destino: ' + this.getTownName(id)).css('color','#4ade80');
-        this.console.log('[ColonizeShipSender] Destino salvo: ' + this.getTownName(id));
+        const name = this.getTownName(id);
+        uw.$('#css_target_status').text(this.t('css_target_saved', { name })).css('color','#4ade80');
+        this.console.log('[ColonizeShipSender] ' + this.t('css_target_saved', { name }));
     };
 
     _saveInterval = () => {
         const val = parseInt(uw.$('#css_interval').val(), 10);
-        if (!val || val < 1) { this._log('Intervalo inválido (mínimo 1 minuto).', 'error'); return; }
+        if (!val || val < 1) { this._log(this.t('css_invalid_interval'), 'error'); return; }
         this.config.intervalMinutes = val;
         this._saveConfig();
-        this._log('Intervalo salvo: ' + val + ' minuto(s).', 'info');
+        this._log(this.t('css_interval_saved', { val }), 'info');
         if (this._running) { this._stopLoop(); this._startLoop(); }
     };
 
@@ -114,8 +115,8 @@ class ColonizeShipSender extends MultUtil {
 
     start() {
         if (this._running) return;
-        if (!this.config.targetTownId) { this._log('Configure a cidade destino antes de iniciar.', 'error'); return; }
-        if (!uw.gpAjax || !uw.Game)    { this._log('Jogo não está pronto. Tente novamente.', 'error'); return; }
+        if (!this.config.targetTownId) { this._log(this.t('css_configure_target'), 'error'); return; }
+        if (!uw.gpAjax || !uw.Game)    { this._log(this.t('css_game_not_ready'), 'error'); return; }
         this._stop = false;
         this._startLoop();
         this._updateTitle();
@@ -124,7 +125,7 @@ class ColonizeShipSender extends MultUtil {
     stop() {
         this._stop = true;
         this._stopLoop();
-        this._log('Loop parado manualmente.', 'warning');
+        this._log(this.t('css_loop_stopped'), 'warning');
         this._updateTitle();
     }
 
@@ -132,7 +133,7 @@ class ColonizeShipSender extends MultUtil {
         this._running = true;
         this._updateButtons();
         this.storage.save('css_active', true);
-        this._log('Loop iniciado. Intervalo: ' + this.config.intervalMinutes + ' min.', 'success');
+        this._log(this.t('css_loop_started', { min: this.config.intervalMinutes }), 'success');
         this._tick();
         const ms = this.config.intervalMinutes * 60 * 1000;
         this._intervalId = setInterval(() => { if (!this._stop) this._tick(); }, ms);
@@ -146,10 +147,10 @@ class ColonizeShipSender extends MultUtil {
 
     _tick = async () => {
     if (window.__multbot_captcha_active) return;
-    this._log('Verificando colonize_ships em todas as cidades...', 'info');
+    this._log(this.t('css_checking'), 'info');
     try {
         const townIds = Object.keys(uw.ITowns.towns);
-        if (townIds.length === 0) { this._log('Nenhuma cidade encontrada.', 'warning'); return; }
+        if (townIds.length === 0) { this._log(this.t('mt_no_city_found'), 'warning'); return; }
 
         // Filtra cidades com colonize_ship disponível
         const eligible = townIds.filter(townId =>
@@ -157,7 +158,7 @@ class ColonizeShipSender extends MultUtil {
             this._getColonizeShipCount(townId) > 0
         );
 
-        if (eligible.length === 0) { this._log('Nenhum colonize_ship disponível.', 'info'); return; }
+        if (eligible.length === 0) { this._log(this.t('css_no_ships_available'), 'info'); return; }
 
         // Envio SEQUENCIAL — evita corrida no swap de Game.townId
         let totalSent = 0;
@@ -169,19 +170,19 @@ class ColonizeShipSender extends MultUtil {
 
             try {
                 await this._sendSupport(townId, this.config.targetTownId, count);
-                this._log('✓ ' + townName + ': ' + count + ' navio(s) enviado(s).', 'success');
+                this._log(this.t('css_sent_log', { town: townName, count }), 'success');
                 totalSent += count;
             } catch (e) {
-                this._log('✗ Erro em ' + townName + ': ' + (e?.message ?? e), 'error');
+                this._log(this.t('css_send_error', { town: townName, msg: e?.message ?? e }), 'error');
             }
 
             // Delay entre cada envio para não sobrecarregar e dar tempo do restore terminar
             await this.sleep(400 + Math.random() * 300);
         }
 
-        if (totalSent > 0) this._log('Ciclo completo. Total: ' + totalSent + ' navio(s).', 'success');
+        if (totalSent > 0) this._log(this.t('css_cycle_complete', { count: totalSent }), 'success');
     } catch (e) {
-        this._log('Erro no ciclo: ' + (e?.message ?? e), 'error');
+        this._log(this.t('css_cycle_error', { msg: e?.message ?? e }), 'error');
     }
 };
     _getColonizeShipCount(townId) {
