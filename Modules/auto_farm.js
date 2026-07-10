@@ -25,22 +25,22 @@ class AutoFarm extends MultUtil {
     /* Create the dropdown menu */
     createDropdown = () => {
         this.$content = uw.$("<div></div>")
-        this.$title = uw.$("<p>Mult Farm</p>").css({ "text-align": "center", "margin": "2px", "font-weight": "bold", "font-size": "16px" })
+        this.$title = uw.$("<p></p>").text(this.t('af_title')).css({ "text-align": "center", "margin": "2px", "font-weight": "bold", "font-size": "16px" })
         this.$content.append(this.$title)
 
-        this.$duration = uw.$("<p>Duration:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
+        this.$duration = uw.$("<p></p>").text(this.t('af_duration')).css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
         this.$button5 = this.createButton("mult_farm_5", "5 min", this.toggleDuration)
         this.$button10 = this.createButton("mult_farm_10", "10 min", this.toggleDuration)
         this.$button20 = this.createButton("mult_farm_20", "20 min", this.toggleDuration)
         this.$content.append(this.$duration, this.$button5, this.$button10, this.$button20)
 
-        this.$storage = uw.$("<p>Storage:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
+        this.$storage = uw.$("<p></p>").text(this.t('af_storage')).css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
         this.$button80 = this.createButton("mult_farm_80", "80%", this.toggleStorage).css({ "width": "70px" })
         this.$button90 = this.createButton("mult_farm_90", "90%", this.toggleStorage).css({ "width": "80px" })
         this.$button100 = this.createButton("mult_farm_100", "100%", this.toggleStorage).css({ "width": "80px" })
         this.$content.append(this.$storage, this.$button80, this.$button90, this.$button100)
 
-        this.$gui = uw.$("<p>Gui:</p>").css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
+        this.$gui = uw.$("<p></p>").text(this.t('af_gui')).css({ "text-align": "left", "margin": "2px", "font-weight": "bold" })
         this.$guiOn = this.createButton("mult_farm_gui_on", "ON", this.toggleGui)
         this.$guiOff = this.createButton("mult_farm_gui_off", "OFF", this.toggleGui)
         this.$content.append(this.$gui, this.$guiOn, this.$guiOff)
