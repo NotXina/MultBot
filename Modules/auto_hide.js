@@ -13,7 +13,7 @@ class AutoHide extends MultUtil {
                     class: 'button_new',
                     id: 'autoCaveButton',
                     style: 'float: right; margin: 0px; left: 169px; position: absolute; top: 56px; width: 66px',
-                    html: '<div onclick="window.multBot.autoHide.toggle()"><div class="left"></div><div class="right"></div><div class="caption js-caption"> Auto <div class="effect js-effect"></div></div><div>'
+                    html: '<div onclick="window.multBot.autoHide.toggle()"><div class="left"></div><div class="right"></div><div class="caption js-caption"> ' + this.t('ah_auto_label') + ' <div class="effect js-effect"></div></div><div>'
                 });
                 box.prepend(butt);
                 this.updateSettings(uw.ITowns.getCurrentTown().id);
@@ -54,11 +54,11 @@ class AutoHide extends MultUtil {
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
             <div id="auto_cave_title" style="cursor: pointer; filter: ${this.autogratis ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : ''
-            }" class="game_header bold" onclick="window.multBot.autoHide.toggle()"> Auto Hide <span class="command_count"></span>
-                <div style="position: absolute; right: 10px; top: 4px; font-size: 10px;"> (click to toggle) </div>
+            }" class="game_header bold" onclick="window.multBot.autoHide.toggle()"> ${this.t('ah_title')} <span class="command_count"></span>
+                <div style="position: absolute; right: 10px; top: 4px; font-size: 10px;"> ${this.t('click_to_toggle')} </div>
             </div>
             <div style="padding: 5px; font-weight: 600">
-                Check every 5 seconds, if there is more then 15000 iron store it in the hide
+                ${this.t('ah_desc')}
             </div>    
         </div>
         `;
@@ -71,7 +71,7 @@ class AutoHide extends MultUtil {
             this.activePolis = 0
         } else {
             if (hide == 10) this.activePolis = town.id;
-            else uw.HumanMessage.error("Hide must be at level 10");
+            else uw.HumanMessage.error(this.t('ah_error_hide_level'));
         }
         this.storage.save("autohide_active", this.activePolis)
         this.updateSettings(town.id)
@@ -112,7 +112,7 @@ class AutoHide extends MultUtil {
                 "town_id": town_id,
             });
         } catch (e) {
-            this.console.log('[AutoHide] Erro ao guardar ferro: ' + e.message);
+            this.console.log('[AutoHide] ' + this.t('ah_store_error', { msg: e.message }));
         }
     }
 
