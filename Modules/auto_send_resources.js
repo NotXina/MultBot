@@ -16,8 +16,9 @@ var AutoSendResources = class extends MultUtil {
         this._active     = false;
         this._intervalId = null;
         this._lastRun    = null;
-        this.mode            = this.storage.load('asr_mode', 'auto'); // 'auto' | 'manual'
-        this.manualTargetId  = this.storage.load('asr_manual_target', null);
+        this.mode                = this.storage.load('asr_mode', 'auto'); // 'auto' | 'manual'
+        this.manualTargetId      = this.storage.load('asr_manual_target', null);
+        this.checkIntervalMinutes = this.storage.load('asr_interval_min', 30);
 
         if (this.storage.load('asr_active', false)) {
             setTimeout(() => this.start(), 2500);
@@ -37,10 +38,18 @@ var AutoSendResources = class extends MultUtil {
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             ${this.getTitleHtml('asr_title', 'Auto Envio de Recursos', this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
-                Envia recursos de cidades ociosas para a cidade menos desenvolvida (com espaço no armazém). Verifica a cada 30 min.
+                Envia recursos de cidades ociosas para a cidade menos desenvolvida (com espaço no armazém).
             </div>
             <div style="padding:2px 10px 4px;font-size:11px;color:#5a3a0a;">
                 Remetente: pop &lt; 200 + AutoBuild concluído + recurso &gt; 50% storage. Destino: menor soma de níveis de construção, com margem de 5% de espaço livre no armazém.
+            </div>
+
+            <div style="padding:4px 10px;display:flex;gap:6px;align-items:center;">
+                <label style="font-size:11px;font-weight:bold;">Verificar a cada</label>
+                <input id="asr_interval_input" type="number" min="1" max="1440" value="${this.checkIntervalMinutes}" style="width:55px;padding:2px 5px;" />
+                <span style="font-size:11px;">min</span>
+                ${this.getButtonHtml('asr_interval_save_btn', 'Salvar', this.saveInterval)}
+                <span id="asr_interval_status" style="font-size:11px;color:#5a3a0a;"></span>
             </div>
 
             <div style="padding:4px 10px;display:flex;gap:6px;">
@@ -75,9 +84,9 @@ var AutoSendResources = class extends MultUtil {
         this._active = true;
         this.storage.save('asr_active', true);
         this._updateTitle();
-        this.console.log('[AutoRecursos] Iniciado. Intervalo: 30 min.');
+        this.console.log('[AutoRecursos] Iniciado. Intervalo: ' + this.checkIntervalMinutes + ' min.');
         this._tick();
-        this._intervalId = this.createGuardedInterval(() => this._tick(), 30 * 60 * 1000);
+        this._intervalId = this.createGuardedInterval(() => this._tick(), this.checkIntervalMinutes * 60 * 1000);
     }
 
     stop() {
@@ -98,6 +107,27 @@ var AutoSendResources = class extends MultUtil {
         this.storage.save('asr_mode', mode);
         this._updateModeButtons();
         this.console.log('[AutoRecursos] Modo alterado para: ' + (mode === 'manual' ? 'Manual (90%)' : 'Automático'));
+    };
+
+    // Salva o intervalo de verificação (em minutos) e, se o módulo já
+    // estiver ativo, reinicia o ciclo na hora com o novo valor - não
+    // precisa desligar e ligar de novo pra a mudança valer.
+    saveInterval = () => {
+        const val = parseInt(uw.$('#asr_interval_input').val(), 10);
+        if (!val || val < 1) {
+            uw.$('#asr_interval_status').text('Intervalo inválido (mínimo 1 min).').css('color', '#f87171');
+            return;
+        }
+
+        this.checkIntervalMinutes = val;
+        this.storage.save('asr_interval_min', val);
+        uw.$('#asr_interval_status').text('✓ Intervalo salvo: ' + val + ' min.').css('color', '#1a6b2a');
+        this.console.log('[AutoRecursos] Intervalo alterado para ' + val + ' min.');
+
+        if (this._active) {
+            if (this._intervalId) clearInterval(this._intervalId);
+            this._intervalId = this.createGuardedInterval(() => this._tick(), this.checkIntervalMinutes * 60 * 1000);
+        }
     };
 
     _updateModeButtons() {
