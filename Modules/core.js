@@ -33,7 +33,9 @@ if (typeof unsafeWindow == 'undefined') {
    MARKET_LANG_MAP covers the market codes Grepolis has historically
    used as subdomain prefixes. Anything not in this map (or not
    matched at all) falls back to 'en'. */
-var MULT_MARKET_LANG_MAP = {
+var __MultBotI18N = {};
+
+__MultBotI18N.marketLangMap = {
 	br: 'pt', pt: 'pt',
 	de: 'de', at: 'de', ch: 'de',
 	us: 'en', en: 'en', uk: 'en', gb: 'en', 'int': 'en',
@@ -62,7 +64,7 @@ var MULT_MARKET_LANG_MAP = {
 	ee: 'et',
 };
 
-var MULT_LANG = (() => {
+__MultBotI18N.lang = (() => {
 	try {
 		if (uw.Game && uw.Game.locale) {
 			const short = String(uw.Game.locale).toLowerCase().split(/[_-]/)[0];
@@ -75,7 +77,7 @@ var MULT_LANG = (() => {
 		const match = host.match(/^([a-z]+?)\d*\.grepolis\.com$/i);
 		if (match) {
 			const code = match[1].toLowerCase();
-			if (MULT_MARKET_LANG_MAP[code]) return MULT_MARKET_LANG_MAP[code];
+			if (__MultBotI18N.marketLangMap[code]) return __MultBotI18N.marketLangMap[code];
 		}
 	} catch (e) {}
 
@@ -93,7 +95,7 @@ var MULT_LANG = (() => {
    any key missing from a non-English language just shows the
    English text instead of breaking. Add new languages here as
    {code: {key: value, ...}} - no other file needs to change. */
-var MULT_I18N = {
+__MultBotI18N.dict = {
 	en: {
 		active: 'Active',
 		stopped: 'Stopped',
@@ -502,7 +504,7 @@ var MULT_I18N = {
 	},
 };
 
-console.log(`[MultBot] i18n: detected language "${MULT_LANG}" (hostname: ${typeof location !== 'undefined' ? location.hostname : 'n/a'})`);
+console.log(`[MultBot] i18n: detected language "${__MultBotI18N.lang}" (hostname: ${typeof location !== 'undefined' ? location.hostname : 'n/a'})`);
 
 /* Standalone version of the translation helper, usable from ANY file
    in the bundle - not just classes that extend MultUtil (e.g.
@@ -511,15 +513,22 @@ console.log(`[MultBot] i18n: detected language "${MULT_LANG}" (hostname: ${typeo
    vars (optional): {name: 'X'} replaces "{name}" inside the string -
    lets a single translated sentence carry a dynamic value (module
    name, count, etc) without needing one dictionary key per value. */
-var multT = function(key, vars) {
-    const dict = MULT_I18N[MULT_LANG] || MULT_I18N.en;
-    let text = dict[key] ?? MULT_I18N.en[key] ?? key;
+__MultBotI18N.t = function(key, vars) {
+    const dict = __MultBotI18N.dict[__MultBotI18N.lang] || __MultBotI18N.dict.en;
+    let text = dict[key] ?? __MultBotI18N.dict.en[key] ?? key;
     if (vars) {
         for (const k in vars) {
             text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), vars[k]);
         }
     }
     return text;
+};
+
+/* Alias solto, so pra nao precisar reescrever os lugares que ja
+   chamam multT(...) diretamente (ex: multbot.js, nos titulos das
+   abas). A funcao de verdade agora vive em __MultBotI18N.t. */
+var multT = function(key, vars) {
+    return __MultBotI18N.t(key, vars);
 };
 
 var style = document.createElement("style");
