@@ -16,6 +16,10 @@
 //    junto de town_id (cidade atual) e nl_init:true.
 // ══════════════════════════════════════════════════════
 var AutoQuest = class extends MultUtil {
+    // Limite do proprio jogo: so e possivel ter 3 missoes aceitas
+    // (em andamento ou prontas pra reivindicar) ao mesmo tempo.
+    MAX_ACCEPTED_QUESTS = 3;
+
     constructor(c, s) {
         super(c, s);
         this._active = false;
@@ -87,6 +91,23 @@ var AutoQuest = class extends MultUtil {
             return models.filter(m => m.attributes?.state === 'satisfied');
         } catch (e) {
             return [];
+        }
+    }
+
+    /* Conta quantas missoes ja estao ocupando uma vaga - "running"
+       (em andamento) OU "satisfied" (pronta mas ainda nao
+       reivindicada, ainda ocupa a vaga ate ser reivindicada). O
+       jogo so permite 3 vagas ao mesmo tempo - MAX_ACCEPTED_QUESTS. */
+    _getAcceptedQuestCount() {
+        try {
+            const collection = uw.MM.getOnlyCollectionByName('IslandQuest');
+            const models = collection?.models ?? [];
+            return models.filter(m => {
+                const s = m.attributes?.state;
+                return s === 'running' || s === 'satisfied';
+            }).length;
+        } catch (e) {
+            return this.MAX_ACCEPTED_QUESTS; // erro ao ler -> assume cheio, nao arrisca
         }
     }
 
@@ -233,7 +254,9 @@ var AutoQuest = class extends MultUtil {
         try {
             const quests = this._getSatisfiedQuests();
             const forks = this._getUndecidedFreeForks();
-            let html = this.t('aq_ready_count', { count: quests.length });
+            const accepted = this._getAcceptedQuestCount();
+            let html = this.t('aq_accepted_count', { count: accepted, max: this.MAX_ACCEPTED_QUESTS });
+            html += ' | ' + this.t('aq_ready_count', { count: quests.length });
             if (forks.length > 0) html += this.t('aq_pending_forks', { count: forks.length });
             uw.$('#aq_status').html(html);
         } catch (e) {}
@@ -281,26 +304,40 @@ var AutoQuest = class extends MultUtil {
             // 3. Aceita (challenge) as missoes "suportar efeito" que ja
             //    estao decididas e prontas pra comecar - precisa ser
             //    feito a partir de uma cidade na MESMA ilha da missao.
-            const challengeable = this._getChallengeableBearEffectQuests();
-            for (const quest of challengeable) {
-                const name = quest.attributes.progressable_id;
-                const islandX = quest.attributes.configuration?.island_x;
-                const islandY = quest.attributes.configuration?.island_y;
-                const townOnIsland = (islandX != null && islandY != null) ? this._findTownOnIsland(islandX, islandY) : null;
+            //    RESPEITA o limite do jogo de 3 missoes aceitas ao
+            //    mesmo tempo (running + satisfied ocupam vaga).
+            let slotsAvailable = this.MAX_ACCEPTED_QUESTS - this._getAcceptedQuestCount();
 
-                if (!townOnIsland) {
-                    this.console.log('[AutoQuest] ' + this.t('aq_no_town_on_island_log', { name }));
-                }
-                const challengeTownId = townOnIsland ?? townId;
+            if (slotsAvailable <= 0) {
+                this.console.log('[AutoQuest] ' + this.t('aq_max_accepted_log', { max: this.MAX_ACCEPTED_QUESTS }));
+            } else {
+                const challengeable = this._getChallengeableBearEffectQuests();
+                for (const quest of challengeable) {
+                    if (slotsAvailable <= 0) {
+                        this.console.log('[AutoQuest] ' + this.t('aq_max_accepted_log', { max: this.MAX_ACCEPTED_QUESTS }));
+                        break;
+                    }
 
-                const success = await this._challengeQuest(challengeTownId, name);
-                if (success) {
-                    this._challengedThisSession.add(name);
-                    const msg = this.t('aq_challenged_log', { name });
-                    this.console.log('[AutoQuest] ' + msg);
-                    uw.$('#aq_log').text(msg).css('color', '#1a6b2a');
+                    const name = quest.attributes.progressable_id;
+                    const islandX = quest.attributes.configuration?.island_x;
+                    const islandY = quest.attributes.configuration?.island_y;
+                    const townOnIsland = (islandX != null && islandY != null) ? this._findTownOnIsland(islandX, islandY) : null;
+
+                    if (!townOnIsland) {
+                        this.console.log('[AutoQuest] ' + this.t('aq_no_town_on_island_log', { name }));
+                    }
+                    const challengeTownId = townOnIsland ?? townId;
+
+                    const success = await this._challengeQuest(challengeTownId, name);
+                    if (success) {
+                        this._challengedThisSession.add(name);
+                        slotsAvailable--;
+                        const msg = this.t('aq_challenged_log', { name });
+                        this.console.log('[AutoQuest] ' + msg);
+                        uw.$('#aq_log').text(msg).css('color', '#1a6b2a');
+                    }
+                    await this.sleep(500);
                 }
-                await this.sleep(500);
             }
 
             this._renderStatus();
