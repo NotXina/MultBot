@@ -1,10 +1,14 @@
 // ══════════════════════════════════════════════════════
 //  MODULE: AutoSendResources
 //  Condições para enviar da cidade X para cidade Y:
-//  - Cidade X: pop < 200, festa + teatro em curso, mercado ativo,
-//    não pode fazer festa/teatro
-//  - Cidade Y: cidade do jogador com menor % storage
-//  Envia o máximo balanceado via town_info/trade
+//  - Cidade X (remetente): pop < 200, sem construção em fila,
+//    mercado ativo, recurso acima de 50% do storage
+//  - Cidade Y (destino): cidade do jogador com MENOR soma de
+//    níveis de construção (proxy de "menos desenvolvida"),
+//    entre as que ainda têm espaço de sobra no armazém
+//  Envia o excedente do remetente, mas nunca mais do que o
+//  espaço livre no armazém do destino (margem de 5%) - evita
+//  desperdiçar recurso que "estoura" o armazém de lá.
 // ══════════════════════════════════════════════════════
 var AutoSendResources = class extends MultUtil {
     constructor(c, s) {
@@ -28,10 +32,10 @@ var AutoSendResources = class extends MultUtil {
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             ${this.getTitleHtml('asr_title', 'Auto Envio de Recursos', this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
-                Envia recursos de cidades ociosas para a cidade com menor % de storage. Verifica a cada 30 min.
+                Envia recursos de cidades ociosas para a cidade menos desenvolvida (com espaço no armazém). Verifica a cada 30 min.
             </div>
             <div style="padding:2px 10px 4px;font-size:11px;color:#5a3a0a;">
-                Condição para enviar: pop &lt; 200 + AutoBuild concluído + recurso &gt; 50% storage.
+                Remetente: pop &lt; 200 + AutoBuild concluído + recurso &gt; 50% storage. Destino: menor soma de níveis de construção, com margem de 5% de espaço livre no armazém.
             </div>
             <div id="asr_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
@@ -49,7 +53,7 @@ var AutoSendResources = class extends MultUtil {
         this._updateTitle();
         this.console.log('[AutoRecursos] Iniciado. Intervalo: 30 min.');
         this._tick();
-        this._intervalId = setInterval(() => this._tick(), 30 * 60 * 1000);
+        this._intervalId = this.createGuardedInterval(() => this._tick(), 30 * 60 * 1000);
     }
 
     stop() {
@@ -71,11 +75,11 @@ var AutoSendResources = class extends MultUtil {
         const townIds = Object.keys(uw.ITowns.towns);
         if (townIds.length < 2) return;
 
-        const target = this._findPoorestTown(townIds);
+        const target = this._findLeastDevelopedTown(townIds);
         if (!target) return;
 
         const targetName = uw.ITowns.towns[target].getName();
-        this.console.log(`[AutoRecursos] Destino: ${targetName}`);
+        this.console.log(`[AutoRecursos] Destino (menos desenvolvida, com espaço no armazém): ${targetName}`);
 
         const senders = townIds.filter(id => id !== target && this._isEligibleSender(id));
         if (!senders.length) {
@@ -97,17 +101,42 @@ var AutoSendResources = class extends MultUtil {
         uw.$('#asr_log').text(msg);
     }
 
-    // Cidade com menor % de storage (wood+stone+iron / storage*3)
-    _findPoorestTown(townIds) {
-        let bestId  = null;
-        let bestPct = Infinity;
+    // Soma dos niveis de todas as construcoes de uma cidade - usado
+    // como indicador de "quao desenvolvida" ela e (uma cidade nova/
+    // recem-fundada tem essa soma bem menor que uma ja consolidada).
+    _getDevelopmentScore(town) {
+        try {
+            const buildings = town.buildings().attributes;
+            let sum = 0;
+            for (const key in buildings) {
+                if (typeof buildings[key] === 'number') sum += buildings[key];
+            }
+            return sum;
+        } catch (e) {
+            return Infinity; // erro ao ler -> nunca escolhe essa cidade como alvo
+        }
+    }
+
+    // Cidade MENOS DESENVOLVIDA (menor soma de niveis de construcao)
+    // entre as que ainda tem espaco de sobra no armazem - cidades com
+    // o armazem praticamente cheio sao ignoradas aqui, pra nao virar
+    // alvo de um envio que so vai desperdicar recurso estourando.
+    _findLeastDevelopedTown(townIds) {
+        let bestId    = null;
+        let bestScore = Infinity;
 
         for (const id of townIds) {
             try {
                 const town = uw.ITowns.towns[id];
                 const res  = town.resources();
-                const pct  = (res.wood + res.stone + res.iron) / (res.storage * 3);
-                if (pct < bestPct) { bestPct = pct; bestId = id; }
+
+                // Espaco livre total (soma dos 3 recursos) - se sobrar
+                // pouco, nem vale considerar essa cidade como destino.
+                const roomLeft = (res.storage - res.wood) + (res.storage - res.stone) + (res.storage - res.iron);
+                if (roomLeft < 300) continue;
+
+                const score = this._getDevelopmentScore(town);
+                if (score < bestScore) { bestScore = score; bestId = id; }
             } catch(e) {}
         }
         return bestId;
@@ -139,57 +168,53 @@ var AutoSendResources = class extends MultUtil {
         } catch(e) { return false; }
     }
 
-    // Envia o excedente acima de 50% do storage para a cidade destino
-    _sendResources(fromId, toId) {
-        return new Promise(resolve => {
-            try {
-                const from     = uw.ITowns.towns[fromId];
-                const fromRes  = from.resources();
-                const capacity = from.getAvailableTradeCapacity();
+    // Envia o excedente acima de 50% do storage do remetente, mas
+    // NUNCA mais do que o espaço livre no armazém do destino - deixa
+    // uma margem de segurança de 5% no destino, pra sobrar espaço
+    // mesmo com a produção normal da cidade entre o envio e a chegada.
+    _sendResources = async (fromId, toId) => {
+        try {
+            const from     = uw.ITowns.towns[fromId];
+            const to       = uw.ITowns.towns[toId];
+            const fromRes  = from.resources();
+            const toRes    = to.resources();
+            const capacity = from.getAvailableTradeCapacity();
 
-                if (capacity < 100) { resolve(false); return; }
+            if (capacity < 100) return false;
 
-                const threshold = fromRes.storage * 0.5;
-                const excessW = Math.max(0, Math.floor(fromRes.wood  - threshold));
-                const excessS = Math.max(0, Math.floor(fromRes.stone - threshold));
-                const excessI = Math.max(0, Math.floor(fromRes.iron  - threshold));
+            const threshold = fromRes.storage * 0.5;
+            const excessW = Math.max(0, Math.floor(fromRes.wood  - threshold));
+            const excessS = Math.max(0, Math.floor(fromRes.stone - threshold));
+            const excessI = Math.max(0, Math.floor(fromRes.iron  - threshold));
 
-                const perRes = Math.floor(capacity / 3);
-                const wood   = Math.min(perRes, excessW);
-                const stone  = Math.min(perRes, excessS);
-                const iron   = Math.min(perRes, excessI);
-                const total  = wood + stone + iron;
+            // Espaço livre no destino, por recurso, com margem de 5%
+            const safetyMargin = toRes.storage * 0.05;
+            const roomW = Math.max(0, Math.floor(toRes.storage - toRes.wood  - safetyMargin));
+            const roomS = Math.max(0, Math.floor(toRes.storage - toRes.stone - safetyMargin));
+            const roomI = Math.max(0, Math.floor(toRes.storage - toRes.iron  - safetyMargin));
 
-                if (total < 100) { resolve(false); return; }
+            const perRes = Math.floor(capacity / 3);
+            const wood   = Math.min(perRes, excessW, roomW);
+            const stone  = Math.min(perRes, excessS, roomS);
+            const iron   = Math.min(perRes, excessI, roomI);
+            const total  = wood + stone + iron;
 
-                const fromName = from.getName();
-                const toName   = uw.ITowns.towns[toId]?.getName?.() ?? '#' + toId;
-                const data = { id: parseInt(toId), wood, stone, iron, town_id: parseInt(fromId), nl_init: true };
+            if (total < 100) return false;
 
-                this.console.log(`[AutoRecursos] ${fromName} → ${toName}: ${wood}🪵 ${stone}🪨 ${iron}⚙`);
+            const fromName = from.getName();
+            const toName   = to?.getName?.() ?? '#' + toId;
+            const data = { id: parseInt(toId), wood, stone, iron, town_id: parseInt(fromId), nl_init: true };
 
-                // Timeout de 15s — evita Promise pendente para sempre
-                const timer = setTimeout(() => {
-                    this.console.log(`[AutoRecursos] ✗ ${fromName}: timeout`);
-                    resolve(false);
-                }, 15000);
+            this.console.log(`[AutoRecursos] ${fromName} → ${toName}: ${wood}🪵 ${stone}🪨 ${iron}⚙`);
 
-                uw.gpAjax.ajaxPost('town_info', 'trade', data, true,
-                    res => {
-                        clearTimeout(timer);
-                        if (res && !res.error) {
-                            resolve(true);
-                        } else {
-                            this.console.log(`[AutoRecursos] ✗ Erro trade: ${res?.error ?? JSON.stringify(res)}`);
-                            resolve(false);
-                        }
-                    },
-                    () => { clearTimeout(timer); resolve(false); }
-                );
-            } catch(e) {
-                this.console.log('[AutoRecursos] Exceção: ' + e?.message);
-                resolve(false);
-            }
-        });
-    }
+            const res = await this.ajaxPostWithTimeout('town_info', 'trade', data, 15000, true);
+            if (res && !res.error) return true;
+
+            this.console.log(`[AutoRecursos] ✗ Erro trade: ${res?.error ?? JSON.stringify(res)}`);
+            return false;
+        } catch (e) {
+            this.console.log('[AutoRecursos] Exceção: ' + (e?.message ?? e));
+            return false;
+        }
+    };
 };
