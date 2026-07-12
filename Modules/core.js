@@ -33,7 +33,7 @@ if (typeof unsafeWindow == 'undefined') {
    MARKET_LANG_MAP covers the market codes Grepolis has historically
    used as subdomain prefixes. Anything not in this map (or not
    matched at all) falls back to 'en'. */
-const MULT_MARKET_LANG_MAP = {
+var MULT_MARKET_LANG_MAP = {
 	br: 'pt', pt: 'pt',
 	de: 'de', at: 'de', ch: 'de',
 	us: 'en', en: 'en', uk: 'en', gb: 'en', 'int': 'en',
@@ -62,7 +62,7 @@ const MULT_MARKET_LANG_MAP = {
 	ee: 'et',
 };
 
-const MULT_LANG = (() => {
+var MULT_LANG = (() => {
 	try {
 		if (uw.Game && uw.Game.locale) {
 			const short = String(uw.Game.locale).toLowerCase().split(/[_-]/)[0];
@@ -93,7 +93,7 @@ const MULT_LANG = (() => {
    any key missing from a non-English language just shows the
    English text instead of breaking. Add new languages here as
    {code: {key: value, ...}} - no other file needs to change. */
-const MULT_I18N = {
+var MULT_I18N = {
 	en: {
 		active: 'Active',
 		stopped: 'Stopped',
@@ -276,7 +276,7 @@ const MULT_I18N = {
 		aas_network_error_log: 'Network error: {err}',
 		aas_network_error_reason: 'network error',
 		aq_title: 'Auto Quest',
-		aq_desc: 'Automatically claims island quest rewards as soon as they are ready. When a Good/Evil choice is available, picks whichever side has no cost (resources/troops) - skips the choice if both sides require something. Checks every 20s.',
+		aq_desc: 'Automatically claims island quest rewards as soon as they are ready. When a Good/Evil choice is available, picks the "bear effect" (wait-only) side if there is one, and accepts the challenge to start it. Checks every 20s.',
 		aq_ready_count: '{count} quest(s) ready to claim',
 		aq_claimed_log: '✓ Claimed: {name}',
 		aq_claim_fail_log: '✗ Failed to claim {name}: {reason}',
@@ -292,6 +292,10 @@ const MULT_I18N = {
 		mt_renamed_log: '✓ {town}: renamed to {name}',
 		mt_rename_error: '✗ {town}: rename failed - {msg}',
 		mt_rename_complete: '✓ {count} cities renamed.',
+		aq_challenged_log: '✓ Challenge accepted for: {name}',
+		aq_challenge_fail_log: '✗ Failed to accept challenge {name}: {reason}',
+		aq_challenge_network_error: '✗ Network error accepting challenge {name}: {msg}',
+		aq_no_town_on_island_log: '⚠ No town of yours on the island of {name}, using current town as fallback.',
 	},
 	pt: {
 		active: 'Ativo',
@@ -475,7 +479,7 @@ const MULT_I18N = {
 		aas_network_error_log: 'Erro de rede: {err}',
 		aas_network_error_reason: 'erro de rede',
 		aq_title: 'Auto Quest',
-		aq_desc: 'Reivindica automaticamente as recompensas de missões de ilha assim que ficam prontas. Quando há escolha entre Bem/Mal, escolhe o lado que não tem custo (recursos/tropas) - se os dois pedirem algo, deixa a decisão pra você. Verifica a cada 20s.',
+		aq_desc: 'Reivindica automaticamente as recompensas de missões de ilha assim que ficam prontas. Quando há escolha entre Bem/Mal, escolhe o lado "suportar efeito" (só espera) quando existir, e aceita o desafio pra ela começar. Verifica a cada 20s.',
 		aq_ready_count: '{count} missão(ões) pronta(s) pra reivindicar',
 		aq_claimed_log: '✓ Reivindicado: {name}',
 		aq_claim_fail_log: '✗ Falha ao reivindicar {name}: {reason}',
@@ -491,6 +495,10 @@ const MULT_I18N = {
 		mt_renamed_log: '✓ {town}: renomeado para {name}',
 		mt_rename_error: '✗ {town}: falha ao renomear - {msg}',
 		mt_rename_complete: '✓ {count} cidade(s) renomeada(s).',
+		aq_challenged_log: '✓ Desafio aceito para: {name}',
+		aq_challenge_fail_log: '✗ Falha ao aceitar desafio {name}: {reason}',
+		aq_challenge_network_error: '✗ Erro de rede ao aceitar desafio {name}: {msg}',
+		aq_no_town_on_island_log: '⚠ Nenhuma cidade sua na ilha de {name}, usando cidade atual como alternativa.',
 	},
 };
 
@@ -503,7 +511,7 @@ console.log(`[MultBot] i18n: detected language "${MULT_LANG}" (hostname: ${typeo
    vars (optional): {name: 'X'} replaces "{name}" inside the string -
    lets a single translated sentence carry a dynamic value (module
    name, count, etc) without needing one dictionary key per value. */
-function multT(key, vars) {
+var multT = function(key, vars) {
     const dict = MULT_I18N[MULT_LANG] || MULT_I18N.en;
     let text = dict[key] ?? MULT_I18N.en[key] ?? key;
     if (vars) {
@@ -512,7 +520,7 @@ function multT(key, vars) {
         }
     }
     return text;
-}
+};
 
 var style = document.createElement("style");
 style.textContent = `.auto_build_up_arrow{background:url(https://gpit.innogamescdn.com/images/game/academy/up.png) no-repeat -2px -2px;width:18px;height:18px;position:absolute;right:-2px;bottom:12px;transform:scale(.8);cursor:pointer}.auto_build_down_arrow{background:url(https://gpit.innogamescdn.com/images/game/academy/up.png) no-repeat -2px -2px;width:18px;height:18px;position:absolute;right:-2px;bottom:-3px;transform:scale(.8) rotate(180deg);cursor:pointer}.auto_build_box{background:url(https://gpit.innogamescdn.com/images/game/academy/tech_frame.png) no-repeat 0 0;width:58px;height:59px;position:relative;overflow:hidden;display:inline-block;vertical-align:middle}.auto_build_building{position:absolute;top:4px;left:4px;width:50px;height:50px;background:url(https://gpit.innogamescdn.com/images/game/main/buildings_sprite_50x50.png) no-repeat 0 0}.auto_build_lvl{position:absolute;bottom:3px;left:3px;margin:0;font-weight:700;font-size:12px;color:#fff;text-shadow:0 0 2px #000,1px 1px 2px #000,0 2px 2px #000}#buildings_lvl_buttons{padding:5px;max-height:400px;user-select:none}#troops_lvl_buttons{padding:5px;max-height:400px;user-select:none}.progress_bar_auto{position:absolute;z-index:1;height:100%;left:0;top:0;background-image:url(https://gpit.innogamescdn.com/images/game/border/header.png);background-position:0 -1px;filter:brightness(100%) saturate(186%) hue-rotate(241deg)}.mult_bot_settings{z-index:10;position:absolute;top:52px!important;right:116px!important}.console_multbot{width:100%;height:100%;background-color:#000;color:#fff;font-family:monospace;font-size:16px;padding:20px;box-sizing:border-box;overflow-y:scroll;display:flex;flex-direction:column-reverse}#MULT_BOT_content{height:100%;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;padding-right:4px}.console_multbot p{margin:1px}.population_icon_bot{background:url(https://gpit.innogamescdn.com/images/game/autogenerated/layout/layout_095495a.png) no-repeat -697px -647px;width:25px;height:20px;position:absolute;right:2px}.population_icon_bot p{text-align:end;position:absolute;right:30px;padding:0;margin:0;color:#000;font-weight:700}.split_content{width:100%;display:inline-flex;justify-content:space-between}@keyframes rotateForever{from{transform:rotate(0)}to{transform:rotate(360deg)}}.rotate-forever{animation:rotateForever 5s linear infinite;transform-origin:16px 15px;filter:hue-rotate(72deg) saturate(2.5)}.enabled .game_header{filter:brightness(100%) saturate(186%) hue-rotate(241deg)}.auto_build_box .unit_icon50x50{position:absolute!important;top:4px!important;left:4px!important;width:50px!important;height:50px!important;margin:0!important}`;
