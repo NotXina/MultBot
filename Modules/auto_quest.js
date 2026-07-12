@@ -90,8 +90,8 @@ class AutoQuest extends MultUtil {
     }
 
     /* Algumas missoes de ilha vem em pares "Bem" (Good) e "Mal"
-       (Evil) pro mesmo evento (ex: AllJustAnExploitGoodIslandQuest
-       / AllJustAnExploitEvilIslandQuest). Confirmado via captura
+       (Evil) pro mesmo evento (ex: TearOffThePastGoodIslandQuest
+       / TearOffThePastEvilIslandQuest). Confirmado via captura
        real: enquanto nenhum lado foi escolhido, os DOIS aparecem
        com state "viable" ao mesmo tempo. Escolher e feito via
        model_url "IslandQuests", action_name "decide", arguments:
@@ -101,12 +101,18 @@ class AutoQuest extends MultUtil {
        so um lado existir, trata como missao normal (sem decidir
        nada), pra nao arriscar chamar "decide" em algo que nao
        precisa.
-       IMPORTANTE: nao tem preferencia por Bem ou Mal - escolhe
-       QUALQUER lado que nao tenha custo (nem recursos, nem
-       tropas), ou seja, so as missoes de tempo/espera. Se os
-       DOIS lados pedirem algo, fica de fora - decisao fica pra
-       voce fazer manualmente no jogo, ja que decidir
-       provavelmente tranca o lado oposto. */
+       IMPORTANTE: so decide automaticamente o lado cujo
+       static_data.challenge_type seja "bear_effect" ("Suportar
+       efeito" - fica so esperando um efeito, sem gastar nada).
+       Confirmado via captura real de dados completos da
+       IslandQuest (F12): esse campo e MUITO mais confiavel que
+       tentar adivinhar pelo formato de "progress" - descobrimos
+       que missoes do tipo "collect_units" (enviar tropas) tambem
+       aparecem com progress vazio enquanto "viable" (o requisito
+       so populada depois que voce comeca a mandar apoio), o que
+       fazia a heuristica antiga (checar progress.units/resources)
+       escolher errado. Se NENHUM dos dois lados for "bear_effect",
+       fica de fora - decisao fica pra voce fazer manualmente. */
     _getUndecidedFreeForks() {
         try {
             const collection = uw.MM.getOnlyCollectionByName('IslandQuest');
@@ -136,15 +142,13 @@ class AutoQuest extends MultUtil {
                 const g = groups[base];
                 if (!g.good || !g.evil) continue;
 
-                const goodFree = !this._hasCost(g.good);
-                const evilFree = !this._hasCost(g.evil);
+                const goodIsBearEffect = g.good.attributes?.static_data?.challenge_type === 'bear_effect';
+                const evilIsBearEffect = g.evil.attributes?.static_data?.challenge_type === 'bear_effect';
 
-                // Prefere "Bem" quando os dois sao de graca (tanto faz,
-                // mas precisa escolher um); senao pega o que for de graca.
                 let chosen, decision;
-                if (goodFree) { chosen = g.good; decision = 'good'; }
-                else if (evilFree) { chosen = g.evil; decision = 'evil'; }
-                else continue; // os dois tem custo - fica de fora
+                if (goodIsBearEffect) { chosen = g.good; decision = 'good'; }
+                else if (evilIsBearEffect) { chosen = g.evil; decision = 'evil'; }
+                else continue; // nenhum dos dois lados e "suportar efeito" - fica de fora
 
                 const name = chosen.attributes.progressable_id;
                 if (this._decidedThisSession.has(name)) continue;
@@ -155,16 +159,6 @@ class AutoQuest extends MultUtil {
         } catch (e) {
             return [];
         }
-    }
-
-    /* Verdadeiro se a missao pede recursos ou tropas pra progredir
-       (ou seja, NAO e uma missao de tempo/espera pura). */
-    _hasCost(model) {
-        const progress = model.attributes?.progress;
-        if (!progress) return false;
-        if (progress.resources && Object.values(progress.resources).some(v => v > 0)) return true;
-        if (progress.units && Object.values(progress.units).some(v => v > 0)) return true;
-        return false;
     }
 
     _renderStatus() {
