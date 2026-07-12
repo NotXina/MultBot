@@ -59,6 +59,7 @@ var AutoAttack = class extends MultUtil {
         this._intervalId = null;
         this._plans = this.storage.load('attack_plans', []);
         this._stagingUnits = [];
+        this._editingPlanId = null;
 
         this._migrateOldPlans();
 
@@ -163,6 +164,7 @@ var AutoAttack = class extends MultUtil {
             self._updateTitle();
             self._renderPlans();
             self._renderStagingUnits();
+            self._updateAddPlanButtonLabel();
         });
 
         let html = '';
@@ -495,6 +497,52 @@ var AutoAttack = class extends MultUtil {
             unitsCopy.push({ unit: u.unit, quantity: u.quantity, isNaval: u.isNaval, useMax: u.useMax });
         }
 
+        const originTown = uw.ITowns.towns[originId];
+        const originName = originTown && originTown.getName ? originTown.getName() : ('#' + originId);
+
+        let unitsSummary = '';
+        for (let i = 0; i < unitsCopy.length; i++) {
+            if (i > 0) unitsSummary += ', ';
+            unitsSummary += this._formatUnitEntry(unitsCopy[i]);
+        }
+
+        // Modo edicao: atualiza o plano existente NO LUGAR, mantendo o
+        // mesmo id e o nextAllowedAt (cooldowns em andamento nao sao
+        // resetados so por editar o plano - se o alvo ja esta descansando,
+        // continua descansando).
+        if (this._editingPlanId) {
+            const existingPlan = this._plans.find((p) => p.id === this._editingPlanId);
+            if (existingPlan) {
+                existingPlan.originId = originId;
+                existingPlan.units = unitsCopy;
+                existingPlan.targets = targets;
+                existingPlan.restMinutes = restMinutes;
+                existingPlan.hero = hero;
+                // nextAllowedAt, enabled, id: preservados como estavam
+
+                this.storage.save('attack_plans', this._plans);
+                this._renderPlans();
+
+                this._stagingUnits = [];
+                this._renderStagingUnits();
+                uw.$('#attack_origin_select').val('');
+                uw.$('#attack_targets').val('');
+                uw.$('#attack_rest_minutes').val('0');
+                uw.$('#attack_hero_select').val('');
+
+                this._editingPlanId = null;
+                this._updateAddPlanButtonLabel();
+
+                this.console.log('[AutoAttack] Plano atualizado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s).');
+                uw.$('#attack_log').text('Plano atualizado com sucesso!').css('color', '#1a6b2a');
+                return;
+            }
+            // O plano que estava sendo editado sumiu (removido em outra aba,
+            // por ex) - cai pro fluxo normal de criar um plano novo abaixo.
+            this._editingPlanId = null;
+            this._updateAddPlanButtonLabel();
+        }
+
         const plan = {
             id: Date.now() + '_' + Math.floor(Math.random() * 10000),
             originId: originId,
@@ -517,20 +565,76 @@ var AutoAttack = class extends MultUtil {
         uw.$('#attack_rest_minutes').val('0');
         uw.$('#attack_hero_select').val('');
 
-        const originTown = uw.ITowns.towns[originId];
-        const originName = originTown && originTown.getName ? originTown.getName() : ('#' + originId);
-
-        let unitsSummary = '';
-        for (let i = 0; i < plan.units.length; i++) {
-            if (i > 0) unitsSummary += ', ';
-            unitsSummary += this._formatUnitEntry(plan.units[i]);
-        }
-
         const restLabel = restMinutes > 0 ? (', descanso ' + restMinutes + 'min') : '';
         const heroLabel = hero ? (', heroi: ' + this._getHeroLabel(hero)) : '';
         this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s)' + restLabel + heroLabel + '.');
         uw.$('#attack_log').text('Plano adicionado com sucesso!').css('color', '#1a6b2a');
     };
+
+    /* Carrega os dados de um plano existente de volta no formulario,
+       pra edicao. O botao "+ Adicionar Plano" vira "Salvar Alteracoes"
+       enquanto _editingPlanId estiver setado (ver _updateAddPlanButtonLabel). */
+    editPlan = (planId) => {
+        const plan = this._plans.find((p) => p.id === planId);
+        if (!plan) {
+            this.console.log('[AutoAttack] Erro: plano nao encontrado pra editar.');
+            return;
+        }
+
+        this._editingPlanId = planId;
+
+        uw.$('#attack_origin_select').val(plan.originId);
+        uw.$('#attack_rest_minutes').val(plan.restMinutes || 0);
+        uw.$('#attack_hero_select').val(plan.hero || '');
+        uw.$('#attack_targets').val(plan.targets.join(', '));
+
+        this._stagingUnits = plan.units.map((u) => ({ unit: u.unit, quantity: u.quantity, isNaval: u.isNaval, useMax: u.useMax }));
+        this._renderStagingUnits();
+
+        this._updateAddPlanButtonLabel();
+
+        const townName = this.getTownName(plan.originId);
+        this.console.log('[AutoAttack] Editando plano: ' + townName + '.');
+        uw.$('#attack_log').text('Editando plano de ' + townName + ' - altere e clique em "Salvar Alteracoes".').css('color', '#5a3a0a');
+
+        const formEl = document.getElementById('attack_origin_select');
+        if (formEl && formEl.scrollIntoView) formEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+
+    /* Sai do modo de edicao sem salvar - limpa o formulario e volta o
+       botao pro estado normal de "+ Adicionar Plano". */
+    cancelEditPlan = () => {
+        this._editingPlanId = null;
+        this._stagingUnits = [];
+        this._renderStagingUnits();
+        uw.$('#attack_origin_select').val('');
+        uw.$('#attack_targets').val('');
+        uw.$('#attack_rest_minutes').val('0');
+        uw.$('#attack_hero_select').val('');
+        this._updateAddPlanButtonLabel();
+        uw.$('#attack_log').text('Edicao cancelada.').css('color', '#5a3a0a');
+    };
+
+    /* Troca o texto do botao entre "+ Adicionar Plano" e "Salvar
+       Alteracoes" dependendo de _editingPlanId, e mostra/esconde o
+       link "Cancelar edicao" ao lado dele. */
+    _updateAddPlanButtonLabel() {
+        const isEditing = !!this._editingPlanId;
+        const label = isEditing ? '💾 Salvar Alteracoes' : '+ Adicionar Plano';
+        uw.$('#attack_add_plan_btn .js-caption').html(label + ' <div class="effect js-effect"></div>');
+
+        const $cancel = uw.$('#attack_cancel_edit_link');
+        if (isEditing) {
+            if ($cancel.length === 0) {
+                uw.$('#attack_add_plan_btn').after(
+                    '<span id="attack_cancel_edit_link" onclick="window.multBot.autoAttack.cancelEditPlan()" ' +
+                    'style="cursor:pointer;color:#7a5c2a;font-size:11px;margin-left:8px;text-decoration:underline;">Cancelar edicao</span>'
+                );
+            }
+        } else {
+            $cancel.remove();
+        }
+    }
 
     removePlan = (planId) => {
         this._plans = this._plans.filter(function (p) {
@@ -585,6 +689,7 @@ var AutoAttack = class extends MultUtil {
             html += '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px;" title="' + townName + ' [' + unitsLabel + '] -> ' + targetsLabel + restLabel + '">';
             html += '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + restLabel;
             html += '</div>';
+            html += '<span onclick="window.multBot.autoAttack.editPlan(\'' + plan.id + '\')" style="cursor:pointer;color:#4a90d9;font-weight:bold;flex-shrink:0;padding:0 4px;" title="Editar plano">✏️</span>';
             html += '<span onclick="window.multBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;flex-shrink:0;padding:0 4px;">X</span>';
             html += '</div>';
         }
