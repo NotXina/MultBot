@@ -16,6 +16,8 @@ var AutoSendResources = class extends MultUtil {
         this._active     = false;
         this._intervalId = null;
         this._lastRun    = null;
+        this.mode            = this.storage.load('asr_mode', 'auto'); // 'auto' | 'manual'
+        this.manualTargetId  = this.storage.load('asr_manual_target', null);
 
         if (this.storage.load('asr_active', false)) {
             setTimeout(() => this.start(), 2500);
@@ -23,7 +25,10 @@ var AutoSendResources = class extends MultUtil {
     }
 
     settings = () => {
-        requestAnimationFrame(() => this._updateTitle());
+        requestAnimationFrame(() => {
+            this._updateTitle();
+            this._updateModeButtons();
+        });
         return `
         <div class="game_border" style="margin-bottom:20px;">
             <div class="game_border_top"></div><div class="game_border_bottom"></div>
@@ -37,6 +42,25 @@ var AutoSendResources = class extends MultUtil {
             <div style="padding:2px 10px 4px;font-size:11px;color:#5a3a0a;">
                 Remetente: pop &lt; 200 + AutoBuild concluído + recurso &gt; 50% storage. Destino: menor soma de níveis de construção, com margem de 5% de espaço livre no armazém.
             </div>
+
+            <div style="padding:4px 10px;display:flex;gap:6px;">
+                ${this.getButtonHtml('asr_mode_auto', 'Automático', this.setMode, 'auto')}
+                ${this.getButtonHtml('asr_mode_manual', 'Manual (90%)', this.setMode, 'manual')}
+            </div>
+
+            <div id="asr_manual_controls" style="padding:4px 10px;display:none;">
+                <label style="font-size:11px;font-weight:bold;">Cidade Destino (envia quando alguma cidade atingir 90% de armazém)</label><br>
+                <div style="display:flex;gap:6px;align-items:center;margin-top:3px;">
+                    <select id="asr_manual_target_select" style="flex:1;padding:3px;">
+                        ${this._getTownOptionsHtml()}
+                    </select>
+                    ${this.getButtonHtml('asr_manual_save_btn', 'Salvar', this.saveManualTarget)}
+                </div>
+                <div id="asr_manual_target_status" style="font-size:11px;color:#5a3a0a;margin-top:3px;">
+                    ${this.manualTargetId ? '✓ Destino atual: ' + (uw.ITowns.towns[this.manualTargetId]?.getName?.() ?? '#' + this.manualTargetId) : 'Nenhum destino configurado.'}
+                </div>
+            </div>
+
             <div id="asr_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
     };
@@ -69,11 +93,70 @@ var AutoSendResources = class extends MultUtil {
             ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
 
+    setMode = (mode) => {
+        this.mode = mode;
+        this.storage.save('asr_mode', mode);
+        this._updateModeButtons();
+        this.console.log('[AutoRecursos] Modo alterado para: ' + (mode === 'manual' ? 'Manual (90%)' : 'Automático'));
+    };
+
+    _updateModeButtons() {
+        if (this.mode === 'manual') {
+            uw.$('#asr_mode_auto').addClass('disabled');
+            uw.$('#asr_mode_manual').removeClass('disabled');
+            uw.$('#asr_manual_controls').show();
+        } else {
+            uw.$('#asr_mode_manual').addClass('disabled');
+            uw.$('#asr_mode_auto').removeClass('disabled');
+            uw.$('#asr_manual_controls').hide();
+        }
+    }
+
+    saveManualTarget = () => {
+        const id = uw.$('#asr_manual_target_select').val();
+        if (!id) {
+            uw.$('#asr_manual_target_status').text('Selecione uma cidade.').css('color', '#f87171');
+            return;
+        }
+        this.manualTargetId = id;
+        this.storage.save('asr_manual_target', id);
+        const name = uw.ITowns.towns[id]?.getName?.() ?? '#' + id;
+        uw.$('#asr_manual_target_status').text('✓ Destino atual: ' + name).css('color', '#1a6b2a');
+        this.console.log('[AutoRecursos] Destino manual salvo: ' + name);
+    };
+
+    _getTownOptionsHtml() {
+        try {
+            const towns = uw.ITowns.towns;
+            const keys = Object.keys(towns);
+            keys.sort((a, b) => {
+                const nameA = towns[a].getName ? towns[a].getName() : '';
+                const nameB = towns[b].getName ? towns[b].getName() : '';
+                return nameA.localeCompare(nameB);
+            });
+            let html = '<option value="">Selecione...</option>';
+            for (const id of keys) {
+                const t = towns[id];
+                const name = t.getName ? t.getName() : ('#' + id);
+                const selected = (String(id) === String(this.manualTargetId)) ? ' selected' : '';
+                html += '<option value="' + id + '"' + selected + '>' + name + ' (#' + id + ')</option>';
+            }
+            return html;
+        } catch (e) {
+            return '<option value="">Erro ao carregar cidades</option>';
+        }
+    }
+
     async _tick() {
         this.console.log('[AutoRecursos] Verificando cidades...');
 
         const townIds = Object.keys(uw.ITowns.towns);
         if (townIds.length < 2) return;
+
+        if (this.mode === 'manual') {
+            await this._tickManual(townIds);
+            return;
+        }
 
         const target = this._findLeastDevelopedTown(townIds);
         if (!target) return;
@@ -99,6 +182,60 @@ var AutoSendResources = class extends MultUtil {
             : 'Nenhuma cidade elegível para envio.';
         this.console.log('[AutoRecursos] ' + msg);
         uw.$('#asr_log').text(msg);
+    }
+
+    /* Modo manual: destino FIXO escolhido por voce. Diferente do modo
+       automatico, aqui NAO checa pop/fila de construcao/mercado - o
+       unico gatilho e "algum recurso bateu 90% do armazem". E uma
+       valvula de seguranca contra desperdicio por armazem cheio, nao
+       um balanceamento entre cidades. */
+    async _tickManual(townIds) {
+        if (!this.manualTargetId) {
+            this.console.log('[AutoRecursos] Modo manual: nenhuma cidade destino configurada ainda.');
+            uw.$('#asr_log').text('Configure uma cidade destino no modo manual.').css('color', '#f87171');
+            return;
+        }
+
+        const targetTown = uw.ITowns.towns[this.manualTargetId];
+        if (!targetTown) {
+            this.console.log('[AutoRecursos] Modo manual: cidade destino #' + this.manualTargetId + ' não encontrada (saiu do cache ou não é mais sua).');
+            uw.$('#asr_log').text('Cidade destino não encontrada.').css('color', '#f87171');
+            return;
+        }
+        const targetName = targetTown.getName();
+
+        const senders = townIds.filter(id => id !== this.manualTargetId && this._isOverflowing(id));
+        if (!senders.length) {
+            this.console.log('[AutoRecursos] Modo manual: nenhuma cidade em 90%+ de armazém no momento.');
+            uw.$('#asr_log').text('Nenhuma cidade em 90%+ de armazém no momento.');
+            return;
+        }
+
+        this.console.log(`[AutoRecursos] Modo manual: ${senders.length} cidade(s) em 90%+ de armazém, enviando para ${targetName}...`);
+
+        const results = await Promise.allSettled(
+            senders.map(fromId => this._sendResources(fromId, this.manualTargetId))
+        );
+
+        const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
+        const msg = totalSent > 0
+            ? `✓ Recursos enviados de ${totalSent} cidade(s) → ${targetName}`
+            : 'Nenhum envio concluído (destino sem espaço ou remetentes sem excedente).';
+        this.console.log('[AutoRecursos] ' + msg);
+        uw.$('#asr_log').text(msg);
+    }
+
+    // Verdadeiro se algum recurso da cidade estiver em 90% ou mais do
+    // armazem - o gatilho do modo manual.
+    _isOverflowing(townId) {
+        try {
+            const town = uw.ITowns.towns[townId];
+            const res  = town.resources();
+            const threshold = res.storage * 0.9;
+            return res.wood >= threshold || res.stone >= threshold || res.iron >= threshold;
+        } catch (e) {
+            return false;
+        }
     }
 
     // Soma dos niveis de todas as construcoes de uma cidade - usado
