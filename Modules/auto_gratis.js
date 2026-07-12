@@ -47,7 +47,7 @@ var AutoGratis = class extends MultUtil {
                 'filter',
                 'brightness(100%) saturate(186%) hue-rotate(241deg)',
             );
-            this.autogratis = setInterval(this.main, 1000);
+            this.autogratis = this.createGuardedInterval(this.main, 1000);
         } else {
             uw.$('#auto_gratis_title').css('filter', '');
             clearInterval(this.autogratis);
@@ -103,7 +103,7 @@ var AutoGratis = class extends MultUtil {
     };
 
     /* Post request to call the gratis */
-    callGratis = (town_id, order_id) => {
+    callGratis = async (town_id, order_id) => {
         const data = {
             "model_url": `BuildingOrder/${order_id}`,
             "action_name": "buyInstant",
@@ -112,11 +112,19 @@ var AutoGratis = class extends MultUtil {
             },
             "town_id": town_id
         };
-    
-        // Add console log
+
         this.console.log(`${uw.ITowns.towns[town_id].getName()}: calling gratis for order ${order_id}`);
-    
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
+
+        try {
+            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+            if (res && res.error) {
+                this.console.log(`[AutoGratis] Erro ao usar gratis (ordem ${order_id}): ${res.error}`);
+                this._fired.delete(order_id); // permite tentar de novo no proximo tick
+            }
+        } catch (e) {
+            this.console.log(`[AutoGratis] Erro de rede ao usar gratis (ordem ${order_id}): ${e?.message ?? e}`);
+            this._fired.delete(order_id); // permite tentar de novo no proximo tick
+        }
     };
-    
+
 };

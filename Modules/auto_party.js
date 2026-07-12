@@ -207,18 +207,19 @@ var AutoParty = class extends MultUtil {
         this._renderActiveCelebrations();
     };
 
-    makeCelebration = (type, town_id) => {
-        if (typeof town_id === 'undefined') {
-            let data = {
-                celebration_type: type,
-            };
-            uw.gpAjax.ajaxPost('town_overviews', 'start_all_celebrations', data);
-        } else {
-            let data = {
-                celebration_type: type,
-                town_id: town_id,
-            };
-            uw.gpAjax.ajaxPost('building_place', 'start_celebration', data);
+    makeCelebration = async (type, town_id) => {
+        try {
+            let res;
+            if (typeof town_id === 'undefined') {
+                res = await this.ajaxPostWithTimeout('town_overviews', 'start_all_celebrations', { celebration_type: type });
+            } else {
+                res = await this.ajaxPostWithTimeout('building_place', 'start_celebration', { celebration_type: type, town_id: town_id });
+            }
+            if (res && res.error) {
+                this.console.log('[AutoParty] Erro ao iniciar celebração (' + type + '): ' + res.error);
+            }
+        } catch (e) {
+            this.console.log('[AutoParty] Erro de rede ao iniciar celebração (' + type + '): ' + (e?.message ?? e));
         }
     };
 };

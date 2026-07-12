@@ -380,15 +380,16 @@ var AutoBuild = class extends MultUtil {
             arguments: { building_id: type },
             town_id: town_id,
         };
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
-            res => {
-                if (res && !res.error) {
-                    this.console.log('[AutoBuild] ' + this.t('ab_build_up_log', { town: town.getName(), building: this.getGameName('building', type) }));
-                } else {
-                    this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: res?.error ?? JSON.stringify(res) }));
-                }
+        try {
+            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+            if (res && !res.error) {
+                this.console.log('[AutoBuild] ' + this.t('ab_build_up_log', { town: town.getName(), building: this.getGameName('building', type) }));
+            } else {
+                this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: res?.error ?? JSON.stringify(res) }));
             }
-        );
+        } catch (e) {
+            this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: e?.message ?? e }));
+        }
         await this.sleep(1234);
         return true;
     };
@@ -400,8 +401,16 @@ var AutoBuild = class extends MultUtil {
             arguments: { building_id: type },
             town_id: town_id,
         };
-        uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
-        this.console.log(this.t('ab_build_down_log', { town: town.getName(), building: this.getGameName('building', type) }));
+        try {
+            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+            if (res && !res.error) {
+                this.console.log(this.t('ab_build_down_log', { town: town.getName(), building: this.getGameName('building', type) }));
+            } else {
+                this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: res?.error ?? JSON.stringify(res) }));
+            }
+        } catch (e) {
+            this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: e?.message ?? e }));
+        }
         await this.sleep(1234);
     };
     /* return true if the quee is full */

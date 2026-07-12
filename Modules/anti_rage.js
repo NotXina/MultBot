@@ -256,13 +256,12 @@ var AntiRage = class extends MultUtil {
 
 	enchanted = async type => {
 		if (type === 'zeus') {
-			this.cast(this.command_id, 'cleanse');
-			//await this.sleep(1);
-			this.cast(this.command_id, 'transformation');
+			await this.cast(this.command_id, 'cleanse');
+			await this.cast(this.command_id, 'transformation');
 		}
 	};
 
-	cast = (id, type) => {
+	cast = async (id, type) => {
 		let data = {
 			model_url: 'Commands',
 			action_name: 'cast',
@@ -271,6 +270,13 @@ var AntiRage = class extends MultUtil {
 				power_id: type,
 			},
 		};
-		uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
+		try {
+			const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+			if (res && res.error) {
+				this.console.log('[AntiRage] Erro ao lançar ' + type + ': ' + res.error);
+			}
+		} catch (e) {
+			this.console.log('[AntiRage] Erro de rede ao lançar ' + type + ': ' + (e?.message ?? e));
+		}
 	};
 };

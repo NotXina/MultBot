@@ -212,28 +212,26 @@ var AutoResearch = class extends MultUtil {
         } catch (e) { return false; }
     }
 
-    _doResearch(townId, tech, townName) {
-        return new Promise(resolve => {
-            const data = {
-                model_url: 'ResearchOrder',
-                action_name: 'research',
-                captcha: null,
-                arguments: { id: tech },
-                town_id: parseInt(townId),
-            };
-            uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
-                res => {
-                    if (res && !res.error) {
-                        const msg = this.t('ar_research_started', { town: townName, tech: this.getGameName('research', tech) });
-                        this.console.log(`[AutoPesquisa] ✓ ${msg}`);
-                        uw.$('#ares_log').text(`✓ ${msg}`).css('color', '#1a6b2a');
-                        resolve(true);
-                    } else {
-                        resolve(false);
-                    }
-                },
-                () => resolve(false)
-            );
-        });
+    async _doResearch(townId, tech, townName) {
+        const data = {
+            model_url: 'ResearchOrder',
+            action_name: 'research',
+            captcha: null,
+            arguments: { id: tech },
+            town_id: parseInt(townId),
+        };
+        try {
+            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+            if (res && !res.error) {
+                const msg = this.t('ar_research_started', { town: townName, tech: this.getGameName('research', tech) });
+                this.console.log(`[AutoPesquisa] ✓ ${msg}`);
+                uw.$('#ares_log').text(`✓ ${msg}`).css('color', '#1a6b2a');
+                return true;
+            }
+            return false;
+        } catch (e) {
+            this.console.log(`[AutoPesquisa] ${this.t('error')}: ` + (e?.message ?? e));
+            return false;
+        }
     }
 };

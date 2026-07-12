@@ -46,7 +46,7 @@ var AutoMilitia = class extends MultUtil {
         this._updateButtons();
         this.console.log('[AutoMilícia] Iniciado. Monitorando ataques...');
         this._tick();
-        this._intervalId = setInterval(() => this._tick(), 15000);
+        this._intervalId = this.createGuardedInterval(() => this._tick(), 15000);
     }
 
     stop() {
@@ -122,31 +122,26 @@ var AutoMilitia = class extends MultUtil {
         } catch(e) { return []; }
     }
 
-    _activateMilitia(townId) {
+    _activateMilitia = async (townId) => {
         try {
             const townName = uw.ITowns.towns[townId]?.getName?.() ?? '#' + townId;
             this.console.log(`[AutoMilícia] Ativando milícia em ${townName}...`);
 
             const data = { town_id: parseInt(townId), nl_init: true };
-            uw.gpAjax.ajaxPost('building_farm', 'request_militia', data, true,
-                res => {
-                    if (res && !res.error) {
-                        const msg = `✓ Milícia ativada em ${townName}`;
-                        this.console.log('[AutoMilícia] ' + msg);
-                        uw.$('#militia_log').text(msg).css('color', '#1a6b2a');
-                        if (uw.HumanMessage) uw.HumanMessage.success(msg);
-                    } else {
-                        const msg = `✗ Falha em ${townName}`;
-                        this.console.log('[AutoMilícia] ' + msg);
-                        uw.$('#militia_log').text(msg).css('color', '#8a2a2a');
-                    }
-                },
-                err => {
-                    this.console.log(`[AutoMilícia] ✗ Erro rede em ${townName}: ${err}`);
-                }
-            );
+            const res = await this.ajaxPostWithTimeout('building_farm', 'request_militia', data, 10000, true);
+
+            if (res && !res.error) {
+                const msg = `✓ Milícia ativada em ${townName}`;
+                this.console.log('[AutoMilícia] ' + msg);
+                uw.$('#militia_log').text(msg).css('color', '#1a6b2a');
+                if (uw.HumanMessage) uw.HumanMessage.success(msg);
+            } else {
+                const msg = `✗ Falha em ${townName}: ${res?.error ?? '?'}`;
+                this.console.log('[AutoMilícia] ' + msg);
+                uw.$('#militia_log').text(msg).css('color', '#8a2a2a');
+            }
         } catch(e) {
-            this.console.log('[AutoMilícia] Exceção: ' + e?.message);
+            this.console.log('[AutoMilícia] Exceção/timeout em #' + townId + ': ' + (e?.message ?? e));
         }
-    }
+    };
 };

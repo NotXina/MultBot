@@ -674,8 +674,11 @@ var MultUtil = class {
        success or the error callback (endpoint changed, unexpected
        response, etc) leaves the Promise hanging FOREVER - the await
        never returns, no exception is thrown, and whoever is waiting
-       (e.g. auto_farm.js) hangs silently with no error log. */
-    ajaxGetWithTimeout = (endpoint, action, data, timeoutMs = 15000) => {
+       (e.g. auto_farm.js) hangs silently with no error log.
+       extraFlag: same meaning as in ajaxPostWithTimeout - some
+       endpoints expect `true` in this 4th parameter. Default false
+       preserves the behavior of all existing callers. */
+    ajaxGetWithTimeout = (endpoint, action, data, timeoutMs = 15000, extraFlag = false) => {
         return new Promise((resolve, reject) => {
             let settled = false;
 
@@ -685,7 +688,7 @@ var MultUtil = class {
                 reject(new Error('Network timeout (' + timeoutMs + 'ms) on ' + endpoint + '/' + action));
             }, timeoutMs);
 
-            uw.gpAjax.ajaxGet(endpoint, action, data, false,
+            uw.gpAjax.ajaxGet(endpoint, action, data, extraFlag,
                 (res) => {
                     if (settled) return;
                     settled = true;

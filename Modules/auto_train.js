@@ -569,7 +569,7 @@ var AutoTrain = class extends MultUtil {
        (categoria mythological_ground, is_naval: false) e roteado
        corretamente para building_barracks, mesmo local onde o jogo
        treina Enviados Divinos de verdade. */
-    buildPost = (town_id, unit, count) => {
+    buildPost = async (town_id, unit, count) => {
         const isNaval = this.NAVAL_ORDER.includes(unit) || this.MYTHICAL_NAVAL.includes(unit);
         const endpoint = isNaval ? 'building_docks' : 'building_barracks';
 
@@ -586,7 +586,14 @@ var AutoTrain = class extends MultUtil {
             endpoint,
         }));
 
-        uw.gpAjax.ajaxPost(endpoint, 'build', data);
+        try {
+            const res = await this.ajaxPostWithTimeout(endpoint, 'build', data);
+            if (res && res.error) {
+                this.console.log('[AutoTrain] ' + this.t('error') + ': ' + res.error);
+            }
+        } catch (e) {
+            this.console.log('[AutoTrain] ' + this.t('error') + ': ' + (e?.message ?? e));
+        }
     };
 
     /* return the active towns */

@@ -76,15 +76,10 @@ var AutoTrade = class extends MultUtil {
         return amount;
     };
 
-    _getAllTrades = () => {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('getAllTrades timeout')), 10000);
-            uw.gpAjax.ajaxGet('town_overviews', 'trade_overview', {}, true, res => {
-                clearTimeout(timeout);
-                if (!res?.movements) return reject(new Error('getAllTrades: resposta inválida'));
-                resolve(res.movements);
-            });
-        });
+    _getAllTrades = async () => {
+        const res = await this.ajaxGetWithTimeout('town_overviews', 'trade_overview', {}, 10000, true);
+        if (!res?.movements) throw new Error('getAllTrades: resposta inválida');
+        return res.movements;
     };
 
     _getCount = (town_id, troop) => {

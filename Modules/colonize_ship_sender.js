@@ -190,20 +190,16 @@ var ColonizeShipSender = class extends MultUtil {
     }
 
     _sendSupport(fromTownId, toTownId, count) {
-        return this._withTownId(fromTownId, () => new Promise((resolve, reject) => {
+        return this._withTownId(fromTownId, async () => {
             const data = {
                 id:            parseInt(toTownId, 10),
                 type:          'support',
                 colonize_ship: count
             };
-            uw.gpAjax.ajaxPost('town_info', 'send_units', data, false,
-                res => {
-                    if (res && res.success) resolve(res);
-                    else reject(new Error(res?.error || 'Failed to send support'));
-                },
-                (r, status, txt) => reject(new Error('Network error: ' + txt))
-            );
-        }));
+            const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data);
+            if (res && res.success) return res;
+            throw new Error(res?.error || 'Failed to send support');
+        });
     }
 
     // Define Game.townId temporariamente para o envio
