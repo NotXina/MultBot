@@ -241,12 +241,21 @@ var AutoSendResources = class extends MultUtil {
     // Soma dos niveis de todas as construcoes de uma cidade - usado
     // como indicador de "quao desenvolvida" ela e (uma cidade nova/
     // recem-fundada tem essa soma bem menor que uma ja consolidada).
+    // Lista de construcoes de verdade (mesma do auto_build.js) - usada
+    // pra filtrar SOMENTE niveis de construcao, ignorando outros campos
+    // numericos que existem em buildings().attributes (id, town_id,
+    // timestamps de atualizacao, etc) que iriam corromper a soma se
+    // entrassem no calculo (um timestamp e um numero gigante e sozinho
+    // ja dominaria a pontuacao inteira).
+    BUILDING_TYPES = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
+
     _getDevelopmentScore(town) {
         try {
             const buildings = town.buildings().attributes;
             let sum = 0;
-            for (const key in buildings) {
-                if (typeof buildings[key] === 'number') sum += buildings[key];
+            for (const key of this.BUILDING_TYPES) {
+                const v = buildings[key];
+                if (typeof v === 'number') sum += v;
             }
             return sum;
         } catch (e) {
