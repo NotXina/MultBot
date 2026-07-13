@@ -21,16 +21,16 @@ var AutoRuralTrade = class extends MultUtil {
             <div class="game_border_corner corner3"></div>
             <div class="game_border_corner corner4"></div>
             <div class="game_header bold" style="position: relative; cursor: pointer" onclick="window.multBot.autoRuralTrade.main()"> 
-            <span style="z-index: 10; position: relative;">Auto Trade resouces </span>
+            <span style="z-index: 10; position: relative;">${this.t('artr_title')} </span>
             <div id="res_progress_bar" class="progress_bar_auto"></div>
-            <div style="position: absolute; right: 10px; top: 4px; font-size: 10px; z-index: 10"> (click to stop) </div>
+            <div style="position: absolute; right: 10px; top: 4px; font-size: 10px; z-index: 10">${this.t('artr_click_to_stop')}</div>
             <span class="command_count"></span></div>
 
             <div class="split_content">
                 <div id="autotrade_lvl_buttons" style="padding: 5px;">
-                    ${this.getButtonHtml('autotrade_lvl_1', 'Iron', this.main, 'iron')}
-                    ${this.getButtonHtml('autotrade_lvl_2', 'Stone', this.main, 'stone')}
-                    ${this.getButtonHtml('autotrade_lvl_3', 'Wood', this.main, 'wood')}
+                    ${this.getButtonHtml('autotrade_lvl_1', this.t('artr_iron'), this.main, 'iron')}
+                    ${this.getButtonHtml('autotrade_lvl_2', this.t('artr_stone'), this.main, 'stone')}
+                    ${this.getButtonHtml('autotrade_lvl_3', this.t('artr_wood'), this.main, 'wood')}
                 </div>
 
                 <div id="min_rural_ratio" style="padding: 5px">
@@ -117,20 +117,24 @@ var AutoRuralTrade = class extends MultUtil {
 	};
 
 	mainTradeLoop = async () => {
-		/* If last polis, then trigger to stop */
-		if (this.done_trade >= this.total_trade) {
-			this.main();
-			return;
+		try {
+			/* If last polis, then trigger to stop */
+			if (this.done_trade >= this.total_trade) {
+				this.main();
+				return;
+			}
+
+			/* perform trade with current index */
+			let towns = Object.keys(uw.ITowns.towns);
+			await this.tradeWithRural(towns[this.done_trade]);
+
+			/* update progress bar */
+			uw.$('#res_progress_bar').css('width', `${(this.done_trade / this.total_trade) * 100}%`);
+
+			this.done_trade += 1;
+		} catch (e) {
+			this.console.log('[AutoRuralTrade] ' + this.t('artr_loop_error', { msg: e?.message ?? e }));
 		}
-
-		/* perform trade with current index */
-		let towns = Object.keys(uw.ITowns.towns);
-		await this.tradeWithRural(towns[this.done_trade]);
-
-		/* update progress bar */
-		uw.$('#res_progress_bar').css('width', `${(this.done_trade / this.total_trade) * 100}%`);
-
-		this.done_trade += 1;
 	};
 
 	tradeRuralPost = async (farm_town_id, relation_id, count, town_id) => {
