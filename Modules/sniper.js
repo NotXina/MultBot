@@ -131,15 +131,15 @@ var Sniper = class extends MultUtil {
             const panel = document.createElement('div');
             panel.className = 'mult_sniper_panel';
             panel.id = panelId;
-            panel.style.cssText = 'margin-top:10px;padding:10px 12px;border:1px solid #a3803f;border-radius:6px;background:linear-gradient(180deg, rgba(255,246,222,0.9), rgba(240,222,180,0.7));box-shadow:0 1px 3px rgba(0,0,0,0.15);';
+            panel.style.cssText = 'width:100%;box-sizing:border-box;margin-top:10px;padding:10px 12px;border:1px solid #a3803f;border-radius:6px;background:linear-gradient(180deg, rgba(255,246,222,0.9), rgba(240,222,180,0.7));box-shadow:0 1px 3px rgba(0,0,0,0.15);clear:both;';
             panel.innerHTML = `
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
                     <span style="font-size:16px;">🎯</span>
                     <span style="font-weight:bold;font-size:12px;color:#5a3a0a;">${this.t('sniper_panel_title')}</span>
                 </div>
                 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                    <input type="date" class="mult_sniper_date" value="${todayStr}" style="padding:3px 5px;border-radius:3px;border:1px solid #b8935a;" />
-                    <input type="time" class="mult_sniper_time" step="1" style="padding:3px 5px;border-radius:3px;border:1px solid #b8935a;" />
+                    <input type="date" class="mult_sniper_date" value="${todayStr}" style="padding:3px 5px;border-radius:3px;border:1px solid #b8935a;font-size:11px;" />
+                    <input type="time" class="mult_sniper_time" step="1" style="padding:3px 5px;border-radius:3px;border:1px solid #b8935a;font-size:11px;" />
                     <div class="button_new" style="cursor:pointer;margin:0;" data-target-id="${targetId}">
                         <div class="left"></div><div class="right"></div>
                         <div class="caption js-caption">🎯 ${this.t('sniper_schedule_btn')}<div class="effect js-effect"></div></div>
@@ -148,13 +148,14 @@ var Sniper = class extends MultUtil {
                 <div class="mult_sniper_status" style="font-size:10.5px;margin-top:5px;color:#5a3a0a;"></div>
                 <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(150,110,50,0.3);">
                     <div style="font-weight:bold;font-size:10.5px;color:#5a3a0a;margin-bottom:3px;">📍 ${this.t('sniper_closest_title')}</div>
-                    <div style="font-size:10.5px;color:#3a2a0a;">${closestHtml}</div>
+                    <div style="font-size:10.5px;color:#3a2a0a;display:flex;flex-wrap:wrap;gap:2px 16px;">${closestHtml}</div>
                 </div>
             `;
 
-            // Insere no fim da janela (mesmo container que tem os botoes nativos)
-            const insertionPoint = windowEl.querySelector('.duration_container')?.parentElement || windowEl;
-            insertionPoint.appendChild(panel);
+            // Insere no FINAL da janela inteira (largura total), nao numa
+            // barra lateral estreita - windowEl e um bloco que ocupa a
+            // largura toda da janela nativa.
+            windowEl.appendChild(panel);
 
             panel.querySelector('.button_new').addEventListener('click', (ev) => {
                 this._onScheduleClick(windowEl, targetId, panel);
@@ -193,17 +194,27 @@ var Sniper = class extends MultUtil {
        proprias cidades do jogador (fonte confiavel, metodo
        confirmado), senao tenta na collection generica de Towns do
        Backbone (cidades de outros jogadores ficam cacheadas ali
-       quando ja foram vistas no mapa/janela). Se a cidade alvo
-       nunca foi carregada no cache, pode nao encontrar - nesse
-       caso a lista de "mais proximas" fica vazia (silenciosamente,
-       nao quebra o resto do painel). */
+       quando ja foram vistas no mapa/janela).
+       FIX: uw.MM.getModels().Town costuma ser uma Collection do
+       Backbone, nao um objeto comum indexavel por [id] - "Town[id]"
+       sempre retorna undefined mesmo com a cidade cacheada. O
+       acesso certo e via .get(id), metodo proprio do Backbone. */
     _getTownCoords(townId) {
         try {
             const ownTown = uw.ITowns.towns[townId];
             if (ownTown) {
                 return { x: ownTown.getIslandCoordinateX(), y: ownTown.getIslandCoordinateY() };
             }
-            const model = uw.MM.getModels().Town?.[townId];
+
+            const townsCollection = uw.MM.getModels()?.Town;
+            let model = null;
+            if (townsCollection) {
+                if (typeof townsCollection.get === 'function') {
+                    model = townsCollection.get(String(townId)) || townsCollection.get(Number(townId));
+                } else {
+                    model = townsCollection[townId]; // fallback, caso nao seja Collection
+                }
+            }
             if (model?.attributes) {
                 const a = model.attributes;
                 if (a.island_x != null && a.island_y != null) return { x: a.island_x, y: a.island_y };
@@ -437,6 +448,9 @@ var Sniper = class extends MultUtil {
     }
 
     async _fire(snipe) {
+        const fireStartedAt = Date.now();
+        const localDeltaMs = fireStartedAt - snipe.sendAt; // positivo = disparou depois do alvo, negativo = antes
+
         try {
             const data = {
                 ...snipe.composition,
@@ -447,10 +461,13 @@ var Sniper = class extends MultUtil {
             };
 
             const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data);
+            const roundTripMs = Date.now() - fireStartedAt;
+
             if (res && !res.error) {
                 snipe.status = 'sent';
                 const msg = this.t('sniper_fired_ok', { target: snipe.targetName });
                 this.console.log('[Sniper] ' + msg);
+                this.console.log('[Sniper] ' + this.t('sniper_timing_debug_log', { localDelta: localDeltaMs, roundTrip: roundTripMs }));
                 if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
             } else {
                 snipe.status = 'failed';
