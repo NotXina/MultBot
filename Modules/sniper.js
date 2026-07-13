@@ -220,7 +220,14 @@ var Sniper = class extends MultUtil {
        estar presente se o jogador nunca clicou nela). */
     _getTargetCoordsFromWindow(windowEl) {
         try {
-            const text = windowEl.innerText || windowEl.textContent || '';
+            /* FIX: innerText so pega texto de elementos VISIVEIS (respeita
+               CSS/display:none) - quando a aba "Informacao" fica escondida
+               de novo (voce volta pra aba Atacar), innerText do windowEl
+               INTEIRO ignora esse texto, mesmo que ele continue no DOM.
+               textContent nao tem esse problema - pega o texto de
+               QUALQUER elemento, visivel ou nao. Esse era o motivo real
+               de "nao funcionou" mesmo depois de clicar em Informacao. */
+            const text = windowEl.textContent || windowEl.innerText || '';
             const match = text.match(/\((\d{2,4})\s*,\s*(\d{2,4})\)/);
             if (match) return { x: parseInt(match[1], 10), y: parseInt(match[2], 10) };
         } catch (e) {}
@@ -436,9 +443,18 @@ var Sniper = class extends MultUtil {
         }
     }
 
+    /* FIX: bug de concorrencia real - o setTimeout exato e o poller
+       de seguranca de 5s podem disparar quase ao mesmo tempo pro
+       MESMO agendamento. Como o status so mudava pra 'sent'/'failed'
+       DEPOIS que a chamada de rede terminava (dentro de _fire), os
+       dois caminhos podiam ver 'pending' ainda e disparar o envio
+       DUAS VEZES. Agora trava como 'firing' de forma SINCRONA, antes
+       de qualquer await - fecha a janela de corrida por completo. */
     async _fireIfPending(id) {
         const snipe = this._scheduled.find(s => s.id === id);
         if (!snipe || snipe.status !== 'pending') return;
+
+        snipe.status = 'firing';
 
         if (this._armedTimeouts[id]) {
             clearTimeout(this._armedTimeouts[id]);
@@ -502,6 +518,7 @@ var Sniper = class extends MultUtil {
 
             const STATUS_STYLE = {
                 pending: { bg: '#fdf1d6', fg: '#8a5a0a', label: this.t('sniper_status_pending') },
+                firing:  { bg: '#e0e8f5', fg: '#3a5a9a', label: this.t('sniper_status_firing') },
                 sent:    { bg: '#dff3e3', fg: '#1a6b2a', label: this.t('sniper_status_sent') },
                 failed:  { bg: '#fbe0e0', fg: '#c0392b', label: this.t('sniper_status_failed') },
             };
