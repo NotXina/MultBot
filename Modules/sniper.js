@@ -119,6 +119,14 @@ var Sniper = class extends MultUtil {
             const today = new Date();
             const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
 
+            const closest = this._getClosestOwnTowns(targetId, 5);
+            const closestHtml = closest.length
+                ? closest.map((t, i) => `<div style="display:flex;justify-content:space-between;padding:2px 0;">
+                    <span>${i + 1}. ${t.name}</span>
+                    <span style="color:#8a7a5a;">${this.t('sniper_distance_units', { dist: t.dist.toFixed(1) })}</span>
+                   </div>`).join('')
+                : `<div style="color:#8a7a5a;">${this.t('sniper_no_closest_found')}</div>`;
+
             const panelId = 'mult_sniper_panel_' + targetId;
             const panel = document.createElement('div');
             panel.className = 'mult_sniper_panel';
@@ -138,6 +146,10 @@ var Sniper = class extends MultUtil {
                     </div>
                 </div>
                 <div class="mult_sniper_status" style="font-size:10.5px;margin-top:5px;color:#5a3a0a;"></div>
+                <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(150,110,50,0.3);">
+                    <div style="font-weight:bold;font-size:10.5px;color:#5a3a0a;margin-bottom:3px;">📍 ${this.t('sniper_closest_title')}</div>
+                    <div style="font-size:10.5px;color:#3a2a0a;">${closestHtml}</div>
+                </div>
             `;
 
             // Insere no fim da janela (mesmo container que tem os botoes nativos)
@@ -175,6 +187,54 @@ var Sniper = class extends MultUtil {
        ler "attack" mesmo com a aba Apoiar selecionada). */
     _getActiveForm(windowEl) {
         return this._getVisibleEl(windowEl, '.send_units_form');
+    }
+
+    /* Tenta achar as coordenadas de uma cidade - primeiro nas
+       proprias cidades do jogador (fonte confiavel, metodo
+       confirmado), senao tenta na collection generica de Towns do
+       Backbone (cidades de outros jogadores ficam cacheadas ali
+       quando ja foram vistas no mapa/janela). Se a cidade alvo
+       nunca foi carregada no cache, pode nao encontrar - nesse
+       caso a lista de "mais proximas" fica vazia (silenciosamente,
+       nao quebra o resto do painel). */
+    _getTownCoords(townId) {
+        try {
+            const ownTown = uw.ITowns.towns[townId];
+            if (ownTown) {
+                return { x: ownTown.getIslandCoordinateX(), y: ownTown.getIslandCoordinateY() };
+            }
+            const model = uw.MM.getModels().Town?.[townId];
+            if (model?.attributes) {
+                const a = model.attributes;
+                if (a.island_x != null && a.island_y != null) return { x: a.island_x, y: a.island_y };
+                if (a.x != null && a.y != null) return { x: a.x, y: a.y };
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    /* Distancia em coordenadas de ilha (unidade relativa, NAO e
+       "campos" exatos de viagem - serve so pra RANKING/ordenacao
+       entre as proprias cidades, nao pra calcular tempo). O tempo
+       de viagem real continua vindo do way_duration lido da tela,
+       depois que voce escolhe a cidade e abre o ataque de la. */
+    _getClosestOwnTowns(targetId, limit = 5) {
+        try {
+            const targetCoords = this._getTownCoords(targetId);
+            if (!targetCoords) return [];
+
+            const ownTowns = Object.values(uw.ITowns.towns).map(t => {
+                const x = t.getIslandCoordinateX();
+                const y = t.getIslandCoordinateY();
+                const dist = Math.sqrt(Math.pow(x - targetCoords.x, 2) + Math.pow(y - targetCoords.y, 2));
+                return { id: t.id, name: t.getName(), dist };
+            });
+
+            ownTowns.sort((a, b) => a.dist - b.dist);
+            return ownTowns.slice(0, limit);
+        } catch (e) {
+            return [];
+        }
     }
 
     _onScheduleClick(windowEl, targetId, panel) {
