@@ -1,4 +1,9 @@
 var AutoHide = class extends MultUtil {
+    // Quantidade fixa de ferro guardada no esconderijo por vez -
+    // antes guardava TODO o ferro acumulado; agora guarda só isso,
+    // deixando o resto disponível pra uso.
+    STORE_AMOUNT = 10000;
+
     constructor(c, s) {
         super(c, s);
 
@@ -97,7 +102,7 @@ var AutoHide = class extends MultUtil {
         const town = uw.ITowns.towns[this.activePolis];
         const { iron } = town.resources()
         if (iron > 15000) {
-            await this.storeIron(this.activePolis, iron)
+            await this.storeIron(this.activePolis, this.STORE_AMOUNT)
         }
     }
 
