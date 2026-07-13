@@ -348,15 +348,17 @@ var AutoQuest = class extends MultUtil {
 
     /* Confirmado via captura real de rede:
        model_url: "IslandQuests", action_name: "claimReward",
-       arguments: { reward_action: "use", state: "closed",
-       progressable_id: <id> }, town_id, nl_init:true. */
+       arguments: { reward_action: "stash", state: "closed",
+       progressable_id: <id> }, town_id, nl_init:true.
+       reward_action: "stash" guarda a recompensa pra usar depois,
+       em vez de "use" (que usaria na hora). */
     _claimReward = async (townId, progressableId) => {
         const data = {
             model_url: 'IslandQuests',
             action_name: 'claimReward',
             captcha: null,
             arguments: {
-                reward_action: 'use',
+                reward_action: 'stash',
                 state: 'closed',
                 progressable_id: progressableId,
             },
