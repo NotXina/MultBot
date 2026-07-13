@@ -106,8 +106,22 @@ var AutoAttack = class extends MultUtil {
                 migratedPlan.restMinutes = 0;
                 changed = true;
             }
-            if (!migratedPlan.nextAllowedAt || typeof migratedPlan.nextAllowedAt !== 'object') {
-                migratedPlan.nextAllowedAt = {};
+            /* MUDANCA DE COMPORTAMENTO: "descanso" agora e o intervalo
+               entre UM ataque e o PROXIMO do plano inteiro (nao mais um
+               cooldown independente por alvo). Planos antigos tinham
+               nextAllowedAt como objeto {targetId: timestamp} - migra
+               pra um unico timestamp (nextAttackAt) + um indice de
+               rotacao entre os alvos (nextTargetIndex). A checagem por
+               "typeof nextAttackAt !== 'number'" garante que isso so
+               roda UMA VEZ (na primeira carga depois da mudanca) - sem
+               ela, o progresso seria resetado a cada reload da pagina. */
+            if (typeof migratedPlan.nextAttackAt !== 'number') {
+                if (migratedPlan.nextAllowedAt && typeof migratedPlan.nextAllowedAt === 'object') {
+                    this.console.log('[AutoAttack] Plano #' + migratedPlan.id + ': descanso migrado de "por alvo" pra "intervalo do plano inteiro".');
+                }
+                migratedPlan.nextAttackAt = 0;
+                migratedPlan.nextTargetIndex = 0;
+                delete migratedPlan.nextAllowedAt;
                 changed = true;
             }
 
@@ -507,9 +521,9 @@ var AutoAttack = class extends MultUtil {
         }
 
         // Modo edicao: atualiza o plano existente NO LUGAR, mantendo o
-        // mesmo id e o nextAllowedAt (cooldowns em andamento nao sao
-        // resetados so por editar o plano - se o alvo ja esta descansando,
-        // continua descansando).
+        // mesmo id e o nextAttackAt/nextTargetIndex (cooldown e rotacao
+        // em andamento nao sao resetados so por editar o plano - se o
+        // plano ja esta descansando, continua descansando).
         if (this._editingPlanId) {
             const existingPlan = this._plans.find((p) => p.id === this._editingPlanId);
             if (existingPlan) {
@@ -518,7 +532,7 @@ var AutoAttack = class extends MultUtil {
                 existingPlan.targets = targets;
                 existingPlan.restMinutes = restMinutes;
                 existingPlan.hero = hero;
-                // nextAllowedAt, enabled, id: preservados como estavam
+                // nextAttackAt, nextTargetIndex, enabled, id: preservados como estavam
 
                 this.storage.save('attack_plans', this._plans);
                 this._renderPlans();
@@ -549,7 +563,8 @@ var AutoAttack = class extends MultUtil {
             units: unitsCopy,
             targets: targets,
             restMinutes: restMinutes,
-            nextAllowedAt: {},
+            nextAttackAt: 0,
+            nextTargetIndex: 0,
             hero: hero,
             enabled: true
         };
@@ -674,16 +689,15 @@ var AutoAttack = class extends MultUtil {
             let targetsLabel = '';
             for (let i = 0; i < plan.targets.length; i++) {
                 if (i > 0) targetsLabel += ', ';
-                targetsLabel += this.getTownName(plan.targets[i]);
-
-                const nextAt = plan.nextAllowedAt ? plan.nextAllowedAt[plan.targets[i]] : null;
-                if (nextAt && nextAt > Date.now()) {
-                    const remainMin = Math.ceil((nextAt - Date.now()) / 60000);
-                    targetsLabel += '(' + remainMin + 'min)';
-                }
+                const isNext = i === (plan.nextTargetIndex || 0);
+                targetsLabel += (isNext ? '▶' : '') + this.getTownName(plan.targets[i]);
             }
 
-            const restLabel = (plan.restMinutes && plan.restMinutes > 0) ? (' | ' + plan.restMinutes + 'min') : '';
+            let restLabel = (plan.restMinutes && plan.restMinutes > 0) ? (' | descanso ' + plan.restMinutes + 'min') : '';
+            if (plan.nextAttackAt && plan.nextAttackAt > Date.now()) {
+                const remainMin = Math.ceil((plan.nextAttackAt - Date.now()) / 60000);
+                restLabel += ' (proximo em ~' + remainMin + 'min)';
+            }
 
             html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 2px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:10px;line-height:1.3;">';
             html += '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px;" title="' + townName + ' [' + unitsLabel + '] -> ' + targetsLabel + restLabel + '">';
@@ -728,6 +742,14 @@ var AutoAttack = class extends MultUtil {
                 this.console.log('[AutoAttack] Aviso: plano da cidade #' + plan.originId + ' sem composicao valida, ignorado.');
                 return;
             }
+            if (!Array.isArray(plan.targets) || plan.targets.length === 0) {
+                return;
+            }
+
+            // Descanso agora e do PLANO INTEIRO - enquanto nao passar,
+            // nao ataca NENHUM alvo (nao so o ultimo atacado).
+            const now = Date.now();
+            if (plan.nextAttackAt && plan.nextAttackAt > now) return;
 
             const town = uw.ITowns.towns[plan.originId];
             if (!town) {
@@ -748,109 +770,63 @@ var AutoAttack = class extends MultUtil {
             }
             if (hasMissing) return;
 
-            if (!plan.nextAllowedAt) plan.nextAllowedAt = {};
-
-            const now = Date.now();
-
-            const readyTargets = [];
-            for (const targetId of plan.targets) {
-                const nextAt = plan.nextAllowedAt[targetId];
-                if (nextAt && nextAt > now) continue;
-                readyTargets.push(targetId);
-            }
-
-            if (readyTargets.length === 0) {
-                return;
-            }
-
             const townName = town.getName ? town.getName() : ('#' + plan.originId);
 
-            let unitsSummary = '';
-            for (let i = 0; i < plan.units.length; i++) {
-                if (i > 0) unitsSummary += ', ';
-                unitsSummary += this._formatUnitEntry(plan.units[i]);
+            // Alvo da vez, girando pela lista - cada ataque do plano vai
+            // pro PROXIMO alvo, nao sempre o primeiro.
+            if (typeof plan.nextTargetIndex !== 'number' || plan.nextTargetIndex >= plan.targets.length) {
+                plan.nextTargetIndex = 0;
             }
+            const targetId = plan.targets[plan.nextTargetIndex];
+            const targetName = this.getTownName(targetId);
 
-            this.console.log('[AutoAttack] ' + townName + ': composicao completa disponivel [' + unitsSummary + ']. Disparando ataques em ' + readyTargets.length + ' alvo(s) prontos...');
-
-            const remaining = {};
+            const sendUnits = [];
             for (const u of plan.units) {
-                remaining[u.unit] = available[u.unit] || 0;
+                const qtyToSend = u.useMax ? (available[u.unit] || 0) : u.quantity;
+                sendUnits.push({ unit: u.unit, quantity: qtyToSend });
             }
 
-            let heroAlreadySent = false;
+            let sendSummary = '';
+            for (let i = 0; i < sendUnits.length; i++) {
+                if (i > 0) sendSummary += ', ';
+                sendSummary += sendUnits[i].quantity + 'x ' + this._getUnitLabel(sendUnits[i].unit);
+            }
 
-            for (const targetId of readyTargets) {
-                let stillEnough = true;
-                for (const u of plan.units) {
-                    const required = u.useMax ? 1 : u.quantity;
-                    if (remaining[u.unit] < required) {
-                        stillEnough = false;
-                        break;
-                    }
-                }
-                if (!stillEnough) {
-                    this.console.log('[AutoAttack] ' + townName + ': composicao insuficiente para continuar aos proximos alvos.');
-                    break;
-                }
+            const heroForThisSend = plan.hero || null;
+            if (heroForThisSend) {
+                sendSummary += ' + heroi ' + this._getHeroLabel(heroForThisSend);
+            }
 
-                const sendUnits = [];
-                for (const u of plan.units) {
-                    const qtyToSend = u.useMax ? remaining[u.unit] : u.quantity;
-                    sendUnits.push({ unit: u.unit, quantity: qtyToSend });
+            try {
+                await this._sendAttack(plan.originId, targetId, sendUnits, heroForThisSend);
+                this.console.log('[AutoAttack] OK: ' + townName + ' -> ' + targetName + ': ataque com [' + sendSummary + '] enviado!');
+                uw.$('#attack_log').text('OK: ' + townName + ' atacou ' + targetName + ' [' + sendSummary + ']').css('color', '#1a6b2a');
+                if (uw.HumanMessage) {
+                    uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + targetName + ' (ataque)');
                 }
 
-                let sendSummary = '';
-                for (let i = 0; i < sendUnits.length; i++) {
-                    if (i > 0) sendSummary += ', ';
-                    sendSummary += sendUnits[i].quantity + 'x ' + this._getUnitLabel(sendUnits[i].unit);
+                // Avanca a rotacao pro proximo alvo da lista
+                plan.nextTargetIndex = (plan.nextTargetIndex + 1) % plan.targets.length;
+
+                // Descanso do plano inteiro - proximo ataque (a QUALQUER
+                // alvo) so depois desse intervalo.
+                if (plan.restMinutes && plan.restMinutes > 0) {
+                    plan.nextAttackAt = this._computeNextAllowedAt(plan.restMinutes);
+                    const remainMin = Math.round((plan.nextAttackAt - Date.now()) / 60000);
+                    this.console.log('[AutoAttack] ' + townName + ': proximo ataque desse plano em aproximadamente ' + remainMin + 'min.');
+                } else {
+                    plan.nextAttackAt = 0;
                 }
 
-                // O heroi so pode ir num unico envio por ciclo (um heroi
-                // fisico so pode estar em um exercito de cada vez), entao
-                // ele e incluido apenas no primeiro alvo pronto do ciclo.
-                const heroForThisSend = (plan.hero && !heroAlreadySent) ? plan.hero : null;
-                if (heroForThisSend) {
-                    sendSummary += ' + heroi ' + this._getHeroLabel(heroForThisSend);
-                }
-
-                const targetName = this.getTownName(targetId);
-                try {
-                    await this._sendAttack(plan.originId, targetId, sendUnits, heroForThisSend);
-                    if (heroForThisSend) heroAlreadySent = true;
-                    this.console.log('[AutoAttack] OK: ' + townName + ' -> ' + targetName + ': ataque com [' + sendSummary + '] enviado!');
-                    uw.$('#attack_log').text('OK: ' + townName + ' atacou ' + targetName + ' [' + sendSummary + ']').css('color', '#1a6b2a');
-                    if (uw.HumanMessage) {
-                        uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + targetName + ' (ataque)');
-                    }
-
-                    for (const u of plan.units) {
-                        if (u.useMax) {
-                            remaining[u.unit] = 0;
-                        } else {
-                            remaining[u.unit] -= u.quantity;
-                        }
-                    }
-
-                    if (plan.restMinutes && plan.restMinutes > 0) {
-                        const nextAllowed = this._computeNextAllowedAt(plan.restMinutes);
-                        plan.nextAllowedAt[targetId] = nextAllowed;
-                        this.storage.save('attack_plans', this._plans);
-
-                        const remainMin = Math.round((nextAllowed - Date.now()) / 60000);
-                        this.console.log('[AutoAttack] ' + targetName + ' entrando em descanso por aproximadamente ' + remainMin + 'min.');
-                    }
-                } catch (e) {
-                    const msg = e && e.message ? e.message : e;
-                    this.console.log('[AutoAttack] FALHA ao atacar ' + targetName + ' de ' + townName + ': ' + msg);
-                    uw.$('#attack_log').text('Falha ao atacar ' + targetName + ': ' + msg).css('color', '#f87171');
-                }
-
-                await this.sleep(this.SEND_DELAY_MS);
+                this.storage.save('attack_plans', this._plans);
+            } catch (e) {
+                const msg = e && e.message ? e.message : e;
+                this.console.log('[AutoAttack] FALHA ao atacar ' + targetName + ' de ' + townName + ': ' + msg);
+                uw.$('#attack_log').text('FALHA ao atacar ' + targetName + ': ' + msg).css('color', '#f87171');
             }
         } catch (e) {
             const msg = e && e.message ? e.message : e;
-            this.console.log('[AutoAttack] Erro ao processar plano da cidade #' + plan.originId + ': ' + msg);
+            this.console.log('[AutoAttack] Erro inesperado no plano #' + plan.originId + ': ' + msg);
         }
     }
 
