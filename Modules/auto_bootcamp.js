@@ -168,8 +168,12 @@ var AutoBootcamp = class extends MultUtil {
 
     /* Main function, call in loop */
     main = async () => {
-        if (await this.rewardBootcamp()) return;
-        if (await this.attackBootcamp()) return;
+        try {
+            if (await this.rewardBootcamp()) return;
+            if (await this.attackBootcamp()) return;
+        } catch (e) {
+            this.console.log('[AutoBootcamp] ' + this.t('abc_main_error', { msg: e?.message ?? e }));
+        }
     };
 
     /* Send post request to attack with the given units */
