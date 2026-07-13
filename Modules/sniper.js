@@ -9,21 +9,27 @@
 //  2. O Sniper detecta essa janela via MutationObserver (nao
 //     depende do GameEvents.window.open - confirmado que essa
 //     janela especifica e "old style" e nao passa por la) e
-//     injeta um painel extra com data/hora de chegada desejada.
+//     injeta um painel extra com data/hora de chegada desejada
+//     (data pre-preenchida com hoje).
 //  3. Ao clicar "Agendar", le o "way_duration" (tempo de viagem)
 //     DIRETO DO DOM - ja calculado pelo proprio jogo, sem risco
 //     de formula errada - e calcula o horario de ENVIO
-//     (chegada - duracao).
+//     (chegada - duracao - compensacao de rede).
 //  4. O agendamento fica salvo (sobrevive a fechar a janela e
-//     ate a um reload da pagina). Quando o horario de envio
-//     chega, dispara via a chamada de rede ja confirmada
-//     (town_info/send_units), sem precisar da janela aberta.
+//     ate a um reload da pagina). O disparo usa setTimeout
+//     calculado pro momento EXATO (nao fica preso a um poll
+//     periodico, que sozinho ja seria uma fonte de atraso) - um
+//     poller de 5s continua rodando so como rede de seguranca
+//     (ex: caso a pagina tenha sido reaberta e o setTimeout
+//     original tenha se perdido).
 //
-//  IMPORTANTE - limitacao de navegador: setTimeout/setInterval
-//  em abas em SEGUNDO PLANO podem atrasar (throttling do
-//  navegador, ate 1+ minuto em casos extremos). Pra precisao de
-//  sniper, a aba do jogo precisa ficar em primeiro plano perto
-//  do horario agendado.
+//  IMPORTANTE - limitacao de navegador: setTimeout em abas em
+//  SEGUNDO PLANO pode atrasar (throttling do navegador, ate 1+
+//  minuto em casos extremos). Pra precisao de sniper, a aba do
+//  jogo precisa ficar em primeiro plano perto do horario
+//  agendado. A "Compensacao de rede" ajuda a compensar o atraso
+//  entre o disparo local e o servidor realmente registrar o
+//  envio, mas nao compensa esse throttling do navegador.
 // ══════════════════════════════════════════════════════
 var Sniper = class extends MultUtil {
     constructor(c, s) {
@@ -31,9 +37,12 @@ var Sniper = class extends MultUtil {
         this._scheduled = this.storage.load('sniper_scheduled', []);
         this._observer = null;
         this._checkerInterval = null;
+        this._armedTimeouts = {};
+        this._networkCompensationMs = this.storage.load('sniper_network_comp', 300);
 
         this._startWatching();
         this._startChecker();
+        this._armAllPending();
     }
 
     settings = () => {
@@ -46,14 +55,28 @@ var Sniper = class extends MultUtil {
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
             <div class="game_header bold">${this.t('sniper_title')}</div>
-            <div style="padding:5px 10px;font-weight:bold;">
+            <div style="padding:8px 10px 4px;font-weight:bold;">
                 ${this.t('sniper_desc')}
             </div>
-            <div style="padding:2px 10px 4px;font-size:11px;color:#8a2a2a;">
-                ${this.t('sniper_background_warning')}
+            <div style="padding:0 10px 6px;font-size:11px;color:#8a5a2a;">
+                ⚠ ${this.t('sniper_background_warning')}
             </div>
-            <div id="sniper_list" style="padding:4px 10px 10px;"></div>
+            <div style="margin:0 10px 8px;padding:6px 8px;background:rgba(0,0,0,0.04);border-radius:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <label style="font-size:11px;font-weight:bold;">${this.t('sniper_network_comp_label')}</label>
+                <input type="number" id="sniper_network_comp_input" min="0" max="5000" step="50" value="${this._networkCompensationMs}" style="width:65px;padding:2px 5px;" />
+                <span style="font-size:11px;">ms</span>
+                ${this.getButtonHtml('sniper_network_comp_save', this.t('apply'), this._saveNetworkComp)}
+                <span style="font-size:10px;color:#8a7a5a;">(${this.t('sniper_network_comp_hint')})</span>
+            </div>
+            <div id="sniper_list" style="padding:0 10px 10px;"></div>
         </div>`;
+    };
+
+    _saveNetworkComp = () => {
+        const val = parseInt(uw.$('#sniper_network_comp_input').val(), 10);
+        this._networkCompensationMs = (!isNaN(val) && val >= 0) ? val : 0;
+        this.storage.save('sniper_network_comp', this._networkCompensationMs);
+        this.console.log('[Sniper] ' + this.t('sniper_network_comp_saved_log', { ms: this._networkCompensationMs }));
     };
 
     /* Observa a pagina inteira por qualquer elemento que apareca
@@ -93,22 +116,28 @@ var Sniper = class extends MultUtil {
             const targetId = match ? match[1] : null;
             if (!targetId) return;
 
+            const today = new Date();
+            const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+
             const panelId = 'mult_sniper_panel_' + targetId;
             const panel = document.createElement('div');
             panel.className = 'mult_sniper_panel';
             panel.id = panelId;
-            panel.style.cssText = 'margin-top:8px;padding:6px;border:1px solid #8a6c3a;border-radius:4px;background:rgba(255,255,255,0.06);';
+            panel.style.cssText = 'margin-top:10px;padding:10px 12px;border:1px solid #a3803f;border-radius:6px;background:linear-gradient(180deg, rgba(255,246,222,0.9), rgba(240,222,180,0.7));box-shadow:0 1px 3px rgba(0,0,0,0.15);';
             panel.innerHTML = `
-                <div style="font-weight:bold;font-size:11px;margin-bottom:4px;">🎯 ${this.t('sniper_panel_title')}</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                    <span style="font-size:16px;">🎯</span>
+                    <span style="font-weight:bold;font-size:12px;color:#5a3a0a;">${this.t('sniper_panel_title')}</span>
+                </div>
                 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                    <input type="date" class="mult_sniper_date" style="padding:2px;" />
-                    <input type="time" class="mult_sniper_time" step="1" style="padding:2px;" />
+                    <input type="date" class="mult_sniper_date" value="${todayStr}" style="padding:3px 5px;border-radius:3px;border:1px solid #b8935a;" />
+                    <input type="time" class="mult_sniper_time" step="1" style="padding:3px 5px;border-radius:3px;border:1px solid #b8935a;" />
                     <div class="button_new" style="cursor:pointer;margin:0;" data-target-id="${targetId}">
                         <div class="left"></div><div class="right"></div>
-                        <div class="caption js-caption">${this.t('sniper_schedule_btn')}<div class="effect js-effect"></div></div>
+                        <div class="caption js-caption">🎯 ${this.t('sniper_schedule_btn')}<div class="effect js-effect"></div></div>
                     </div>
                 </div>
-                <div class="mult_sniper_status" style="font-size:10px;margin-top:3px;color:#5a3a0a;"></div>
+                <div class="mult_sniper_status" style="font-size:10.5px;margin-top:5px;color:#5a3a0a;"></div>
             `;
 
             // Insere no fim da janela (mesmo container que tem os botoes nativos)
@@ -123,6 +152,31 @@ var Sniper = class extends MultUtil {
         }
     }
 
+    /* Generico: entre todos os elementos que baterem com o
+       seletor dentro de root, retorna o primeiro que estiver
+       VISIVEL na tela (nao escondido pela aba inativa). */
+    _getVisibleEl(root, selector) {
+        try {
+            const els = root.querySelectorAll(selector);
+            for (const el of els) {
+                if (el.offsetParent !== null) return el;
+            }
+            return els[0] || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /* Retorna o formulario de envio VISIVEL no momento - a janela
+       de ataque/apoio pode manter os dois formularios (aba Atacar
+       e aba Apoiar) no mesmo DOM ao mesmo tempo, so alternando
+       visibilidade via CSS. Pegar "o primeiro que aparecer" sem
+       checar visibilidade arriscaria ler o formulario ERRADO (ex:
+       ler "attack" mesmo com a aba Apoiar selecionada). */
+    _getActiveForm(windowEl) {
+        return this._getVisibleEl(windowEl, '.send_units_form');
+    }
+
     _onScheduleClick(windowEl, targetId, panel) {
         try {
             const statusEl = panel.querySelector('.mult_sniper_status');
@@ -131,44 +185,49 @@ var Sniper = class extends MultUtil {
 
             if (!dateVal || !timeVal) {
                 statusEl.textContent = this.t('sniper_missing_datetime');
-                statusEl.style.color = '#f87171';
+                statusEl.style.color = '#c0392b';
                 return;
             }
 
             const arrivalDate = new Date(`${dateVal}T${timeVal}`);
             if (isNaN(arrivalDate.getTime())) {
                 statusEl.textContent = this.t('sniper_invalid_datetime');
-                statusEl.style.color = '#f87171';
+                statusEl.style.color = '#c0392b';
                 return;
             }
 
-            const wayDurationEl = windowEl.querySelector('.way_duration');
+            const wayDurationEl = this._getVisibleEl(windowEl, '.way_duration');
             if (!wayDurationEl) {
                 statusEl.textContent = this.t('sniper_no_duration_found');
-                statusEl.style.color = '#f87171';
+                statusEl.style.color = '#c0392b';
                 return;
             }
             const durationSeconds = this._parseDuration(wayDurationEl.textContent);
             if (durationSeconds === null) {
                 statusEl.textContent = this.t('sniper_duration_parse_error', { raw: wayDurationEl.textContent });
-                statusEl.style.color = '#f87171';
+                statusEl.style.color = '#c0392b';
                 return;
             }
 
             const sendAt = arrivalDate.getTime() - (durationSeconds * 1000);
             if (sendAt <= Date.now()) {
                 statusEl.textContent = this.t('sniper_too_late', { duration: this._formatDuration(durationSeconds) });
-                statusEl.style.color = '#f87171';
+                statusEl.style.color = '#c0392b';
                 return;
             }
 
-            const formEl = windowEl.querySelector('.send_units_form');
+            const formEl = this._getActiveForm(windowEl);
             const commandType = formEl?.dataset?.type || formEl?.getAttribute('data-type') || 'attack';
 
-            const composition = this._readComposition(windowEl);
+            // Escopo de leitura da composicao: o container que envolve o
+            // formulario ativo (nao a janela toda), pra nao pegar por
+            // engano os inputs da OUTRA aba (Atacar vs Apoiar) se os
+            // dois estiverem no mesmo DOM.
+            const compositionScope = formEl?.closest('.town_units_wrapper') || formEl || windowEl;
+            const composition = this._readComposition(compositionScope);
             if (!composition || Object.keys(composition).length === 0) {
                 statusEl.textContent = this.t('sniper_no_units_found');
-                statusEl.style.color = '#f87171';
+                statusEl.style.color = '#c0392b';
                 return;
             }
 
@@ -190,10 +249,12 @@ var Sniper = class extends MultUtil {
 
             this._scheduled.push(snipe);
             this.storage.save('sniper_scheduled', this._scheduled);
+            this._armTimeout(snipe);
 
             const compSummary = Object.entries(composition).map(([u, n]) => `${n}x ${this.getGameName('unit', u)}`).join(', ');
-            statusEl.textContent = this.t('sniper_scheduled_ok', { time: arrivalDate.toLocaleString() });
+            statusEl.innerHTML = '✓ ' + this.t('sniper_scheduled_ok', { time: arrivalDate.toLocaleString() });
             statusEl.style.color = '#1a6b2a';
+            statusEl.style.fontWeight = 'bold';
 
             this.console.log('[Sniper] ' + this.t('sniper_scheduled_log', {
                 target: targetName, type: commandType, comp: compSummary,
@@ -256,10 +317,39 @@ var Sniper = class extends MultUtil {
         return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
     }
 
-    /* Checa a cada 5s se algum agendamento chegou na hora de
-       disparar. respectSleep=false: um agendamento de horario
-       exato nao deve ser pausado pelo Sleeper - o jogador pediu
-       explicitamente esse horario. */
+    /* Agenda um setTimeout PRECISO pro momento exato de disparo
+       (sendAt - compensacao de rede), em vez de depender so do
+       poller periodico - um poll de 5s sozinho ja seria uma fonte
+       de ate 5s de atraso, o que explica o "nao foi pontual"
+       observado. O poller de 5s continua rodando como rede de
+       seguranca (ex: se a pagina foi fechada e reaberta, o
+       setTimeout anterior se perdeu, mas o poller pega no proximo
+       ciclo). */
+    _armTimeout(snipe) {
+        if (this._armedTimeouts[snipe.id]) clearTimeout(this._armedTimeouts[snipe.id]);
+
+        const target = snipe.sendAt - this._networkCompensationMs;
+        const delay = target - Date.now();
+
+        if (delay <= 0) {
+            this._fireIfPending(snipe.id);
+            return;
+        }
+
+        this._armedTimeouts[snipe.id] = setTimeout(() => this._fireIfPending(snipe.id), delay);
+    }
+
+    _armAllPending() {
+        for (const snipe of this._scheduled) {
+            if (snipe.status === 'pending') this._armTimeout(snipe);
+        }
+    }
+
+    /* Rede de seguranca: roda a cada 5s, pega qualquer agendamento
+       pendente que por algum motivo o setTimeout nao tenha
+       disparado (ex: pagina recarregada). respectSleep=false: um
+       agendamento de horario exato nao deve ser pausado pelo
+       Sleeper - o jogador pediu explicitamente esse horario. */
     _startChecker() {
         this._checkerInterval = this.createGuardedInterval(() => this._checkDue(), 5000, false);
     }
@@ -267,15 +357,23 @@ var Sniper = class extends MultUtil {
     async _checkDue() {
         const now = Date.now();
         const due = this._scheduled.filter(s => s.status === 'pending' && s.sendAt <= now);
-
         for (const snipe of due) {
-            await this._fire(snipe);
+            await this._fireIfPending(snipe.id);
+        }
+    }
+
+    async _fireIfPending(id) {
+        const snipe = this._scheduled.find(s => s.id === id);
+        if (!snipe || snipe.status !== 'pending') return;
+
+        if (this._armedTimeouts[id]) {
+            clearTimeout(this._armedTimeouts[id]);
+            delete this._armedTimeouts[id];
         }
 
-        if (due.length > 0) {
-            this.storage.save('sniper_scheduled', this._scheduled);
-            this._renderList();
-        }
+        await this._fire(snipe);
+        this.storage.save('sniper_scheduled', this._scheduled);
+        this._renderList();
     }
 
     async _fire(snipe) {
@@ -307,6 +405,10 @@ var Sniper = class extends MultUtil {
     }
 
     cancelSnipe = (id) => {
+        if (this._armedTimeouts[id]) {
+            clearTimeout(this._armedTimeouts[id]);
+            delete this._armedTimeouts[id];
+        }
         this._scheduled = this._scheduled.filter(s => s.id !== id);
         this.storage.save('sniper_scheduled', this._scheduled);
         this._renderList();
@@ -315,29 +417,42 @@ var Sniper = class extends MultUtil {
 
     _renderList() {
         try {
-            const rows = this._scheduled
-                .slice()
-                .sort((a, b) => a.sendAt - b.sendAt)
-                .map(s => {
-                    const compSummary = Object.entries(s.composition || {}).map(([u, n]) => `${n}x ${this.getGameName('unit', u)}`).join(', ');
-                    const statusLabel = { pending: this.t('sniper_status_pending'), sent: this.t('sniper_status_sent'), failed: this.t('sniper_status_failed') }[s.status] || s.status;
-                    const statusColor = { pending: '#5a3a0a', sent: '#1a6b2a', failed: '#f87171' }[s.status] || '#5a3a0a';
-                    const cancelBtn = s.status === 'pending'
-                        ? `<span onclick="window.multBot.sniper.cancelSnipe('${s.id}')" style="cursor:pointer;color:#f87171;font-weight:bold;margin-left:8px;">✕</span>`
-                        : '';
-                    return `
-                    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;">
-                        <div>
-                            <b>${s.targetName}</b> (${s.type === 'attack' ? this.t('sniper_type_attack') : this.t('sniper_type_support')}) - ${compSummary}<br/>
-                            ${this.t('sniper_row_arrival', { time: new Date(s.arrivalAt).toLocaleString() })}
-                        </div>
-                        <div style="text-align:right;color:${statusColor};">
-                            ${statusLabel}${cancelBtn}
-                        </div>
-                    </div>`;
-                }).join('');
+            const sorted = this._scheduled.slice().sort((a, b) => a.sendAt - b.sendAt);
+            const nextPendingId = sorted.find(s => s.status === 'pending')?.id;
 
-            uw.$('#sniper_list').html(rows || `<div style="font-size:11px;color:#8a7a5a;padding:4px;">${this.t('sniper_none_scheduled')}</div>`);
+            const STATUS_STYLE = {
+                pending: { bg: '#fdf1d6', fg: '#8a5a0a', label: this.t('sniper_status_pending') },
+                sent:    { bg: '#dff3e3', fg: '#1a6b2a', label: this.t('sniper_status_sent') },
+                failed:  { bg: '#fbe0e0', fg: '#c0392b', label: this.t('sniper_status_failed') },
+            };
+
+            const rows = sorted.map(s => {
+                const compSummary = Object.entries(s.composition || {}).map(([u, n]) => `${n}x ${this.getGameName('unit', u)}`).join(', ');
+                const st = STATUS_STYLE[s.status] || { bg: '#eee', fg: '#555', label: s.status };
+                const isNext = s.id === nextPendingId;
+                const cancelBtn = s.status === 'pending'
+                    ? `<span onclick="window.multBot.sniper.cancelSnipe('${s.id}')" title="${this.t('sniper_cancel_tooltip')}" style="cursor:pointer;color:#c0392b;font-weight:bold;margin-left:10px;font-size:13px;">✕</span>`
+                    : '';
+                const typeIcon = s.type === 'attack' ? '⚔️' : '🛡️';
+
+                return `
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                    padding:8px 10px;margin-bottom:5px;border-radius:6px;font-size:11.5px;
+                    background:${isNext ? 'rgba(255, 215, 130, 0.25)' : 'rgba(0,0,0,0.025)'};
+                    border-left:3px solid ${isNext ? '#c9a227' : 'transparent'};">
+                    <div>
+                        <div style="font-weight:bold;color:#3a2a0a;">${typeIcon} ${s.targetName}</div>
+                        <div style="color:#6a5a3a;margin-top:1px;">${compSummary}</div>
+                        <div style="color:#8a7a5a;font-size:10.5px;margin-top:2px;">${this.t('sniper_row_arrival', { time: new Date(s.arrivalAt).toLocaleString() })}</div>
+                    </div>
+                    <div style="text-align:right;white-space:nowrap;">
+                        <span style="background:${st.bg};color:${st.fg};padding:2px 8px;border-radius:10px;font-weight:bold;font-size:10.5px;">${st.label}</span>
+                        ${cancelBtn}
+                    </div>
+                </div>`;
+            }).join('');
+
+            uw.$('#sniper_list').html(rows || `<div style="font-size:11px;color:#8a7a5a;padding:10px;text-align:center;">${this.t('sniper_none_scheduled')}</div>`);
         } catch (e) {}
     }
 };
