@@ -76,80 +76,84 @@ var AutoRuralLevel = class extends MultUtil {
 
     main = async () => {
         if (window.__multbot_captcha_active) return;
-        let player_relation_models = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation').models;
-        let farm_town_models = uw.MM.getOnlyCollectionByName('FarmTown').models;
-        let killpoints = uw.MM.getModelByNameAndPlayerId('PlayerKillpoints').attributes;
+        try {
+            let player_relation_models = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation').models;
+            let farm_town_models = uw.MM.getOnlyCollectionByName('FarmTown').models;
+            let killpoints = uw.MM.getModelByNameAndPlayerId('PlayerKillpoints').attributes;
 
-        /* Get array with all locked rurals */
-        const locked = player_relation_models.filter(model => model.attributes.relation_status === 0);
+            /* Get array with all locked rurals */
+            const locked = player_relation_models.filter(model => model.attributes.relation_status === 0);
 
-        /* Get killpoints */
-        let available = killpoints.att + killpoints.def - killpoints.used;
-        let unlocked = player_relation_models.length - locked.length;
+            /* Get killpoints */
+            let available = killpoints.att + killpoints.def - killpoints.used;
+            let unlocked = player_relation_models.length - locked.length;
 
-        /* If some rurals still have to be unlocked */
-        if (locked.length > 0) {
-            /* The first 5 rurals have discount */
-            const discounts = [2, 8, 10, 30, 50, 100];
-            if (unlocked < discounts.length && available < discounts[unlocked]) return;
-            else if (available < 100) return;
+            /* If some rurals still have to be unlocked */
+            if (locked.length > 0) {
+                /* The first 5 rurals have discount */
+                const discounts = [2, 8, 10, 30, 50, 100];
+                if (unlocked < discounts.length && available < discounts[unlocked]) return;
+                else if (available < 100) return;
 
-            let towns = this.generateList();
-            for (let town_id of towns) {
-                let town = uw.ITowns.towns[town_id];
-                let x = town.getIslandCoordinateX(),
-                    y = town.getIslandCoordinateY();
-
-                for (let farmtown of farm_town_models) {
-                    if (farmtown.attributes.island_x != x || farmtown.attributes.island_y != y) continue;
-
-                    for (let relation of locked) {
-                        if (farmtown.attributes.id != relation.attributes.farm_town_id) continue;
-                        await this.unlockRural(town_id, relation.attributes.farm_town_id, relation.id);
-                        this.console.log(`Island ${farmtown.attributes.island_xy}: unlocked ${farmtown.attributes.name}`);
-                        return;
-                    }
-                }
-            }
-        } else {
-            /* else check each level once at the time */
-            let towns = this.generateList();
-            let expansion = false;
-            const levelCosts = [1, 5, 25, 50, 100];
-            for (let level = 1; level < this.rural_level; level++) {
-                if (available < levelCosts[level - 1]) return;
-
+                let towns = this.generateList();
                 for (let town_id of towns) {
                     let town = uw.ITowns.towns[town_id];
-                    let x = town.getIslandCoordinateX();
-                    let y = town.getIslandCoordinateY();
+                    let x = town.getIslandCoordinateX(),
+                        y = town.getIslandCoordinateY();
 
                     for (let farmtown of farm_town_models) {
-                        if (farmtown.attributes.island_x != x) continue;
-                        if (farmtown.attributes.island_y != y) continue;
+                        if (farmtown.attributes.island_x != x || farmtown.attributes.island_y != y) continue;
 
-                        for (let relation of player_relation_models) {
-                            if (farmtown.attributes.id != relation.attributes.farm_town_id) {
-                                continue;
-                            }
-                            if (relation.attributes.expansion_at) {
-                                expansion = true;
-                                continue;
-                            }
-                            if (relation.attributes.expansion_stage > level) continue;
-                            await this.upgradeRural(town_id, relation.attributes.farm_town_id, relation.attributes.id);
-                            this.console.log(`Island ${farmtown.attributes.island_xy}: upgraded ${farmtown.attributes.name}`);
+                        for (let relation of locked) {
+                            if (farmtown.attributes.id != relation.attributes.farm_town_id) continue;
+                            await this.unlockRural(town_id, relation.attributes.farm_town_id, relation.id);
+                            this.console.log('[AutoRuralLevel] ' + this.t('arl_unlocked_log', { island: farmtown.attributes.island_xy, name: farmtown.attributes.name }));
                             return;
                         }
                     }
                 }
+            } else {
+                /* else check each level once at the time */
+                let towns = this.generateList();
+                let expansion = false;
+                const levelCosts = [1, 5, 25, 50, 100];
+                for (let level = 1; level < this.rural_level; level++) {
+                    if (available < levelCosts[level - 1]) return;
+
+                    for (let town_id of towns) {
+                        let town = uw.ITowns.towns[town_id];
+                        let x = town.getIslandCoordinateX();
+                        let y = town.getIslandCoordinateY();
+
+                        for (let farmtown of farm_town_models) {
+                            if (farmtown.attributes.island_x != x) continue;
+                            if (farmtown.attributes.island_y != y) continue;
+
+                            for (let relation of player_relation_models) {
+                                if (farmtown.attributes.id != relation.attributes.farm_town_id) {
+                                    continue;
+                                }
+                                if (relation.attributes.expansion_at) {
+                                    expansion = true;
+                                    continue;
+                                }
+                                if (relation.attributes.expansion_stage > level) continue;
+                                await this.upgradeRural(town_id, relation.attributes.farm_town_id, relation.attributes.id);
+                                this.console.log('[AutoRuralLevel] ' + this.t('arl_upgraded_log', { island: farmtown.attributes.island_xy, name: farmtown.attributes.name }));
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                if (expansion) return;
             }
 
-            if (expansion) return;
+            /* Auto turn off when the level is reached */
+            this.toggle();
+        } catch (e) {
+            this.console.log('[AutoRuralLevel] ' + this.t('arl_main_error', { msg: e?.message ?? e }));
         }
-
-        /* Auto turn off when the level is reached */
-        this.toggle();
     };
 
     /* 
