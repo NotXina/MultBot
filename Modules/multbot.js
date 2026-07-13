@@ -26,6 +26,7 @@ var MultBot = class {
         this.colonizeShipSender = this._safeInit('ColonizeShipSender', () => new ColonizeShipSender(this.console, this.storage));
         this.multTools          = this._safeInit('MultTools', () => new MultTools(this.console, this.storage));
         this.autoQuest          = this._safeInit('AutoQuest', () => new AutoQuest(this.console, this.storage));
+        this.sniper              = this._safeInit('Sniper', () => new Sniper(this.console, this.storage));
         this.autoMilitia        = this._safeInit('AutoMilitia', () => new AutoMilitia(this.console, this.storage));
         this.autoDodge          = this._safeInit('AutoDodge', () => new AutoDodge(this.console, this.storage));
         this.autoAttack         = this._safeInit('AutoAttack', () => new AutoAttack(this.console, this.storage));
@@ -68,6 +69,11 @@ var MultBot = class {
                     title: multT('tab_attack'),
                     id: 'attack',
                     render: this.settingsAttack,
+                },
+                {
+                    title: multT('sniper_title'),
+                    id: 'sniper',
+                    render: this.settingsSniper,
                 },
                 {
                     title: multT('tab_mult'),
@@ -138,6 +144,12 @@ var MultBot = class {
     settingsAttack = () => {
         let html = '';
         html += this.autoAttack ? this.autoAttack.settings() : this._missingModuleHtml('Auto Attack');
+        return html;
+    };
+
+    settingsSniper = () => {
+        let html = '';
+        html += this.sniper ? this.sniper.settings() : this._missingModuleHtml('Sniper');
         return html;
     };
 
