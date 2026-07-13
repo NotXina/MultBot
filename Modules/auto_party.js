@@ -12,7 +12,7 @@ var AutoParty = class extends MultUtil {
 
     startInterval() {
         const randomInterval = Math.floor(Math.random() * (50000 - 5000 + 1)) + 5000; // Random number between 5000 and 50000
-        this.enable = setInterval(this.main.bind(this), randomInterval);
+        this.enable = this.createGuardedInterval(this.main, randomInterval);
         this.randomInterval = randomInterval;
     }
 

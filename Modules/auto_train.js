@@ -86,7 +86,7 @@ var AutoTrain = class extends MultUtil {
         this.city_troops = this.storage.load('troops', {});
         this.shiftHeld = false;
 
-        this.interval = setInterval(this.main.bind(this), this.getRandomDelay(1000, 10000));
+        this.interval = this.createGuardedInterval(this.main, this.getRandomDelay(1000, 10000));
     }
 
     getRandomDelay(min, max) {
@@ -95,7 +95,7 @@ var AutoTrain = class extends MultUtil {
 
     startInterval() {
         const randomDelay = this.getRandomDelay(1000, 10000);
-        this.interval = setInterval(this.main.bind(this), randomDelay);
+        this.interval = this.createGuardedInterval(this.main, randomDelay);
     }
 
     settings = () => {
@@ -351,7 +351,7 @@ var AutoTrain = class extends MultUtil {
 
         /* restart the interval to prevent spam*/
         clearInterval(this.interval);
-        this.interval = setInterval(this.main.bind(this), 2345);
+        this.interval = this.createGuardedInterval(this.main, 2345);
 
         const { units } = uw.GameData;
         const { city_troops } = this;

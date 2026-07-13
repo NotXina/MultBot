@@ -115,6 +115,15 @@ __MultBotI18N.dict = {
 		tooltip_build: 'Building',
 		tooltip_train: 'Training',
 		auto_refresh_label: 'Auto Refresh:',
+		sleeper_label: 'Sleeper:',
+		sleeper_to: 'to',
+		sleeper_desc: 'While active, pauses ALL other modules during this daily window - except Auto Militia and Auto Dodge, which keep running for defense.',
+		sleeper_invalid: 'Set both a start and end time.',
+		sleeper_enabled_log: 'Enabled: {start} - {end} (pauses everything except Militia and Dodge).',
+		sleeper_disabled_log: 'Disabled.',
+		sleeper_disable: 'Disable',
+		sleeper_active_now: '😴 Sleeping now - other modules paused',
+		sleeper_scheduled: '⏰ Scheduled (not active right now)',
 		status_disabled: 'Disabled',
 		status_reloads_every: '✓ Reloads every {min} min (±30s)',
 		row_farm: '🌾 Farm',
@@ -344,6 +353,15 @@ __MultBotI18N.dict = {
 		tooltip_build: 'Construção',
 		tooltip_train: 'Recrutamento',
 		auto_refresh_label: 'Auto Refresh:',
+		sleeper_label: 'Sleeper:',
+		sleeper_to: 'até',
+		sleeper_desc: 'Enquanto ativo, pausa TODOS os outros módulos durante essa janela diária - exceto Auto Milícia e Auto Fuga, que continuam rodando pra defesa.',
+		sleeper_invalid: 'Defina um horário de início e de fim.',
+		sleeper_enabled_log: 'Ativado: {start} - {end} (pausa tudo, exceto Milícia e Fuga).',
+		sleeper_disabled_log: 'Desativado.',
+		sleeper_disable: 'Desativar',
+		sleeper_active_now: '😴 Dormindo agora - outros módulos pausados',
+		sleeper_scheduled: '⏰ Agendado (não ativo no momento)',
 		status_disabled: 'Desativado',
 		status_reloads_every: '✓ Recarrega a cada {min} min (±30s)',
 		row_farm: '🌾 Fazenda',
@@ -757,10 +775,47 @@ var MultUtil = class {
         });
     };
 
-    createGuardedInterval = (fn, intervalMs) => {
+    /* Verifica se o Sleeper (configurado na aba Status) esta ativo
+       agora. Janela definida por horario de inicio/fim (HH:MM),
+       recorrente todo dia. Lida com janelas que cruzam a meia-noite
+       (ex: 23:00 - 07:00). */
+    isSleeping() {
+        try {
+            const enabled = this.storage.load('sleeper_enabled', false);
+            if (!enabled) return false;
+
+            const start = this.storage.load('sleeper_start', '00:00');
+            const end = this.storage.load('sleeper_end', '00:00');
+            if (start === end) return false; // janela vazia = nunca dorme
+
+            const now = new Date();
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+            const [startH, startM] = start.split(':').map(Number);
+            const [endH, endM] = end.split(':').map(Number);
+            const startMinutes = startH * 60 + startM;
+            const endMinutes = endH * 60 + endM;
+
+            if (startMinutes < endMinutes) {
+                return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+            }
+            return nowMinutes >= startMinutes || nowMinutes < endMinutes; // cruza meia-noite
+        } catch (e) {
+            return false; // erro -> nao bloqueia por seguranca
+        }
+    }
+
+    /* respectSleep=true (padrao): o callback e pulado enquanto o
+       Sleeper estiver ativo - todo modulo que ja usa
+       createGuardedInterval ganha isso automaticamente, sem
+       precisar mudar nada no proprio modulo. Modulos criticos de
+       defesa (AutoMilitia, AutoDodge) passam respectSleep=false
+       explicitamente pra continuar rodando mesmo durante o sono. */
+    createGuardedInterval = (fn, intervalMs, respectSleep = true) => {
         let processing = false;
         return setInterval(async () => {
             if (processing) return;
+            if (respectSleep && this.isSleeping()) return;
             processing = true;
             try {
                 await fn();

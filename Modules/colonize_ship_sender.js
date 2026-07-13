@@ -136,7 +136,7 @@ var ColonizeShipSender = class extends MultUtil {
         this._log(this.t('css_loop_started', { min: this.config.intervalMinutes }), 'success');
         this._tick();
         const ms = this.config.intervalMinutes * 60 * 1000;
-        this._intervalId = setInterval(() => { if (!this._stop) this._tick(); }, ms);
+        this._intervalId = this.createGuardedInterval(() => { if (!this._stop) return this._tick(); }, ms);
     }
 
     _stopLoop() {

@@ -87,7 +87,9 @@ var AutoDodge = class extends MultUtil {
         this._updateTitle();
         this.console.log('[AutoDodge] Iniciado. Monitorando ataques...');
         this._tick();
-        this._intervalId = this.createGuardedInterval(() => this._tick(), 15000);
+        // respectSleep=false: modulo de defesa critico, precisa
+        // continuar rodando mesmo durante a janela do Sleeper.
+        this._intervalId = this.createGuardedInterval(() => this._tick(), 15000, false);
         this._setupIslandScraper();
     }
 

@@ -21,7 +21,7 @@ var AutoBuild = class extends MultUtil {
         this._buildBlockedUntil = {};
         this._hookNativeErrorMessages();
         /* Active always, check if the towns are in the active list */
-        this.interval = setInterval(this.main.bind(this), 5000);
+        this.interval = this.createGuardedInterval(this.main, 5000);
         /* Add listener that change the Senate look */
         try {
             uw.$.Observer(uw.GameEvents.window.open).subscribe("multSenate", this.updateSenate);
@@ -30,7 +30,7 @@ var AutoBuild = class extends MultUtil {
         }
     }
     startInterval() {
-        this.interval = setInterval(this.main.bind(this), 5000);
+        this.interval = this.createGuardedInterval(this.main, 5000);
     }
     _buildKey(town_id, building) {
         return town_id + ':' + building;

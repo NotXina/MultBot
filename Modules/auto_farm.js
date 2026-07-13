@@ -19,7 +19,7 @@ var AutoFarm = class extends MultUtil {
 
         this.timer = 0;
         this.lastTime = Date.now();
-        if (this.active) this.active = setInterval(this.main, 5000);
+        if (this.active) this.active = this.createGuardedInterval(this.main, 5000);
     }
 
     /* Create the dropdown menu */
@@ -189,7 +189,7 @@ var AutoFarm = class extends MultUtil {
         }
         else {
             this.updateTimer();
-            this.active = setInterval(this.main, 5000);
+            this.active = this.createGuardedInterval(this.main, 5000);
         }
 
         // Save the settings
@@ -243,32 +243,20 @@ var AutoFarm = class extends MultUtil {
         const isCaptainActive = uw.GameDataPremium.isAdvisorActivated('captain');
         const polis_list = this.generateList();
 
-        // If the captain is active, claim all the resources at once and fake the opening
-        if (isCaptainActive && !this.gui) {
-            try {
-                await this.fakeOpening();
-                await this.sleep(Math.random() * 2000 + 1000); // random between 1 second and 3
-                await this.fakeSelectAll();
-                await this.sleep(Math.random() * 2000 + 1000);
-                if (this.timing <= 600_000) await this.claimMultiple(300, 600);
-                if (this.timing > 600_000) await this.claimMultiple(1200, 2400);
-                await this.fakeUpdate();
-
-                setTimeout(() => uw.WMap.removeFarmTownLootCooldownIconAndRefreshLootTimers(), 2000);
-                return;
-            } catch (e) {
-                /* Se o caminho do Captain (claim em massa) falhar por
-                   qualquer motivo (timeout, erro do servidor, etc), cai
-                   pro caminho de coleta individual abaixo em vez de
-                   ficar preso repetindo o mesmo erro pra sempre a cada
-                   ciclo - assim o farm continua funcionando (mais
-                   devagar) mesmo quando o caminho em massa está com
-                   problema. */
-                this.console.log('[AutoFarm] Caminho do Captain falhou (' + (e?.message ?? e) + '), usando coleta individual como alternativa.');
-            }
-        }
-
-        if (isCaptainActive && this.gui) {
+        /* Confirmado por teste real (13/07): o caminho AJAX direto
+           (fakeOpening -> fakeSelectAll -> claimMultiple) tem o
+           payload 100% correto (validado por captura de rede) mas
+           trava com timeout de 45s TODA vez - a chamada nativa
+           equivalente responde em ~225ms, entao nao e lentidao do
+           servidor. O modo Gui (clica nos elementos reais da janela
+           do Captain, em vez de simular so o AJAX por fora) foi
+           testado e FUNCIONA de forma confiavel. Por isso, agora o
+           Gui e sempre usado quando o Captain esta ativo, sem
+           depender do toggle - o caminho AJAX direto (fakeOpening/
+           fakeSelectAll/claimMultiple, mais abaixo no arquivo) fica
+           mantido no codigo apenas como referencia/depuracao futura,
+           mas nao e mais chamado daqui. */
+        if (isCaptainActive) {
             try {
                 await this.fakeGuiUpdate();
                 return;
@@ -277,7 +265,8 @@ var AutoFarm = class extends MultUtil {
             }
         }
 
-        // If the captain is not active (or the captain path failed above), claim the resources one by one, but limit the number of claims
+        // Se o Captain nao esta ativo (ou o caminho GUI falhou acima),
+        // coleta as resources uma por uma, respeitando o limite por ciclo.
         await this._claimOneByOne(polis_list);
     };
 
@@ -356,7 +345,7 @@ var AutoFarm = class extends MultUtil {
                 this.active = null;
 
                 await this.claim();
-                this.active = setInterval(this.main, 5000);
+                this.active = this.createGuardedInterval(this.main, 5000);
 
                 // Set the new timer 
                 const rand = Math.floor(Math.random() * 20_000) + 10_000;
@@ -370,7 +359,7 @@ var AutoFarm = class extends MultUtil {
             this.console.log('[AutoFarm] Erro no main(): ' + (e?.message ?? e));
             // Garante que o interval nao fica travado (parado) se o erro
             // aconteceu depois do clearInterval mas antes de recria-lo.
-            if (!this.active) this.active = setInterval(this.main, 5000);
+            if (!this.active) this.active = this.createGuardedInterval(this.main, 5000);
         }
     };
 

@@ -25,7 +25,22 @@ var StatusPanel = class extends MultUtil {
 
     settings = () => {
         requestAnimationFrame(() => this._startVisuals());
+        const sleeperEnabled = this.storage.load('sleeper_enabled', false);
+        const sleeperStart = this.storage.load('sleeper_start', '23:00');
+        const sleeperEnd = this.storage.load('sleeper_end', '07:00');
         return `
+        <div style="padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.1);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-weight:bold;font-size:12px;">${this.t('sleeper_label')}</span>
+            <input id="sleeper_start_input" type="time" value="${sleeperStart}" style="padding:2px 5px;" />
+            <span style="font-size:11px;">${this.t('sleeper_to')}</span>
+            <input id="sleeper_end_input" type="time" value="${sleeperEnd}" style="padding:2px 5px;" />
+            ${this.getButtonHtml('btn_set_sleeper', this.t('apply'), this._applySleeper)}
+            ${sleeperEnabled ? this.getButtonHtml('btn_disable_sleeper', this.t('sleeper_disable'), this._disableSleeper) : ''}
+            <span id="sleeper_status" style="font-size:11px;font-weight:bold;"></span>
+        </div>
+        <div style="padding:1px 8px 6px;font-size:10px;color:#8a7a5a;">
+            ${this.t('sleeper_desc')}
+        </div>
         <div style="padding:5px 8px;border-bottom:1px solid rgba(0,0,0,0.1);display:flex;align-items:center;gap:8px;">
             <span style="font-weight:bold;font-size:12px;">${this.t('auto_refresh_label')}</span>
             <input id="refresh_minutes_input" type="number" min="0" max="999" value="${this._refreshMinutes}"
@@ -36,6 +51,53 @@ var StatusPanel = class extends MultUtil {
         </div>
         <div id="status_rows" style="padding:4px;"></div>`;
     };
+
+    _applySleeper = () => {
+        const start = uw.$('#sleeper_start_input').val();
+        const end = uw.$('#sleeper_end_input').val();
+
+        if (!start || !end) {
+            uw.$('#sleeper_status').text(this.t('sleeper_invalid')).css('color', '#8a2a2a');
+            return;
+        }
+
+        this.storage.save('sleeper_enabled', true);
+        this.storage.save('sleeper_start', start);
+        this.storage.save('sleeper_end', end);
+        this.console.log(`[Sleeper] ${this.t('sleeper_enabled_log', { start, end })}`);
+        this._renderSleeperStatus();
+        this._refreshSleeperButtons();
+    };
+
+    _disableSleeper = () => {
+        this.storage.save('sleeper_enabled', false);
+        this.console.log('[Sleeper] ' + this.t('sleeper_disabled_log'));
+        this._renderSleeperStatus();
+        this._refreshSleeperButtons();
+    };
+
+    _refreshSleeperButtons() {
+        const enabled = this.storage.load('sleeper_enabled', false);
+        const $btn = uw.$('#btn_disable_sleeper');
+        if (enabled && $btn.length === 0) {
+            uw.$('#btn_set_sleeper').after(this.getButtonHtml('btn_disable_sleeper', this.t('sleeper_disable'), this._disableSleeper));
+        } else if (!enabled && $btn.length > 0) {
+            $btn.remove();
+        }
+    }
+
+    _renderSleeperStatus() {
+        try {
+            const enabled = this.storage.load('sleeper_enabled', false);
+            if (!enabled) {
+                uw.$('#sleeper_status').text(this.t('status_disabled')).css('color', '#8a2a2a');
+                return;
+            }
+            const sleeping = this.isSleeping();
+            const msg = sleeping ? this.t('sleeper_active_now') : this.t('sleeper_scheduled');
+            uw.$('#sleeper_status').text(msg).css('color', sleeping ? '#c9a227' : '#1a6b2a');
+        } catch (e) {}
+    }
 
     _applyRefresh = () => {
         const val = parseInt(uw.$('#refresh_minutes_input').val(), 10);
@@ -93,6 +155,7 @@ var StatusPanel = class extends MultUtil {
             uw.$('#refresh_status').text(this.t('status_reloads_every', { min: this._refreshMinutes })).css('color', '#1a6b2a');
         }
         this._updateCountdown();
+        this._renderSleeperStatus();
     }
 
     _updateCountdown() {
@@ -149,6 +212,7 @@ var StatusPanel = class extends MultUtil {
             rows.push(this._row(this.t('row_research'),       researchActive, researchActive ? this.t('active') : this.t('stopped'), 'autoResearch',      'toggle'));
 
             uw.$('#status_rows').html(rows.join(''));
+            this._renderSleeperStatus();
         } catch(e) {
             uw.$('#status_rows').html(`<div style="padding:5px;color:red;">${this.t('error')}: ${e.message}</div>`);
         }

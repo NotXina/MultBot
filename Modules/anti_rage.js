@@ -247,6 +247,12 @@ var AntiRage = class extends MultUtil {
 			this.active_god_el = null;
 			return;
 		}
+		// Respeita o Sleeper: pula o clique (mas continua reagendando,
+		// pra nao perder a janela quando o Sleeper acabar).
+		if (this.isSleeping()) {
+			this.loop_funct = setInterval(this.clicker, 1000, el);
+			return;
+		}
 		el.click();
 		let delta_time = 500;
 		let rand = 500 + Math.floor(Math.random() * delta_time);
