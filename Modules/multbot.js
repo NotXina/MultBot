@@ -27,6 +27,7 @@ var MultBot = class {
         this.multTools          = this._safeInit('MultTools', () => new MultTools(this.console, this.storage));
         this.autoQuest          = this._safeInit('AutoQuest', () => new AutoQuest(this.console, this.storage));
         this.sniper              = this._safeInit('Sniper', () => new Sniper(this.console, this.storage));
+        this.discordAlert        = this._safeInit('DiscordAlert', () => new DiscordAlert(this.console, this.storage));
         this.autoMilitia        = this._safeInit('AutoMilitia', () => new AutoMilitia(this.console, this.storage));
         this.autoDodge          = this._safeInit('AutoDodge', () => new AutoDodge(this.console, this.storage));
         this.autoAttack         = this._safeInit('AutoAttack', () => new AutoAttack(this.console, this.storage));
@@ -138,6 +139,7 @@ var MultBot = class {
         html += this.autoMilitia ? this.autoMilitia.settings() : this._missingModuleHtml('Auto Militia');
         html += this.autoDodge ? this.autoDodge.settings() : this._missingModuleHtml('Auto Dodge');
         html += this.autoQuest ? this.autoQuest.settings() : this._missingModuleHtml('Auto Quest');
+        html += this.discordAlert ? this.discordAlert.settings() : this._missingModuleHtml('Discord Alert');
         return html;
     };
 
