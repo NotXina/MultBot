@@ -178,12 +178,13 @@ var DiscordAlert = class extends MultUtil {
     }
 
     /* Confirmado via captura real: town_info/info (GET) na cidade
-       de ORIGEM do ataque devolve um HTML (em res.plain.html) que
-       contem data-player_name="NomeDoJogador" - extrai isso via
-       regex, sem precisar decodificar nada mais complexo.
-       FIX: faltava o campo "town_id" no payload (a cidade ATIVA no
-       momento) - a captura real mostrou {"id":<alvo>,"town_id":
-       <cidade ativa>,"nl_init":true}, eu so tinha incluido "id". */
+       de ORIGEM do ataque devolve um HTML que contem
+       data-player_name="NomeDoJogador" - extrai isso via regex.
+       FIX: o objeto que ajaxGetWithTimeout resolve ja vem
+       desembrulhado pelo proprio jogo como {menu, html} - o html
+       fica DIRETO em res.html, nao em res.plain.html (esse ultimo
+       era so o formato do corpo bruto da resposta HTTP, confirmado
+       via teste direto no console). */
     async _resolveAttackerName(homeTownId) {
         try {
             const activeTownId = uw.ITowns.getCurrentTown().id;
@@ -192,7 +193,7 @@ var DiscordAlert = class extends MultUtil {
                 town_id: activeTownId,
                 nl_init: true,
             }, 15000, true);
-            const html = res?.plain?.html || res?.json?.plain?.html || '';
+            const html = res?.html || res?.plain?.html || res?.json?.plain?.html || '';
             const match = html.match(/data-player_name="([^"]*)"/);
             if (match) {
                 const name = match[1].trim();
