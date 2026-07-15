@@ -177,21 +177,51 @@ var DiscordAlert = class extends MultUtil {
         return [h, m, sec].map(n => String(n).padStart(2, '0')).join(':');
     }
 
+    /* Confirmado via captura real: town_info/info (GET) na cidade
+       de ORIGEM do ataque devolve um HTML (em res.plain.html) que
+       contem data-player_name="NomeDoJogador" - extrai isso via
+       regex, sem precisar decodificar nada mais complexo (tambem
+       tem a mesma info dentro de um <script>, mas o atributo HTML
+       e mais simples e confiavel de extrair). */
+    async _resolveAttackerName(homeTownId) {
+        try {
+            const res = await this.ajaxGetWithTimeout('town_info', 'info', { id: parseInt(homeTownId, 10), nl_init: true });
+            const html = res?.plain?.html || res?.json?.plain?.html || '';
+            const match = html.match(/data-player_name="([^"]*)"/);
+            if (match) {
+                const name = match[1].trim();
+                if (name) return name;
+            }
+        } catch (e) {
+            this.console.log('[DiscordAlert] ' + this.t('da_resolve_name_error', { msg: e?.message ?? e }));
+        }
+        return null;
+    }
+
     async _sendAlert(atk) {
         try {
             const townName = this.getTownName(atk.target_town_id);
+            const originName = atk.town_name_origin || this.getTownName(atk.home_town_id);
+            const attackerName = await this._resolveAttackerName(atk.home_town_id);
             const arrival = atk.arrival_at || atk.time_of_arrival || 0;
             if (!arrival) return;
 
             const arrivalDate = new Date(arrival * 1000);
             const now = Math.floor(Date.now() / 1000);
             const secondsLeft = arrival - now;
+            const isSpy = atk.type === 'attack_with_spy';
+
+            const originLabel = attackerName
+                ? `${originName || '?'} (${attackerName})`
+                : (originName || this.t('da_unknown'));
 
             const embed = {
                 title: '🚨 ' + this.t('da_alert_title'),
                 description: this.t('da_alert_desc', { town: townName }),
                 color: 15158332, // vermelho
                 fields: [
+                    { name: '🏹 ' + this.t('da_field_origin'), value: originLabel, inline: true },
+                    { name: '⚔️ ' + this.t('da_field_type'), value: isSpy ? this.t('da_type_spy') : this.t('da_type_normal'), inline: true },
                     { name: '⏰ ' + this.t('da_field_arrival'), value: arrivalDate.toLocaleString(), inline: true },
                     { name: '⏳ ' + this.t('da_field_remaining'), value: this._formatDuration(secondsLeft), inline: true },
                 ],
