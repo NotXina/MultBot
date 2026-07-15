@@ -41,7 +41,7 @@ var AutoSendResources = class extends MultUtil {
                 Envia recursos de cidades ociosas para a cidade menos desenvolvida (com espaço no armazém).
             </div>
             <div style="padding:2px 10px 4px;font-size:11px;color:#5a3a0a;">
-                Remetente: pop &lt; 200 + AutoBuild concluído + recurso &gt; 50% storage. Destino: menor soma de níveis de construção, com margem de 5% de espaço livre no armazém.
+                Remetente: qualquer cidade com mercado disponível e algum recurso acima de 50% do storage (não precisa estar ociosa). Destino: menor soma de níveis de construção, com margem de 5% de espaço livre no armazém.
             </div>
 
             <div style="padding:4px 10px;display:flex;gap:6px;align-items:center;">
@@ -188,27 +188,32 @@ var AutoSendResources = class extends MultUtil {
             return;
         }
 
-        const target = this._findLeastDevelopedTown(townIds);
-        if (!target) return;
+        // Lista de cidades carentes (menos desenvolvidas primeiro), nao
+        // so a mais pobre - assim varias cidades sao ajudadas no mesmo
+        // ciclo, em vez de uma por vez.
+        const targets = this._findLeastDevelopedTowns(townIds);
+        if (targets.length === 0) return;
 
-        const targetName = uw.ITowns.towns[target].getName();
-        this.console.log(`[AutoRecursos] Destino (menos desenvolvida, com espaço no armazém): ${targetName}`);
+        const targetNames = targets.map(id => uw.ITowns.towns[id].getName()).join(', ');
+        this.console.log(`[AutoRecursos] Destinos (menos desenvolvidas primeiro, com espaço no armazém): ${targetNames}`);
 
-        const senders = townIds.filter(id => id !== target && this._isEligibleSender(id));
+        const senders = townIds.filter(id => !targets.includes(id) && this._isEligibleSender(id));
         if (!senders.length) {
             this.console.log('[AutoRecursos] Nenhuma cidade elegível para envio.');
             uw.$('#asr_log').text('Nenhuma cidade elegível para envio.');
             return;
         }
 
-        // Envia em paralelo — sem await sequencial
+        // Cada remetente manda pra um destino diferente, girando pela
+        // lista de carentes - as mais pobres aparecem primeiro e recebem
+        // prioridade quando ha mais remetentes do que destinos.
         const results = await Promise.allSettled(
-            senders.map(fromId => this._sendResources(fromId, target))
+            senders.map((fromId, i) => this._sendResources(fromId, targets[i % targets.length]))
         );
 
         const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
         const msg = totalSent > 0
-            ? `✓ Recursos enviados de ${totalSent} cidade(s) → ${targetName}`
+            ? `✓ Recursos enviados de ${totalSent} cidade(s) para ${targets.length} destino(s)`
             : 'Nenhuma cidade elegível para envio.';
         this.console.log('[AutoRecursos] ' + msg);
         uw.$('#asr_log').text(msg);
@@ -293,13 +298,13 @@ var AutoSendResources = class extends MultUtil {
         }
     }
 
-    // Cidade MENOS DESENVOLVIDA (menor soma de niveis de construcao)
-    // entre as que ainda tem espaco de sobra no armazem - cidades com
-    // o armazem praticamente cheio sao ignoradas aqui, pra nao virar
+    // Lista de cidades candidatas a destino, ordenada da MENOS
+    // DESENVOLVIDA (menor soma de niveis de construcao) pra mais -
+    // entre as que ainda tem espaco de sobra no armazem. Cidades com
+    // o armazem praticamente cheio sao excluidas aqui, pra nao virar
     // alvo de um envio que so vai desperdicar recurso estourando.
-    _findLeastDevelopedTown(townIds) {
-        let bestId    = null;
-        let bestScore = Infinity;
+    _findLeastDevelopedTowns(townIds) {
+        const candidates = [];
 
         for (const id of townIds) {
             try {
@@ -312,30 +317,34 @@ var AutoSendResources = class extends MultUtil {
                 if (roomLeft < 300) continue;
 
                 const score = this._getDevelopmentScore(town);
-                if (score < bestScore) { bestScore = score; bestId = id; }
+                candidates.push({ id, score });
             } catch(e) {}
         }
-        return bestId;
+
+        candidates.sort((a, b) => a.score - b.score);
+        return candidates.map(c => c.id);
     }
 
     // Verifica se a cidade pode enviar recursos
+    /* IMPORTANTE: nao exige mais que a cidade esteja "ociosa" (pop
+       livre baixa + fila de construcao vazia) - essa exigencia
+       excluia exatamente as cidades desenvolvidas/ativas, que sao
+       as que mais acumulam recurso parado (sempre construindo ou
+       recrutando, mas com excedente de sobra). Manda o excedente
+       de QUALQUER cidade com mercado disponivel, esteja ela ociosa
+       ou nao - tirar o excedente (acima de 50%) nao atrapalha nada
+       que ja esta em andamento. */
     _isEligibleSender(townId) {
         try {
             const town      = uw.ITowns.towns[townId];
             const buildings = town.buildings().attributes;
             const res       = town.resources();
 
-            // 1. Pop disponível < 200
-            if (town.getAvailablePopulation() >= 200) return false;
-
-            // 2. AutoBuild done — fila de construção vazia
-            if ((town.buildingOrders?.()?.length ?? 0) > 0) return false;
-
-            // 3. Mercado ativo com capacidade > 500
+            // Mercado ativo com capacidade > 500
             if (!buildings.market || buildings.market < 1) return false;
             if (town.getAvailableTradeCapacity() < 500) return false;
 
-            // 4. Pelo menos um recurso acima de 50% do storage
+            // Pelo menos um recurso acima de 50% do storage
             const threshold = res.storage * 0.5;
             const hasExcess = res.wood > threshold || res.stone > threshold || res.iron > threshold;
             if (!hasExcess) return false;
