@@ -181,12 +181,17 @@ var DiscordAlert = class extends MultUtil {
        de ORIGEM do ataque devolve um HTML (em res.plain.html) que
        contem data-player_name="NomeDoJogador" - extrai isso via
        regex, sem precisar decodificar nada mais complexo.
-       FIX: faltava o extraFlag=true (5º parametro) - outras acoes
-       de town_info nesse projeto ja confirmaram precisar disso
-       (ex: town_info/trade). Provavel causa do nome nao aparecer. */
+       FIX: faltava o campo "town_id" no payload (a cidade ATIVA no
+       momento) - a captura real mostrou {"id":<alvo>,"town_id":
+       <cidade ativa>,"nl_init":true}, eu so tinha incluido "id". */
     async _resolveAttackerName(homeTownId) {
         try {
-            const res = await this.ajaxGetWithTimeout('town_info', 'info', { id: parseInt(homeTownId, 10), nl_init: true }, 15000, true);
+            const activeTownId = uw.ITowns.getCurrentTown().id;
+            const res = await this.ajaxGetWithTimeout('town_info', 'info', {
+                id: parseInt(homeTownId, 10),
+                town_id: activeTownId,
+                nl_init: true,
+            }, 15000, true);
             const html = res?.plain?.html || res?.json?.plain?.html || '';
             const match = html.match(/data-player_name="([^"]*)"/);
             if (match) {
@@ -238,6 +243,7 @@ var DiscordAlert = class extends MultUtil {
                     { name: '🛡️ ' + this.t('da_field_defender'), value: '\u200b', inline: false },
                     { name: this.t('da_field_player'), value: defenderName, inline: true },
                     { name: this.t('da_field_city'), value: townName, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: false },
                     { name: '⚔️ ' + this.t('da_field_type'), value: isSpy ? this.t('da_type_spy') : this.t('da_type_normal'), inline: true },
                     { name: '⏰ ' + this.t('da_field_arrival'), value: arrivalDate.toLocaleString(), inline: true },
                 ],
