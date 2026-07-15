@@ -180,22 +180,39 @@ var DiscordAlert = class extends MultUtil {
     /* Confirmado via captura real: town_info/info (GET) na cidade
        de ORIGEM do ataque devolve um HTML (em res.plain.html) que
        contem data-player_name="NomeDoJogador" - extrai isso via
-       regex, sem precisar decodificar nada mais complexo (tambem
-       tem a mesma info dentro de um <script>, mas o atributo HTML
-       e mais simples e confiavel de extrair). */
+       regex, sem precisar decodificar nada mais complexo.
+       FIX: faltava o extraFlag=true (5º parametro) - outras acoes
+       de town_info nesse projeto ja confirmaram precisar disso
+       (ex: town_info/trade). Provavel causa do nome nao aparecer. */
     async _resolveAttackerName(homeTownId) {
         try {
-            const res = await this.ajaxGetWithTimeout('town_info', 'info', { id: parseInt(homeTownId, 10), nl_init: true });
+            const res = await this.ajaxGetWithTimeout('town_info', 'info', { id: parseInt(homeTownId, 10), nl_init: true }, 15000, true);
             const html = res?.plain?.html || res?.json?.plain?.html || '';
             const match = html.match(/data-player_name="([^"]*)"/);
             if (match) {
                 const name = match[1].trim();
                 if (name) return name;
             }
+            // Log de diagnostico - se chegou aqui, a chamada respondeu mas
+            // o regex nao encontrou o nome. Ajuda a investigar se persistir.
+            this.console.log('[DiscordAlert] ' + this.t('da_resolve_name_no_match', {
+                keys: Object.keys(res || {}).join(', '),
+            }));
         } catch (e) {
             this.console.log('[DiscordAlert] ' + this.t('da_resolve_name_error', { msg: e?.message ?? e }));
         }
         return null;
+    }
+
+    /* Nome do proprio jogador (defensor) - Game.player_name e uma
+       variavel global padrao e ja confiavel do Grepolis, nao
+       precisa de nenhuma chamada de rede extra. */
+    _getOwnPlayerName() {
+        try {
+            return uw.Game?.player_name || this.t('da_unknown');
+        } catch (e) {
+            return this.t('da_unknown');
+        }
     }
 
     async _sendAlert(atk) {
@@ -203,28 +220,28 @@ var DiscordAlert = class extends MultUtil {
             const townName = this.getTownName(atk.target_town_id);
             const originName = atk.town_name_origin || this.getTownName(atk.home_town_id);
             const attackerName = await this._resolveAttackerName(atk.home_town_id);
+            const defenderName = this._getOwnPlayerName();
             const arrival = atk.arrival_at || atk.time_of_arrival || 0;
             if (!arrival) return;
 
             const arrivalDate = new Date(arrival * 1000);
-            const now = Math.floor(Date.now() / 1000);
-            const secondsLeft = arrival - now;
             const isSpy = atk.type === 'attack_with_spy';
 
-            const originLabel = attackerName
-                ? `${originName || '?'} (${attackerName})`
-                : (originName || this.t('da_unknown'));
-
             const embed = {
+                author: { name: this.t('da_brand_name') },
                 title: '🚨 ' + this.t('da_alert_title'),
-                description: this.t('da_alert_desc', { town: townName }),
                 color: 15158332, // vermelho
                 fields: [
-                    { name: '🏹 ' + this.t('da_field_origin'), value: originLabel, inline: true },
+                    { name: '⚔️ ' + this.t('da_field_enemy'), value: '\u200b', inline: false },
+                    { name: this.t('da_field_player'), value: attackerName || this.t('da_unknown'), inline: true },
+                    { name: this.t('da_field_city'), value: originName || this.t('da_unknown'), inline: true },
+                    { name: '🛡️ ' + this.t('da_field_defender'), value: '\u200b', inline: false },
+                    { name: this.t('da_field_player'), value: defenderName, inline: true },
+                    { name: this.t('da_field_city'), value: townName, inline: true },
                     { name: '⚔️ ' + this.t('da_field_type'), value: isSpy ? this.t('da_type_spy') : this.t('da_type_normal'), inline: true },
                     { name: '⏰ ' + this.t('da_field_arrival'), value: arrivalDate.toLocaleString(), inline: true },
-                    { name: '⏳ ' + this.t('da_field_remaining'), value: this._formatDuration(secondsLeft), inline: true },
                 ],
+                footer: { text: this.t('da_brand_footer') },
                 timestamp: new Date().toISOString(),
             };
 
