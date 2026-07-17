@@ -292,7 +292,14 @@ var Sniper = class extends MultUtil {
 
     _getTargetNameFromWindow(windowEl) {
         try {
-            const titleEl = windowEl.closest('.js-window-main-container')?.querySelector('.window_header, .title');
+            // FIX: CONFIRMADO via captura real do DOM (dump de todos os
+            // elementos-folha da janela) - o seletor antigo (".window_header,
+            // .title") pegava por engano os rotulos das ABAS INTERNAS da
+            // janela ("Tipos", "Feiticos" - DIV.title), nunca o nome do
+            // alvo de verdade. O nome real da cidade/jogador-alvo fica no
+            // span padrao de titulo do jQuery UI Dialog (".ui-dialog-title",
+            // ex: "OC54-02"), na barra de titulo da janela nativa.
+            const titleEl = windowEl.closest('.js-window-main-container')?.querySelector('.ui-dialog-title');
             return titleEl ? titleEl.textContent.trim() : null;
         } catch (e) {
             return null;
@@ -571,8 +578,18 @@ var Sniper = class extends MultUtil {
                 const maxWaitForTroopsMs = timeLeftMs - observedTravelMs - 1000; // 1s de folga pro reenvio em si
 
                 if (attempt === MAX_ATTEMPTS || !canCancel || maxWaitForTroopsMs < 500) {
+                    // DIAGNOSTICO: antes essa mensagem sempre dizia o mesmo
+                    // texto generico ("ran out of time/attempts/cancel
+                    // window"), sem dizer QUAL dos 3 motivos foi. Agora
+                    // aponta o motivo exato, pra nao precisar adivinhar na
+                    // proxima vez que isso acontecer.
+                    let reasonKey;
+                    if (attempt === MAX_ATTEMPTS) reasonKey = 'sniper_reason_max_attempts';
+                    else if (!canCancel) reasonKey = 'sniper_reason_not_cancelable';
+                    else reasonKey = 'sniper_reason_no_time_for_retry';
+
                     snipe.status = 'sent';
-                    const msg = this.t('sniper_fired_ok_imprecise', { target: snipe.targetName, diff: diffSeconds, attempts: attempt });
+                    const msg = this.t('sniper_fired_ok_imprecise', { target: snipe.targetName, diff: diffSeconds, attempts: attempt, reason: this.t(reasonKey) });
                     this.console.log('[Sniper] ' + msg);
                     if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
                     return;
