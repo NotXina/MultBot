@@ -391,17 +391,19 @@ var Sniper = class extends MultUtil {
        action_name:"cancelCommand", arguments:{id:<command_id>}. So
        funciona por um tempo curto depois do envio (o campo
        cancelable_until do movimento diz ate quando). */
+    /* Confirmado via captura real de rede: cancelar usa command_info
+       (controller) / cancel_command (action), payload direto
+       {id, town_id, nl_init} - NAO e frontend_bridge/execute com
+       model_url "Commands" como eu tinha suposto antes (esse era o
+       endpoint errado, nunca confirmado por captura). */
     async _cancelCommand(townId, commandId) {
         try {
             const data = {
-                model_url: 'Commands',
-                action_name: 'cancelCommand',
-                captcha: null,
-                arguments: { id: commandId },
+                id: parseInt(commandId, 10),
                 town_id: parseInt(townId, 10),
                 nl_init: true,
             };
-            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+            const res = await this.ajaxPostWithTimeout('command_info', 'cancel_command', data);
             return !!(res && !res.error);
         } catch (e) {
             this.console.log('[Sniper] ' + this.t('sniper_cancel_error', { msg: e?.message ?? e }));
@@ -409,10 +411,15 @@ var Sniper = class extends MultUtil {
         }
     }
 
-    /* IDs de comandos JA existentes entre essas duas cidades (do tipo
-       certo) antes de disparar - usado pra achar sem ambiguidade qual
-       comando NOVO apareceu depois do envio. */
-    _getExistingCommandIds(originId, targetId, type) {
+    /* IDs de comandos JA existentes entre essas duas cidades antes de
+       disparar - usado pra achar sem ambiguidade qual comando NOVO
+       apareceu depois do envio. Nao filtra mais por "tipo" exato -
+       o campo type do movimento pode ter uma variacao (ex: "normal",
+       um subtipo de ataque) diferente do "attack"/"support" que a
+       gente mandou, o que causava falso-negativo (nunca achava o
+       comando, mesmo ele existindo). Origem+destino ja e suficiente
+       pra identificar sem ambiguidade nesse contexto. */
+    _getExistingCommandIds(originId, targetId) {
         const ids = new Set();
         try {
             const models = uw.MM.getModels().MovementsUnits;
@@ -421,19 +428,19 @@ var Sniper = class extends MultUtil {
                 if (!mv) continue;
                 if (String(mv.home_town_id) !== String(originId)) continue;
                 if (String(mv.target_town_id) !== String(targetId)) continue;
-                if (mv.type !== type) continue;
-                ids.add(mv.command_id);
+                ids.add(mv.command_id ?? mv.id);
             }
         } catch (e) {}
         return ids;
     }
 
     /* Acha o comando NOVO que apareceu depois do envio (nao estava no
-       conjunto "antes"). Tenta algumas vezes com um pequeno espaco,
-       ja que o movimento pode demorar um instante pra aparecer na
-       collection depois do envio. */
-    async _findNewCommand(originId, targetId, type, existingIds) {
-        for (let attempt = 0; attempt < 6; attempt++) {
+       conjunto "antes"). Aumentado de 6 tentativas (~1.8s) pra 15
+       tentativas (~6s) com espera maior - o movimento pode demorar
+       mais que o esperado inicialmente pra aparecer na collection
+       local depois do envio. */
+    async _findNewCommand(originId, targetId, existingIds) {
+        for (let attempt = 0; attempt < 15; attempt++) {
             try {
                 const models = uw.MM.getModels().MovementsUnits;
                 for (const key in models) {
@@ -441,12 +448,12 @@ var Sniper = class extends MultUtil {
                     if (!mv) continue;
                     if (String(mv.home_town_id) !== String(originId)) continue;
                     if (String(mv.target_town_id) !== String(targetId)) continue;
-                    if (mv.type !== type) continue;
-                    if (existingIds.has(mv.command_id)) continue;
+                    const cid = mv.command_id ?? mv.id;
+                    if (existingIds.has(cid)) continue;
                     return mv;
                 }
             } catch (e) {}
-            await this.sleep(300);
+            await this.sleep(400);
         }
         return null;
     }
@@ -462,14 +469,14 @@ var Sniper = class extends MultUtil {
             nl_init: true,
         };
 
-        const existingIds = this._getExistingCommandIds(snipe.originTownId, snipe.targetId, snipe.type);
+        const existingIds = this._getExistingCommandIds(snipe.originTownId, snipe.targetId);
         const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data);
 
         if (!res || res.error) {
             return { ok: false, error: res?.error ?? '?' };
         }
 
-        const command = await this._findNewCommand(snipe.originTownId, snipe.targetId, snipe.type, existingIds);
+        const command = await this._findNewCommand(snipe.originTownId, snipe.targetId, existingIds);
         return { ok: true, command };
     }
 
