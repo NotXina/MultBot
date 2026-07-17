@@ -214,11 +214,20 @@ var AutoQuest = class extends MultUtil {
        que ainda fazem parte de uma bifurcacao Bem/Mal NAO decidida
        (os dois lados ainda viable ao mesmo tempo), ja que nesse caso
        "challenge" ainda nao faz sentido - precisa decidir primeiro. */
-    _getChallengeableBearEffectQuests() {
+    /* Tipos de desafio que o bot aceita automaticamente:
+       - bear_effect ("Suportar efeito") - unico tipo suportado antes
+       - wait_time ("Aguarde ate que o tempo expire") - so precisa
+         ser aceito pra comecar a contar, nao exige tropa/recurso -
+         adicionado a pedido explicito
+       Os demais (spend_resources, collect_units) continuam sendo
+       pulados de proposito. */
+    _getChallengeableQuests() {
         try {
             const collection = uw.MM.getOnlyCollectionByName('IslandQuest');
             const models = collection?.models ?? [];
             const viable = models.filter(m => m.attributes?.state === 'viable');
+
+            const CHALLENGEABLE_TYPES = new Set(['bear_effect', 'wait_time']);
 
             const GOOD_SUFFIX = 'GoodIslandQuest';
             const EVIL_SUFFIX = 'EvilIslandQuest';
@@ -246,7 +255,7 @@ var AutoQuest = class extends MultUtil {
 
             return viable.filter((m) => {
                 const a = m.attributes;
-                if (a?.static_data?.challenge_type !== 'bear_effect') return false;
+                if (!CHALLENGEABLE_TYPES.has(a?.static_data?.challenge_type)) return false;
                 if (stillForked.has(a.progressable_id)) return false;
                 if (this._challengedThisSession.has(a.progressable_id)) return false;
                 return true;
@@ -327,7 +336,7 @@ var AutoQuest = class extends MultUtil {
                     this._lastFullLogAt = now;
                 }
             } else {
-                const challengeable = this._getChallengeableBearEffectQuests();
+                const challengeable = this._getChallengeableQuests();
                 for (const quest of challengeable) {
                     if (slotsAvailable <= 0) {
                         if (shouldLogFull) {
