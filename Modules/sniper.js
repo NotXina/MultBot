@@ -427,8 +427,15 @@ var Sniper = class extends MultUtil {
        tentativas (~6s) com espera maior - o movimento pode demorar
        mais que o esperado inicialmente pra aparecer na collection
        local depois do envio. */
+    /* Acha o comando NOVO que apareceu depois do envio (nao estava no
+       conjunto "antes"). Reduzido de 15 tentativas/400ms (ate 6s) pra
+       8 tentativas/200ms (ate 1.6s) - a busca longa estava consumindo
+       o tempo que sobrava pra decidir se vale cancelar e tentar de
+       novo (tempo antes da chegada / antes da janela de cancelamento
+       fechar), fazendo o retry desistir na primeira tentativa mesmo
+       quando ainda daria tempo de corrigir. */
     async _findNewCommand(originId, targetId, existingIds) {
-        for (let attempt = 0; attempt < 15; attempt++) {
+        for (let attempt = 0; attempt < 8; attempt++) {
             try {
                 const models = uw.MM.getModels().MovementsUnits;
                 for (const key in models) {
@@ -441,7 +448,7 @@ var Sniper = class extends MultUtil {
                     return mv;
                 }
             } catch (e) {}
-            await this.sleep(400);
+            await this.sleep(200);
         }
         return null;
     }
@@ -532,7 +539,7 @@ var Sniper = class extends MultUtil {
                 const canCancel = cancelableUntil && (Date.now() / 1000) < cancelableUntil;
                 const timeLeftMs = snipe.arrivalAt - Date.now();
 
-                if (attempt === MAX_ATTEMPTS || !canCancel || timeLeftMs < 3000) {
+                if (attempt === MAX_ATTEMPTS || !canCancel || timeLeftMs < 1500) {
                     snipe.status = 'sent';
                     const msg = this.t('sniper_fired_ok_imprecise', { target: snipe.targetName, diff: diffSeconds, attempts: attempt });
                     this.console.log('[Sniper] ' + msg);
