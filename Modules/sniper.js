@@ -32,6 +32,11 @@
 //  envio, mas nao compensa esse throttling do navegador.
 // ══════════════════════════════════════════════════════
 var Sniper = class extends MultUtil {
+    // Margem fixa de seguranca: dispara sempre esse tanto mais cedo
+    // que o horario calculado (chegada - duracao), desde a primeira
+    // tentativa.
+    EARLY_MARGIN_MS = 3000;
+
     constructor(c, s) {
         super(c, s);
         this._scheduled = this.storage.load('sniper_scheduled', []);
@@ -195,7 +200,11 @@ var Sniper = class extends MultUtil {
                 return;
             }
 
-            const sendAt = arrivalDate.getTime() - (durationSeconds * 1000);
+            // Margem de seguranca fixa: dispara 3s mais cedo que o horario
+            // calculado (chegada - duracao), ja desde a primeira tentativa -
+            // pedido explicito, pra ter folga em vez de mirar exatamente
+            // no limite.
+            const sendAt = arrivalDate.getTime() - (durationSeconds * 1000) - this.EARLY_MARGIN_MS;
             if (sendAt <= Date.now()) {
                 statusEl.textContent = this.t('sniper_too_late', { duration: this._formatDuration(durationSeconds) });
                 statusEl.style.color = '#c0392b';
