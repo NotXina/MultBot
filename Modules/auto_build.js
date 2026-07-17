@@ -5,6 +5,14 @@ var AutoBuild = class extends MultUtil {
        de ser tentado de novo - evita ficar re-tentando (e logando)
        a cada ciclo do main() enquanto o requisito nao e atendido. */
     BUILD_ERROR_COOLDOWN_MS = 5 * 60 * 1000;
+    /* Cooldown curto pro caso de recursos/populacao insuficientes -
+       diferente do bloqueio por requisitos (que precisa de outra
+       construcao subir de nivel em algum outro lugar, entao 5min faz
+       sentido), aqui os recursos regeneram sozinhos com o tempo, entao
+       um cooldown mais curto e suficiente pra parar de martelar o
+       mesmo pedido a cada 5s sem esperar tanto quando ja da pra
+       tentar de novo. */
+    RESOURCE_BLOCK_COOLDOWN_MS = 60 * 1000;
 
     constructor(c, s) {
         super(c, s);
@@ -38,13 +46,18 @@ var AutoBuild = class extends MultUtil {
     /* Bloqueia um predio especifico numa cidade especifica por
        BUILD_ERROR_COOLDOWN_MS. Enquanto bloqueado, getNextBuild pula
        essa construcao e segue tentando as outras da composicao. */
-    _blockBuilding(town_id, building) {
+    _blockBuilding(town_id, building, cooldownMs = this.BUILD_ERROR_COOLDOWN_MS, silent = false) {
         const key = this._buildKey(town_id, building);
-        this._buildBlockedUntil[key] = Date.now() + this.BUILD_ERROR_COOLDOWN_MS;
+        this._buildBlockedUntil[key] = Date.now() + cooldownMs;
+        /* silent=true: usado pro caso de recursos/populacao insuficientes -
+           bloqueia a re-tentativa mas nao loga nada (ver
+           isResourceOrCapacityMessage em core.js), pra nao floodar o
+           console com um aviso esperado que se repete o tempo todo. */
+        if (silent) return;
         const town = uw.ITowns.towns[town_id];
         const townName = town && town.getName ? town.getName() : ('#' + town_id);
         const buildingName = this.getGameName ? this.getGameName('building', building) : building;
-        const minutes = Math.round(this.BUILD_ERROR_COOLDOWN_MS / 60000);
+        const minutes = Math.round(cooldownMs / 60000);
         this.console.log('[AutoBuild] ' + this.t('ab_blocked_log', { town: townName, building: buildingName, min: minutes }));
     }
     _isBuildBlocked(town_id, building) {
@@ -70,13 +83,23 @@ var AutoBuild = class extends MultUtil {
             const self = this;
             uw.HumanMessage.error = function (message, ...rest) {
                 try {
-                    const attempt = self._lastBuildAttempt;
-                    if (attempt && (Date.now() - attempt.at) < 3000) {
-                        const buildingName = self.getGameName ? self.getGameName('building', attempt.building) : attempt.building;
-                        self.console.log('[AutoBuild] ' + self.t('ab_native_warning_log', { message, building: buildingName, town: attempt.townName }));
+                    // PDCA: "nao ha recursos suficientes" / "nao pode recrutar
+                    // mais do que N" sao avisos ESPERADOS que se repetem o
+                    // tempo todo enquanto os recursos nao acumulam - nao
+                    // logamos mais isso (evita floodar o console a cada
+                    // ciclo). Nota: esse hook e global (patch unico em
+                    // uw.HumanMessage.error), entao tambem captura avisos de
+                    // populacao vindos do AutoTrain - suprimir aqui cobre
+                    // esse caso tambem, sem precisar duplicar a logica la.
+                    if (!self.isResourceOrCapacityMessage(message)) {
+                        const attempt = self._lastBuildAttempt;
+                        if (attempt && (Date.now() - attempt.at) < 3000) {
+                            const buildingName = self.getGameName ? self.getGameName('building', attempt.building) : attempt.building;
+                            self.console.log('[AutoBuild] ' + self.t('ab_native_warning_log', { message, building: buildingName, town: attempt.townName }));
 
-                        if (/requisit/i.test(message) && attempt.townId != null) {
-                            self._blockBuilding(attempt.townId, attempt.building);
+                            if (/requisit/i.test(message) && attempt.townId != null) {
+                                self._blockBuilding(attempt.townId, attempt.building);
+                            }
                         }
                     }
                 } catch (e) {
@@ -393,6 +416,12 @@ var AutoBuild = class extends MultUtil {
             if (res && !res.error) {
                 this.console.log('[AutoBuild] ' + this.t('ab_build_up_log', { town: town.getName(), building: this.getGameName('building', type) }));
                 ok = true;
+            } else if (this.isResourceOrCapacityMessage(res?.error)) {
+                // Recursos/populacao insuficientes: NAO loga (esperado, se
+                // repetiria a cada 5s) - so bloqueia essa construcao por
+                // um cooldown curto, silenciosamente, ate os recursos
+                // terem chance de acumular.
+                this._blockBuilding(town_id, type, this.RESOURCE_BLOCK_COOLDOWN_MS, true);
             } else {
                 this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: res?.error ?? JSON.stringify(res) }));
             }
