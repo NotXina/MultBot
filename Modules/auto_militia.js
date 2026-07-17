@@ -25,9 +25,9 @@ var AutoMilitia = class extends MultUtil {
             <div class="game_border_left"></div><div class="game_border_right"></div>
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            ${this.getTitleHtml('auto_militia_title', 'Auto Milícia', this.toggle, '', this._active)}
+            ${this.getTitleHtml('auto_militia_title', this.t('am_title'), this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
-                Ativa milícia ~8s antes do impacto em cidades sob ataque.
+                ${this.t('am_desc')}
             </div>
             <div id="militia_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
@@ -44,7 +44,7 @@ var AutoMilitia = class extends MultUtil {
         this._active = true;
         this.storage.save('militia_active', true);
         this._updateButtons();
-        this.console.log('[AutoMilícia] Iniciado. Monitorando ataques...');
+        this.console.log('[AutoMilicia] ' + this.t('am_started_log'));
         this._tick();
         // respectSleep=false: modulo de defesa critico, precisa
         // continuar rodando mesmo durante a janela do Sleeper.
@@ -60,7 +60,7 @@ var AutoMilitia = class extends MultUtil {
         this._scheduled.clear();
 
         this._updateButtons();
-        this.console.log('[AutoMilícia] Parado.');
+        this.console.log('[AutoMilicia] ' + this.t('am_stopped_log'));
     }
 
     _updateButtons() {
@@ -101,10 +101,13 @@ var AutoMilitia = class extends MultUtil {
                 }, fireInMs);
 
                 this._scheduled.set(townId, timeoutId);
-                this.console.log(`[AutoMilícia] Agendado: ${uw.ITowns.towns[townId]?.getName?.() ?? townId} em ${Math.round(fireInMs / 1000)}s`);
+                this.console.log('[AutoMilicia] ' + this.t('am_scheduled_log', {
+                    town: uw.ITowns.towns[townId]?.getName?.() ?? townId,
+                    sec: Math.round(fireInMs / 1000),
+                }));
             }
         } catch(e) {
-            this.console.log('[AutoMilícia] Erro: ' + e?.message);
+            this.console.log('[AutoMilicia] ' + this.t('am_tick_error', { msg: e?.message ?? e }));
         }
     }
 
@@ -127,23 +130,23 @@ var AutoMilitia = class extends MultUtil {
     _activateMilitia = async (townId) => {
         try {
             const townName = uw.ITowns.towns[townId]?.getName?.() ?? '#' + townId;
-            this.console.log(`[AutoMilícia] Ativando milícia em ${townName}...`);
+            this.console.log('[AutoMilicia] ' + this.t('am_activating_log', { town: townName }));
 
             const data = { town_id: parseInt(townId), nl_init: true };
             const res = await this.ajaxPostWithTimeout('building_farm', 'request_militia', data, 10000, true);
 
             if (res && !res.error) {
-                const msg = `✓ Milícia ativada em ${townName}`;
-                this.console.log('[AutoMilícia] ' + msg);
+                const msg = this.t('am_activated_log', { town: townName });
+                this.console.log('[AutoMilicia] ' + msg);
                 uw.$('#militia_log').text(msg).css('color', '#1a6b2a');
                 if (uw.HumanMessage) uw.HumanMessage.success(msg);
             } else {
-                const msg = `✗ Falha em ${townName}: ${res?.error ?? '?'}`;
-                this.console.log('[AutoMilícia] ' + msg);
+                const msg = this.t('am_activate_fail_log', { town: townName, reason: res?.error ?? '?' });
+                this.console.log('[AutoMilicia] ' + msg);
                 uw.$('#militia_log').text(msg).css('color', '#8a2a2a');
             }
         } catch(e) {
-            this.console.log('[AutoMilícia] Exceção/timeout em #' + townId + ': ' + (e?.message ?? e));
+            this.console.log('[AutoMilicia] ' + this.t('am_activate_exception_log', { id: townId, msg: e?.message ?? e }));
         }
     };
 };

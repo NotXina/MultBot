@@ -605,16 +605,30 @@ var AutoTrain = class extends MultUtil {
     /* Main function - treina ground + naval em todas as cidades */
     main = () => {
         if (window.__multbot_captcha_active) return;
-        const town_list = this.getActiveList();
-        if (!town_list.length) return;
-        town_list.forEach(town_id => {
-            if (town_id in uw.ITowns.towns) {
-                this.checkPolis('naval', town_id);
-                this.checkPolis('ground', town_id);
-            } else {
-                delete this.city_troops[town_id];
-                this.storage.save('troops', this.city_troops);
-            }
-        });
+        try {
+            const town_list = this.getActiveList();
+            if (!town_list.length) return;
+            // FIX: cada cidade agora tem seu proprio try/catch - antes, uma
+            // excecao numa cidade (ex: checkPolis/getTroopCount lancando por
+            // dado inesperado) escapava do forEach inteiro e cancelava o
+            // processamento das cidades SEGUINTES nesse mesmo tick, sem
+            // nenhum log. Isolar por cidade evita que uma falha derrube o
+            // ciclo todo.
+            town_list.forEach(town_id => {
+                try {
+                    if (town_id in uw.ITowns.towns) {
+                        this.checkPolis('naval', town_id);
+                        this.checkPolis('ground', town_id);
+                    } else {
+                        delete this.city_troops[town_id];
+                        this.storage.save('troops', this.city_troops);
+                    }
+                } catch (e) {
+                    this.console.log('[AutoTrain] ' + this.t('error') + ': ' + (e?.message ?? e));
+                }
+            });
+        } catch (e) {
+            this.console.log('[AutoTrain] ' + this.t('error') + ': ' + (e?.message ?? e));
+        }
     };
 };

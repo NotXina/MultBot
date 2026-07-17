@@ -129,8 +129,17 @@ var AutoBootcamp = class extends MultUtil {
             delete units.archer;
         }
 
+        // FIX: town.units() sempre retorna uma chave pra cada tipo de
+        // unidade que a cidade PODE ter (mesmo com contagem 0) - entao
+        // "Object.keys(units).length === 0" nunca era verdadeiro na pratica,
+        // e o bot podia mandar um ataque com 0 de cada unidade (token vazio).
+        // Remove primeiro as entradas com contagem zero, so entao a
+        // checagem de "nao ha unidades suficientes" passa a fazer sentido.
+        for (let unit in units) {
+            if (!units[unit]) delete units[unit];
+        }
+
         // If there are not enough units, return
-        // TODO: here check if the units are enough to attack
         if (Object.keys(units).length === 0) return false;
 
         // Send the attack

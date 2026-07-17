@@ -87,18 +87,30 @@ var AutoGratis = class extends MultUtil {
        town currently focused via getCurrentTown — same scope as the
        pre-PR-#75 behaviour, opt-in for users who prefer that cadence. */
     main = () => {
-        const now = Math.floor(Date.now() / 1000);
+        try {
+            const now = Math.floor(Date.now() / 1000);
 
-        // Safety net contra crescimento indefinido do Set
-        if (this._fired.size > 50) this._fired.clear();
+            // Safety net contra crescimento indefinido do Set
+            if (this._fired.size > 50) this._fired.clear();
 
-        if (this.onlyActiveTown) {
-            this.tryTown(uw.ITowns.getCurrentTown(), now);
-            return;
-        }
+            if (this.onlyActiveTown) {
+                this.tryTown(uw.ITowns.getCurrentTown(), now);
+                return;
+            }
 
-        for (const town_id in uw.ITowns.towns) {
-            if (this.tryTown(uw.ITowns.towns[town_id], now)) return;
+            // FIX: cada cidade isolada no proprio try/catch - antes, uma
+            // excecao em tryTown (ex: buildingOrders() falhando numa cidade
+            // especifica) escapava do loop inteiro sem log, cancelando a
+            // checagem das cidades seguintes nesse mesmo tick.
+            for (const town_id in uw.ITowns.towns) {
+                try {
+                    if (this.tryTown(uw.ITowns.towns[town_id], now)) return;
+                } catch (e) {
+                    this.console.log(`[AutoGratis] Erro ao verificar ${town_id}: ${e?.message ?? e}`);
+                }
+            }
+        } catch (e) {
+            this.console.log(`[AutoGratis] Erro no ciclo principal: ${e?.message ?? e}`);
         }
     };
 

@@ -143,10 +143,15 @@ var StatusPanel = class extends MultUtil {
     _startVisuals() {
         if (this._interval) clearInterval(this._interval);
         this._render();
-        this._interval = setInterval(() => this._render(), 3000);
+        // FIX: usa createGuardedInterval (respectSleep=false) em vez de
+        // setInterval cru - alem de seguir o padrao do resto do projeto,
+        // isso evita que o proprio painel de status (que mostra o estado
+        // do Sleeper) fique CONGELADO durante a janela de sono, o que
+        // pareceria um bot travado/crashado em vez de so pausado.
+        this._interval = this.createGuardedInterval(() => this._render(), 3000, false);
 
         if (this._countdownInterval) clearInterval(this._countdownInterval);
-        this._countdownInterval = setInterval(() => this._updateCountdown(), 1000);
+        this._countdownInterval = this.createGuardedInterval(() => this._updateCountdown(), 1000, false);
 
         if (this._refreshMinutes > 0 && this._nextRefreshAt) {
             uw.$('#refresh_status').text(this.t('status_reloads_every', { min: this._refreshMinutes })).css('color', '#1a6b2a');

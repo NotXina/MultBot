@@ -178,45 +178,49 @@ var AutoSendResources = class extends MultUtil {
     }
 
     async _tick() {
-        this.console.log('[AutoRecursos] Verificando cidades...');
+        try {
+            this.console.log('[AutoRecursos] Verificando cidades...');
 
-        const townIds = Object.keys(uw.ITowns.towns);
-        if (townIds.length < 2) return;
+            const townIds = Object.keys(uw.ITowns.towns);
+            if (townIds.length < 2) return;
 
-        if (this.mode === 'manual') {
-            await this._tickManual(townIds);
-            return;
+            if (this.mode === 'manual') {
+                await this._tickManual(townIds);
+                return;
+            }
+
+            // Lista de cidades carentes (menos desenvolvidas primeiro), nao
+            // so a mais pobre - assim varias cidades sao ajudadas no mesmo
+            // ciclo, em vez de uma por vez.
+            const targets = this._findLeastDevelopedTowns(townIds);
+            if (targets.length === 0) return;
+
+            const targetNames = targets.map(id => uw.ITowns.towns[id].getName()).join(', ');
+            this.console.log(`[AutoRecursos] Destinos (menos desenvolvidas primeiro, com espaço no armazém): ${targetNames}`);
+
+            const senders = townIds.filter(id => !targets.includes(id) && this._isEligibleSender(id));
+            if (!senders.length) {
+                this.console.log('[AutoRecursos] Nenhuma cidade elegível para envio.');
+                uw.$('#asr_log').text('Nenhuma cidade elegível para envio.');
+                return;
+            }
+
+            // Cada remetente manda pra um destino diferente, girando pela
+            // lista de carentes - as mais pobres aparecem primeiro e recebem
+            // prioridade quando ha mais remetentes do que destinos.
+            const results = await Promise.allSettled(
+                senders.map((fromId, i) => this._sendResources(fromId, targets[i % targets.length]))
+            );
+
+            const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
+            const msg = totalSent > 0
+                ? `✓ Recursos enviados de ${totalSent} cidade(s) para ${targets.length} destino(s)`
+                : 'Nenhuma cidade elegível para envio.';
+            this.console.log('[AutoRecursos] ' + msg);
+            uw.$('#asr_log').text(msg);
+        } catch (e) {
+            this.console.log('[AutoRecursos] Excecao no ciclo: ' + (e?.message ?? e));
         }
-
-        // Lista de cidades carentes (menos desenvolvidas primeiro), nao
-        // so a mais pobre - assim varias cidades sao ajudadas no mesmo
-        // ciclo, em vez de uma por vez.
-        const targets = this._findLeastDevelopedTowns(townIds);
-        if (targets.length === 0) return;
-
-        const targetNames = targets.map(id => uw.ITowns.towns[id].getName()).join(', ');
-        this.console.log(`[AutoRecursos] Destinos (menos desenvolvidas primeiro, com espaço no armazém): ${targetNames}`);
-
-        const senders = townIds.filter(id => !targets.includes(id) && this._isEligibleSender(id));
-        if (!senders.length) {
-            this.console.log('[AutoRecursos] Nenhuma cidade elegível para envio.');
-            uw.$('#asr_log').text('Nenhuma cidade elegível para envio.');
-            return;
-        }
-
-        // Cada remetente manda pra um destino diferente, girando pela
-        // lista de carentes - as mais pobres aparecem primeiro e recebem
-        // prioridade quando ha mais remetentes do que destinos.
-        const results = await Promise.allSettled(
-            senders.map((fromId, i) => this._sendResources(fromId, targets[i % targets.length]))
-        );
-
-        const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
-        const msg = totalSent > 0
-            ? `✓ Recursos enviados de ${totalSent} cidade(s) para ${targets.length} destino(s)`
-            : 'Nenhuma cidade elegível para envio.';
-        this.console.log('[AutoRecursos] ' + msg);
-        uw.$('#asr_log').text(msg);
     }
 
     /* Modo manual: destino FIXO escolhido por voce. Diferente do modo

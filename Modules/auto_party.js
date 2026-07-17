@@ -201,10 +201,28 @@ var AutoParty = class extends MultUtil {
 
     main = async () => {
         if (window.__multbot_captcha_active) return;
-        if (this.active_types['procession']) await this.checkTriumph();
-        if (this.active_types['festival']) await this.checkParty();
-        if (this.active_types['theater']) await this.checkTheater();
-        this._renderActiveCelebrations();
+        // FIX: cada checagem isolada no proprio try/catch - antes, uma
+        // excecao em qualquer uma delas (ex: checkTriumph quando
+        // PlayerKillpoints ainda nao carregou) escapava do main() inteiro,
+        // cancelando as OUTRAS checagens (party/theater) e o render do
+        // status nesse mesmo tick, sem nenhum log.
+        if (this.active_types['procession']) {
+            try { await this.checkTriumph(); }
+            catch (e) { this.console.log('[AutoParty] Erro ao verificar triunfos: ' + (e?.message ?? e)); }
+        }
+        if (this.active_types['festival']) {
+            try { await this.checkParty(); }
+            catch (e) { this.console.log('[AutoParty] Erro ao verificar festas: ' + (e?.message ?? e)); }
+        }
+        if (this.active_types['theater']) {
+            try { await this.checkTheater(); }
+            catch (e) { this.console.log('[AutoParty] Erro ao verificar teatros: ' + (e?.message ?? e)); }
+        }
+        try {
+            this._renderActiveCelebrations();
+        } catch (e) {
+            this.console.log('[AutoParty] Erro ao renderizar status: ' + (e?.message ?? e));
+        }
     };
 
     makeCelebration = async (type, town_id) => {

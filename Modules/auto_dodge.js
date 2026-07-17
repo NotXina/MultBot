@@ -63,9 +63,9 @@ var AutoDodge = class extends MultUtil {
             '<div class="game_border_left"></div><div class="game_border_right"></div>' +
             '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
             '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
-            this.getTitleHtml('dodge_title', 'Auto Fuga (Dodge)', this.toggle, '', this._active) +
-            '<div style="padding:5px 10px;font-weight:bold;" title="Envia reforco para qualquer cidade conhecida da ilha. Se nenhuma existir no cache, a evacuacao e pulada.">' +
-            'Evacua tropas ' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto para uma cidade aleatoria na mesma ilha, com retorno automatico.' +
+            this.getTitleHtml('dodge_title', this.t('ad_title'), this.toggle, '', this._active) +
+            '<div style="padding:5px 10px;font-weight:bold;" title="' + this.t('ad_tooltip') + '">' +
+            this.t('ad_desc', { sec: this.EVACUATE_LEAD_SECONDS }) +
             '</div>' +
             '<div id="dodge_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
             '</div>'
@@ -85,7 +85,7 @@ var AutoDodge = class extends MultUtil {
         this._active = true;
         this.storage.save('dodge_active', true);
         this._updateTitle();
-        this.console.log('[AutoDodge] Iniciado. Monitorando ataques...');
+        this.console.log('[AutoDodge] ' + this.t('ad_started_log'));
         this._tick();
         // respectSleep=false: modulo de defesa critico, precisa
         // continuar rodando mesmo durante a janela do Sleeper.
@@ -121,7 +121,7 @@ var AutoDodge = class extends MultUtil {
         this._teardownIslandScraper();
 
         this._updateTitle();
-        this.console.log('[AutoDodge] Parado.');
+        this.console.log('[AutoDodge] ' + this.t('ad_stopped_log'));
     }
 
     _updateTitle() {
@@ -154,7 +154,7 @@ var AutoDodge = class extends MultUtil {
         });
 
         this._islandScraperObserver.observe(document.body, { childList: true, subtree: true });
-        this.console.log('[AutoDodge] Aprendizado de ilhas ativo (observando janelas abertas no mapa).');
+        this.console.log('[AutoDodge] ' + this.t('ad_island_scraper_active_log'));
     }
 
     _teardownIslandScraper() {
@@ -192,7 +192,7 @@ var AutoDodge = class extends MultUtil {
 
         if (added > 0) {
             this.storage.save('dodge_island_cache', this._islandCache);
-            this.console.log('[AutoDodge] Aprendidas ' + added + ' cidade(s) nova(s) no cache de ilhas.');
+            this.console.log('[AutoDodge] ' + this.t('ad_learned_towns_log', { n: added }));
         }
     }
 
@@ -248,7 +248,7 @@ var AutoDodge = class extends MultUtil {
                     this._evacuated.add(townId);
 
                     const safeTownId = this._pickRandomTownOnSameIsland(townId);
-                    this.console.log('[AutoDodge] Rede de seguranca: ' + townLabel + ' esta a ' + remaining + 's do impacto - evacuando imediatamente.');
+                    this.console.log('[AutoDodge] ' + this.t('ad_safety_evac_log', { town: townLabel, sec: remaining }));
                     this._evacuateTown(townId, arrival, safeTownId);
                     continue;
                 }
@@ -270,14 +270,14 @@ var AutoDodge = class extends MultUtil {
                 const secLeft = Math.round(fireInMs / 1000);
                 if (safeTownId) {
                     const safeTownLabel = this.getTownName(safeTownId);
-                    this.console.log('[AutoDodge] Evacuacao agendada: ' + townLabel + ' -> ' + safeTownLabel + ' em ' + secLeft + 's (' + this.EVACUATE_LEAD_SECONDS + 's antes do impacto).');
+                    this.console.log('[AutoDodge] ' + this.t('ad_evac_scheduled_log', { from: townLabel, to: safeTownLabel, sec: secLeft, lead: this.EVACUATE_LEAD_SECONDS }));
                 } else {
-                    this.console.log('[AutoDodge] Aviso: ' + townLabel + ' agendada em ' + secLeft + 's, mas SEM cidade conhecida na mesma ilha ainda.');
+                    this.console.log('[AutoDodge] ' + this.t('ad_evac_scheduled_no_island_log', { town: townLabel, sec: secLeft }));
                 }
             }
         } catch (e) {
             const msg = e && e.message ? e.message : e;
-            this.console.log('[AutoDodge] Erro no tick: ' + msg);
+            this.console.log('[AutoDodge] ' + this.t('ad_tick_error', { msg }));
         }
     }
 
@@ -337,7 +337,7 @@ var AutoDodge = class extends MultUtil {
             return candidates[randomIndex];
         } catch (e) {
             const msg = e && e.message ? e.message : e;
-            this.console.log('[AutoDodge] Erro ao procurar cidade na mesma ilha: ' + msg);
+            this.console.log('[AutoDodge] ' + this.t('ad_find_island_error', { msg }));
             return null;
         }
     }
@@ -378,8 +378,8 @@ var AutoDodge = class extends MultUtil {
             }
 
             if (!safeTownId) {
-                this.console.log('[AutoDodge] Aviso: ' + townName + ' - nenhuma cidade conhecida na mesma ilha. Evacuacao pulada.');
-                uw.$('#dodge_log').text('Aviso: ' + townName + ' sem cidade na mesma ilha.').css('color', '#eab308');
+                this.console.log('[AutoDodge] ' + this.t('ad_evac_no_island_log', { town: townName }));
+                uw.$('#dodge_log').text(this.t('ad_evac_no_island_status', { town: townName })).css('color', '#eab308');
                 return;
             }
 
@@ -391,27 +391,27 @@ var AutoDodge = class extends MultUtil {
             const hasNaval = Object.keys(navalUnits).length > 0;
 
             if (!hasLand && !hasNaval) {
-                this.console.log('[AutoDodge] ' + townName + ': sem tropas para evacuar.');
+                this.console.log('[AutoDodge] ' + this.t('ad_no_troops_log', { town: townName }));
                 return;
             }
 
-            this.console.log('[AutoDodge] Evacuando ' + townName + ' para ' + safeTownName + '...');
+            this.console.log('[AutoDodge] ' + this.t('ad_evacuating_log', { town: townName, safe: safeTownName }));
 
             const excludeIds = new Set();
 
             if (hasLand) {
                 await this._evacuateGroup(townId, safeTownId, landUnits, 'terrestre', townName, attackArrival, excludeIds);
             } else {
-                this.console.log('[AutoDodge] ' + townName + ': sem tropas terrestres, pulando esse grupo.');
+                this.console.log('[AutoDodge] ' + this.t('ad_no_land_troops_log', { town: townName }));
             }
 
             if (hasNaval) {
                 await this._evacuateGroup(townId, safeTownId, navalUnits, 'naval', townName, attackArrival, excludeIds);
             } else {
-                this.console.log('[AutoDodge] ' + townName + ': sem tropas navais, pulando esse grupo.');
+                this.console.log('[AutoDodge] ' + this.t('ad_no_naval_troops_log', { town: townName }));
             }
 
-            const finalMsg = townName + ' evacuada para ' + safeTownName + '!';
+            const finalMsg = this.t('ad_evacuated_log', { town: townName, safe: safeTownName });
             this.console.log('[AutoDodge] ' + finalMsg);
             uw.$('#dodge_log').text(finalMsg).css('color', '#1a6b2a');
 
@@ -420,29 +420,29 @@ var AutoDodge = class extends MultUtil {
             }
         } catch (e) {
             const msg = e && e.message ? e.message : e;
-            this.console.log('[AutoDodge] Erro ao evacuar #' + townId + ': ' + msg);
+            this.console.log('[AutoDodge] ' + this.t('ad_evacuate_error', { id: townId, msg }));
         }
     }
 
     async _evacuateGroup(fromTownId, toTownId, units, label, townName, attackArrival, excludeIds) {
         try {
             const result = await this._sendUnits(fromTownId, toTownId, units);
-            this.console.log('[AutoDodge] Resposta do servidor (' + label + '): ' + JSON.stringify(result));
+            this.console.log('[AutoDodge] ' + this.t('ad_group_response_log', { label, res: JSON.stringify(result) }));
 
             await this.sleep(this.CAPTURE_DELAY_MS);
             const commandId = this._findSupportCommandId(fromTownId, toTownId, excludeIds);
 
             if (commandId) {
-                this.console.log('[AutoDodge] ' + townName + ' (' + label + '): commandId encontrado: #' + commandId);
+                this.console.log('[AutoDodge] ' + this.t('ad_command_found_log', { town: townName, label, id: commandId }));
                 excludeIds.add(String(commandId));
                 this._scheduleRecall(fromTownId, townName, attackArrival, commandId, label);
             } else {
-                this.console.log('[AutoDodge] Aviso: ' + townName + ' (' + label + ') - id do comando nao encontrado. Recall manual necessario.');
-                uw.$('#dodge_log').text('Aviso: ' + townName + ' (' + label + ') - recall automatico indisponivel.').css('color', '#eab308');
+                this.console.log('[AutoDodge] ' + this.t('ad_command_not_found_log', { town: townName, label }));
+                uw.$('#dodge_log').text(this.t('ad_command_not_found_status', { town: townName, label })).css('color', '#eab308');
             }
         } catch (e) {
             const msg = e && e.message ? e.message : e;
-            this.console.log('[AutoDodge] FALHA ao enviar ' + label + ' de ' + townName + ': ' + msg);
+            this.console.log('[AutoDodge] ' + this.t('ad_send_group_fail_log', { label, town: townName, msg }));
         }
     }
 
@@ -484,7 +484,7 @@ var AutoDodge = class extends MultUtil {
         const recallKey = townId + ':' + label;
         const dueAt = Date.now() + fireInMs;
 
-        this.console.log('[AutoDodge] ' + townName + ' (' + label + '): retorno agendado para daqui a ' + fireInSec + 's (comando #' + commandId + ').');
+        this.console.log('[AutoDodge] ' + this.t('ad_recall_scheduled_log', { town: townName, label, sec: fireInSec, id: commandId }));
 
         this._savePendingRecall(recallKey, { townId: townId, townName: townName, commandId: commandId, label: label, dueAt: dueAt });
 
@@ -526,7 +526,7 @@ var AutoDodge = class extends MultUtil {
             const keys = Object.keys(store);
             if (keys.length === 0) return;
 
-            this.console.log('[AutoDodge] Reconciliando ' + keys.length + ' recall(s) pendente(s) apos carregamento...');
+            this.console.log('[AutoDodge] ' + this.t('ad_reconcile_start_log', { n: keys.length }));
 
             for (const recallKey of keys) {
                 const entry = store[recallKey];
@@ -538,11 +538,11 @@ var AutoDodge = class extends MultUtil {
                 const remaining = entry.dueAt - Date.now();
 
                 if (remaining <= 0) {
-                    this.console.log('[AutoDodge] Recall de ' + entry.townName + ' (' + entry.label + ') ja deveria ter disparado - disparando agora.');
+                    this.console.log('[AutoDodge] ' + this.t('ad_reconcile_fire_now_log', { town: entry.townName, label: entry.label }));
                     this._removePendingRecall(recallKey);
                     this._recallSupport(entry.townId, entry.townName, entry.commandId, entry.label);
                 } else {
-                    this.console.log('[AutoDodge] Recall de ' + entry.townName + ' (' + entry.label + ') reagendado para daqui a ' + Math.round(remaining / 1000) + 's.');
+                    this.console.log('[AutoDodge] ' + this.t('ad_reconcile_reschedule_log', { town: entry.townName, label: entry.label, sec: Math.round(remaining / 1000) }));
                     const timeoutId = setTimeout(() => {
                         this._pendingRecalls.delete(recallKey);
                         this._removePendingRecall(recallKey);
@@ -553,7 +553,7 @@ var AutoDodge = class extends MultUtil {
             }
         } catch (e) {
             const msg = e && e.message ? e.message : e;
-            this.console.log('[AutoDodge] Erro ao reconciliar recalls pendentes: ' + msg);
+            this.console.log('[AutoDodge] ' + this.t('ad_reconcile_error', { msg }));
         }
     }
 
@@ -565,25 +565,25 @@ var AutoDodge = class extends MultUtil {
             arguments: { id: commandId },
         };
 
-        this.console.log('[AutoDodge] ' + townName + ' (' + label + '): chamando as tropas de volta (comando #' + commandId + ')...');
+        this.console.log('[AutoDodge] ' + this.t('ad_recall_calling_log', { town: townName, label, id: commandId }));
 
         this.ajaxPostWithTimeout('frontend_bridge', 'execute', data, 15000)
             .then((res) => {
-                this.console.log('[AutoDodge] Resposta do recall (' + label + '): ' + JSON.stringify(res));
+                this.console.log('[AutoDodge] ' + this.t('ad_recall_response_log', { label, res: JSON.stringify(res) }));
                 if (res && !res.error) {
-                    const msg = townName + ' (' + label + '): tropas retornando!';
+                    const msg = this.t('ad_recall_success_log', { town: townName, label });
                     this.console.log('[AutoDodge] ' + msg);
                     uw.$('#dodge_log').text(msg).css('color', '#1a6b2a');
                     if (uw.HumanMessage) {
                         uw.HumanMessage.success('MultBot: ' + townName + ' (' + label + ') - retornando!');
                     }
                 } else {
-                    this.console.log('[AutoDodge] Falha ao chamar de volta ' + townName + ' (' + label + '): ' + JSON.stringify(res));
-                    uw.$('#dodge_log').text('Falha no recall de ' + townName + ' (' + label + '). Traga manualmente.').css('color', '#f87171');
+                    this.console.log('[AutoDodge] ' + this.t('ad_recall_fail_log', { town: townName, label, res: JSON.stringify(res) }));
+                    uw.$('#dodge_log').text(this.t('ad_recall_fail_status', { town: townName, label })).css('color', '#f87171');
                 }
             })
             .catch((err) => {
-                this.console.log('[AutoDodge] Erro no recall de ' + townName + ' (' + label + '): ' + (err && err.message ? err.message : err));
+                this.console.log('[AutoDodge] ' + this.t('ad_recall_network_error', { town: townName, label, msg: (err && err.message ? err.message : err) }));
             });
     }
 

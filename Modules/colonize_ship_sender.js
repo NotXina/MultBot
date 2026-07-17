@@ -197,7 +197,12 @@ var ColonizeShipSender = class extends MultUtil {
                 colonize_ship: count
             };
             const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data);
-            if (res && res.success) return res;
+            // FIX: mesmo endpoint usado por auto_dodge.js e auto_attack.js
+            // (town_info/send_units) - ambos os modulos irmaos confirmam
+            // sucesso com "!res.error", a resposta NAO tem campo "success".
+            // O check antigo (res.success) nunca era verdadeiro -> todo
+            // envio bem-sucedido era logado como falha (css_send_error).
+            if (res && !res.error) return res;
             throw new Error(res?.error || 'Failed to send support');
         });
     }
