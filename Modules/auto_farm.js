@@ -399,7 +399,7 @@ var AutoFarm = class extends MultUtil {
     };
 
     /* Claim resources from multiple polis */
-    claimMultiple = async (base = 300, boost = 600) => {
+    claimMultiple = async (base = 600, boost = 600) => {
         const polis_list = this.generateList();
         const data = {
             towns: polis_list,
@@ -411,10 +411,14 @@ var AutoFarm = class extends MultUtil {
                claimLoadsMultiple): o payload nativo NAO tem
                nl_init - so tem os 4 campos acima + town_id (que
                a funcao ajaxRequest do jogo adiciona sozinha se nao
-               vier no objeto). Antes a gente estava ADIVINHANDO que
-               precisava de nl_init:true (nunca tinha sido confirmado
-               por captura especifica dessa chamada) - isso pode ter
-               sido a causa real do timeout de 45s. */
+               vier no objeto).
+               FIX MAIS IMPORTANTE: time_option_base/booty NAO
+               aceitam qualquer numero - sao um enum fixo, confirmado
+               via DOM (.fto_time_checkbox[data-option]): 600, 2400,
+               10800, 28800 (10min/40min/3h/8h). O valor antigo (300)
+               NUNCA foi valido - bem provavel causa real do timeout
+               de 45s (servidor recebendo um valor de enum invalido
+               e travando em vez de responder rapido com erro). */
             town_id: uw.ITowns.getCurrentTown().id,
         };
         try {
