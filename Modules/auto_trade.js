@@ -148,8 +148,16 @@ var AutoTrade = class extends MultUtil {
             town_id:  from_id,
             nl_init:  true,
         };
-        await this.ajaxPostWithTimeout('town_info', 'trade', data, 15000, true);
+        // FIX: o resultado nao era checado - um trade rejeitado pelo
+        // servidor (ex: capacidade mudou entre a checagem e o envio)
+        // era tratado como sucesso, e _sendBalance decrementava o
+        // "count" restante mesmo sem o recurso ter sido enviado de
+        // verdade. Agora propaga o erro - _trade() (chamador de
+        // _sendBalance) ja tem try/catch em volta dessa chamada e
+        // loga a falha sem decrementar o count.
+        const res = await this.ajaxPostWithTimeout('town_info', 'trade', data, 15000, true);
         await this.sleep(500);
+        if (res && res.error) throw new Error(res.error);
     };
 
     _sendBalance = async (from_id, target_id, troop, count) => {

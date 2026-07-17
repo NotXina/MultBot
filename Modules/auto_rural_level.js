@@ -106,8 +106,14 @@ var AutoRuralLevel = class extends MultUtil {
 
                         for (let relation of locked) {
                             if (farmtown.attributes.id != relation.attributes.farm_town_id) continue;
-                            await this.unlockRural(town_id, relation.attributes.farm_town_id, relation.id);
-                            this.console.log('[AutoRuralLevel] ' + this.t('arl_unlocked_log', { island: farmtown.attributes.island_xy, name: farmtown.attributes.name }));
+                            // FIX: resultado do POST nao era checado - um
+                            // desbloqueio rejeitado pelo servidor (killpoints
+                            // insuficientes numa corrida, etc) ainda logava
+                            // "desbloqueado" como se tivesse funcionado.
+                            const ok = await this.unlockRural(town_id, relation.attributes.farm_town_id, relation.id);
+                            if (ok) {
+                                this.console.log('[AutoRuralLevel] ' + this.t('arl_unlocked_log', { island: farmtown.attributes.island_xy, name: farmtown.attributes.name }));
+                            }
                             return;
                         }
                     }
@@ -138,8 +144,12 @@ var AutoRuralLevel = class extends MultUtil {
                                     continue;
                                 }
                                 if (relation.attributes.expansion_stage > level) continue;
-                                await this.upgradeRural(town_id, relation.attributes.farm_town_id, relation.attributes.id);
-                                this.console.log('[AutoRuralLevel] ' + this.t('arl_upgraded_log', { island: farmtown.attributes.island_xy, name: farmtown.attributes.name }));
+                                // FIX: mesma correcao - so loga sucesso se
+                                // o servidor de fato confirmou (sem res.error).
+                                const ok = await this.upgradeRural(town_id, relation.attributes.farm_town_id, relation.attributes.id);
+                                if (ok) {
+                                    this.console.log('[AutoRuralLevel] ' + this.t('arl_upgraded_log', { island: farmtown.attributes.island_xy, name: farmtown.attributes.name }));
+                                }
                                 return;
                             }
                         }
@@ -161,7 +171,7 @@ var AutoRuralLevel = class extends MultUtil {
     */
     unlockRural = async (town_id, farm_town_id, relation_id) => {
         try {
-            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
                 model_url: `FarmTownPlayerRelation/${relation_id}`,
                 action_name: 'unlock',
                 arguments: {
@@ -169,14 +179,20 @@ var AutoRuralLevel = class extends MultUtil {
                 },
                 town_id: town_id,
             });
+            if (res && res.error) {
+                this.console.log('[AutoRuralLevel] ' + this.t('arl_unlock_fail_log', { name: farm_town_id, island: town_id, reason: res.error }));
+                return false;
+            }
+            return true;
         } catch (e) {
             this.console.log('[AutoRuralLevel] ' + this.t('arl_unlock_error', { msg: e.message }));
+            return false;
         }
     };
 
     upgradeRural = async (town_id, farm_town_id, relation_id) => {
         try {
-            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
                 model_url: `FarmTownPlayerRelation/${relation_id}`,
                 action_name: 'upgrade',
                 arguments: {
@@ -184,8 +200,14 @@ var AutoRuralLevel = class extends MultUtil {
                 },
                 town_id: town_id,
             });
+            if (res && res.error) {
+                this.console.log('[AutoRuralLevel] ' + this.t('arl_upgrade_fail_log', { name: farm_town_id, island: town_id, reason: res.error }));
+                return false;
+            }
+            return true;
         } catch (e) {
             this.console.log('[AutoRuralLevel] ' + this.t('arl_upgrade_error', { msg: e.message }));
+            return false;
         }
     };
 };

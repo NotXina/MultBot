@@ -380,10 +380,19 @@ var AutoBuild = class extends MultUtil {
             arguments: { building_id: type },
             town_id: town_id,
         };
+        // FIX: antes retornava "true" (build bem-sucedido) INCONDICIONALMENTE,
+        // mesmo no ramo "else" (res.error) e no catch - getNextBuild usava
+        // esse retorno pra incrementar seu contador local "current[build]",
+        // entao uma construcao rejeitada pelo servidor (requisitos, fila
+        // cheia numa corrida, etc) era contada como concluida dentro do
+        // mesmo ciclo, fazendo o bot pular a proxima tentativa achando que
+        // a meta ja tinha sido atingida.
+        let ok = false;
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
             if (res && !res.error) {
                 this.console.log('[AutoBuild] ' + this.t('ab_build_up_log', { town: town.getName(), building: this.getGameName('building', type) }));
+                ok = true;
             } else {
                 this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: res?.error ?? JSON.stringify(res) }));
             }
@@ -391,7 +400,7 @@ var AutoBuild = class extends MultUtil {
             this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: e?.message ?? e }));
         }
         await this.sleep(1234);
-        return true;
+        return ok;
     };
     /* Make post request to tear building down */
     postTearDown = async (type, town_id, town) => {
@@ -401,10 +410,15 @@ var AutoBuild = class extends MultUtil {
             arguments: { building_id: type },
             town_id: town_id,
         };
+        // FIX: mesma correcao do postBuild - agora retorna se a
+        // demolicao foi realmente confirmada pelo servidor, em vez de
+        // getNextBuild decrementar current[build] incondicionalmente.
+        let ok = false;
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
             if (res && !res.error) {
                 this.console.log(this.t('ab_build_down_log', { town: town.getName(), building: this.getGameName('building', type) }));
+                ok = true;
             } else {
                 this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: res?.error ?? JSON.stringify(res) }));
             }
@@ -412,6 +426,7 @@ var AutoBuild = class extends MultUtil {
             this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: e?.message ?? e }));
         }
         await this.sleep(1234);
+        return ok;
     };
     /* return true if the quee is full */
     isFullQueue = town_id => {
@@ -455,8 +470,8 @@ var AutoBuild = class extends MultUtil {
                 const built = await this.postBuild(build, town_id);
                 if (built) current[build] += 1;
             } else if (target[build] < current[build]) {
-                await this.postTearDown(build, town_id, town);
-                current[build] -= 1;
+                const torn = await this.postTearDown(build, town_id, town);
+                if (torn) current[build] -= 1;
             }
         }
     };

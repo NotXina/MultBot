@@ -58,7 +58,10 @@ var AutoRuralTrade = class extends MultUtil {
 	main = async resouce => {
 		if (resouce) {
 			/* Set button disabled */
-			[1, 2, 3, 4].forEach(i => {
+			// FIX: so existem 3 botoes renderizados (autotrade_lvl_1/2/3 ->
+			// iron/stone/wood) - o "4" era um seletor morto (nao dava erro,
+			// so nao fazia nada; jQuery nao reclama de selecao vazia).
+			[1, 2, 3].forEach(i => {
 				uw.$(`#autotrade_lvl_${i}`).addClass('disabled').css('cursor', 'auto');
 			});
 			this.trade_resouce = resouce;
@@ -81,7 +84,7 @@ var AutoRuralTrade = class extends MultUtil {
 
 			/* Re-enable buttons and set progress to 0 */
 			uw.$('#res_progress_bar').css('width', 0);
-			[1, 2, 3, 4].forEach(i => {
+			[1, 2, 3].forEach(i => {
 				uw.$(`#autotrade_lvl_${i}`).removeClass('disabled').css('cursor', 'pointer');
 			});
 		}
@@ -140,12 +143,18 @@ var AutoRuralTrade = class extends MultUtil {
 	tradeRuralPost = async (farm_town_id, relation_id, count, town_id) => {
 		if (count < 100) return;
 		try {
-			await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
+			const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
 				model_url: `FarmTownPlayerRelation/${relation_id}`,
 				action_name: 'trade',
 				arguments: { farm_town_id: farm_town_id, amount: count > 3000 ? 3000 : count },
 				town_id: town_id,
 			});
+			// FIX: resposta nao era checada - uma troca rejeitada pelo
+			// servidor (ex: ratio mudou, aldeia parou de aceitar) passava
+			// batido sem log nenhum, parecendo sucesso silencioso.
+			if (res && res.error) {
+				this.console.log('[AutoRuralTrade] ' + this.t('artr_trade_error', { msg: res.error }));
+			}
 		} catch (e) {
 			this.console.log('[AutoRuralTrade] ' + this.t('artr_trade_error', { msg: e.message }));
 		}

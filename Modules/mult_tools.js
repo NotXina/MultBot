@@ -30,7 +30,7 @@ var MultTools = class extends MultUtil {
                         ${this.getButtonHtml('mult_preset_btn', '⚡ ' + this.t('apply'), this.applyPreset)}
                     </div>
                     <div style="padding:5px;">
-                        <p style="margin:0 0 4px;font-size:11px;font-weight:bold;">Colonize Ships</p>
+                        <p style="margin:0 0 4px;font-size:11px;font-weight:bold;">${this.t('mt_colonize_label')}</p>
                         <p style="margin:0 0 6px;font-size:11px;color:#888;">${this.t('mt_colonize_desc')}</p>
                         ${this.getButtonHtml('mult_naval_btn', '⚓ ' + this.t('apply'), this.applyNavalPreset)}
                     </div>

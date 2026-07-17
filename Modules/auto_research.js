@@ -129,6 +129,14 @@ var AutoResearch = class extends MultUtil {
 
     async _tick() {
         if (window.__multbot_captcha_active) return;
+        // FIX: _failedThisCycle nunca era limpo em lugar nenhum - o nome
+        // ("ThisCycle") indica escopo de UM ciclo, mas na pratica uma
+        // pesquisa que falhasse uma vez (rejeicao pontual do servidor,
+        // corrida de requisitos) ficava bloqueada pra SEMPRE naquela
+        // cidade pelo resto da sessao do navegador, nunca mais tentada
+        // de novo mesmo em ciclos seguintes. Limpa no inicio de cada
+        // tick pra a blacklist valer so dentro do ciclo atual.
+        this._failedThisCycle.clear();
         const townIds = Object.keys(uw.ITowns.towns);
         let count = 0;
 

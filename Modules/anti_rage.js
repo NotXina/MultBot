@@ -253,7 +253,16 @@ var AntiRage = class extends MultUtil {
 			this.loop_funct = setInterval(this.clicker, 1000, el);
 			return;
 		}
-		el.click();
+		// FIX: sem try/catch aqui, um erro no click() (ex: elemento ficou
+		// desconectado da DOM entre a checagem acima e o click de fato)
+		// virava um erro nao tratado no console do navegador em vez de um
+		// log limpo do bot - nao quebrava o loop (setInterval continua
+		// mesmo apos erro no callback), mas poluia o console sem contexto.
+		try {
+			el.click();
+		} catch (e) {
+			this.console.log('[AntiRage] Erro ao clicar: ' + (e?.message ?? e));
+		}
 		let delta_time = 500;
 		let rand = 500 + Math.floor(Math.random() * delta_time);
 		clearInterval(this.loop_funct);

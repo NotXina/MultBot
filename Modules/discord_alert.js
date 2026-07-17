@@ -161,8 +161,14 @@ var DiscordAlert = class extends MultUtil {
             for (const atk of attacks) {
                 const id = String(atk.id);
                 if (this._notifiedIds.has(id)) continue;
-                this._notifiedIds.add(id);
-                await this._sendAlert(atk);
+                // FIX: so marca como notificado DEPOIS de confirmar que o
+                // webhook foi entregue - antes o id entrava no Set ANTES do
+                // await, entao uma falha de rede/webhook (Discord fora do
+                // ar, URL invalida) fazia esse ataque nunca mais ser
+                // re-tentado nos ciclos seguintes, mesmo sem alerta nenhum
+                // ter realmente chegado.
+                const sent = await this._sendAlert(atk);
+                if (sent) this._notifiedIds.add(id);
             }
         } catch (e) {
             this.console.log('[DiscordAlert] ' + this.t('da_tick_error', { msg: e?.message ?? e }));
@@ -260,11 +266,14 @@ var DiscordAlert = class extends MultUtil {
 
             if (res.ok) {
                 this.console.log('[DiscordAlert] ' + this.t('da_alert_sent_log', { town: townName }));
+                return true;
             } else {
                 this.console.log('[DiscordAlert] ' + this.t('da_alert_fail_log', { town: townName, status: res.status }));
+                return false;
             }
         } catch (e) {
             this.console.log('[DiscordAlert] ' + this.t('da_alert_error_log', { msg: e?.message ?? e }));
+            return false;
         }
     }
 };

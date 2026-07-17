@@ -395,7 +395,13 @@ var AutoFarm = class extends MultUtil {
             town_id: town_id,
         };
         try {
-            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+            // FIX: resposta nao era checada - uma coleta rejeitada pelo
+            // servidor (ex: recompensa ja coletada por outra aba/corrida)
+            // passava batido sem log nenhum, parecendo sucesso silencioso.
+            if (res && res.error) {
+                this.console.log('[AutoFarm] Falha ao coletar rural: ' + res.error);
+            }
         } catch (e) {
             this.console.log('[AutoFarm] Erro ao coletar rural: ' + (e?.message ?? e));
         }
@@ -416,7 +422,10 @@ var AutoFarm = class extends MultUtil {
             claim_factor: 'normal',
         };
         try {
-            await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data, 45000);
+            const res = await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data, 45000);
+            if (res && res.error) {
+                this.console.log('[AutoFarm] Falha em claimMultiple: ' + res.error);
+            }
         } catch (e) {
             this.console.log('[AutoFarm] Erro em claimMultiple: ' + (e?.message ?? e));
             throw e;
