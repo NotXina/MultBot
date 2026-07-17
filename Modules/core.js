@@ -1497,6 +1497,16 @@ var MultUtil = class {
        handler nativo do jogo pra abrir a janela de recrutas de
        verdade. Agora cada chamador passa um id proprio, unico. */
     createPopup = (id, left, width, height, $content) => {
+        // FIX (diagnosticado ao vivo via elementFromPoint): o popup nao
+        // tinha z-index nenhum, entao ficava pintado ATRAS do mapa do
+        // jogo (#index_map_image) - existia no DOM, opacity:1,
+        // visibility:visible, mas invisivel pro usuario porque o mapa
+        // desenhava por cima. Antes isso ficava mascarado pelo bug do
+        // id duplicado (ver acima) que abria a janela nativa de
+        // recrutas por engano, dando a falsa impressao de que "algo
+        // abria" ao clicar. z-index alto o suficiente pra ficar acima
+        // do mapa, mas sem exagerar (evita cobrir modais/dialogos
+        // nativos do jogo que devem ficar por cima de tudo).
         const $box = uw.$('<div class="sandy-box js-dropdown-list"></div>').attr('id', id).css({
             "left": `${left}px`,
             "position": "absolute",
@@ -1505,6 +1515,7 @@ var MultUtil = class {
             "top": "29px",
             "margin-left": "0px",
             "display": "none",
+            "z-index": 500,
         });
 
         const $corner_tl = uw.$('<div class="corner_tl"></div>');
