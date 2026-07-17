@@ -45,7 +45,12 @@ var AutoFarm = class extends MultUtil {
         this.$guiOff = this.createButton("mult_farm_gui_off", "OFF", this.toggleGui)
         this.$content.append(this.$gui, this.$guiOn, this.$guiOff)
 
-        this.$popup = this.createPopup(423, 250, 170, this.$content)
+        // PDCA: id proprio e unico (era o id compartilhado/hardcoded
+        // "toolbar_activity_recruits_list" dentro de createPopup em
+        // core.js - risco de colidir com um elemento nativo do jogo de
+        // mesmo id, fazendo o clique no ON/OFF abrir a janela nativa de
+        // recrutas por engano). Ver createPopup em core.js.
+        this.$popup = this.createPopup('multbot_autofarm_popup', 423, 250, 170, this.$content)
         this.dropdown_active = false
 
         // Open and close the dropdown with the mouse
@@ -358,7 +363,7 @@ var AutoFarm = class extends MultUtil {
             // Check that the timer is not too high
             const next_collection = this.getNextCollection();
             if (next_collection && (this.timer > next_collection + 60 * 1_000 || this.timer < next_collection)) {
-                this.timer = next_collection + Math.floor(Math.random() * 20_000) + 10_000;
+                this.timer = next_collection + Math.floor(Math.random() * 40_000) + 10_000; // PDCA: 10-30s -> 10-50s (pedido explicito - comportamento humano)
             }
 
             // Claim resources when timer has passed
@@ -374,7 +379,7 @@ var AutoFarm = class extends MultUtil {
                 this.active = this.createGuardedInterval(this.main, 5000);
 
                 // Set the new timer 
-                const rand = Math.floor(Math.random() * 20_000) + 10_000;
+                const rand = Math.floor(Math.random() * 40_000) + 10_000; // PDCA: 10-30s -> 10-50s (pedido explicito - comportamento humano)
                 this.timer = this.timing + rand;
                 if (this.timer < next_collection) this.timer = next_collection + rand;
             }
