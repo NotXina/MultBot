@@ -406,12 +406,16 @@ var AutoFarm = class extends MultUtil {
             time_option_base: base,
             time_option_booty: boost,
             claim_factor: 'normal',
-            /* Somado (mesmo padrão confirmado por captura nas outras 2
-               chamadas dessa janela - fakeOpening/fakeSelectAll). Ainda
-               não temos captura da chamada de claim em si, mas town_id +
-               nl_init:true parecem ser exigidos em toda a sequência. */
+            /* Confirmado agora via codigo fonte real do jogo
+               (wndhandler_farm_town_overviews.js, funcao
+               claimLoadsMultiple): o payload nativo NAO tem
+               nl_init - so tem os 4 campos acima + town_id (que
+               a funcao ajaxRequest do jogo adiciona sozinha se nao
+               vier no objeto). Antes a gente estava ADIVINHANDO que
+               precisava de nl_init:true (nunca tinha sido confirmado
+               por captura especifica dessa chamada) - isso pode ter
+               sido a causa real do timeout de 45s. */
             town_id: uw.ITowns.getCurrentTown().id,
-            nl_init: true,
         };
         try {
             /* Timeout aumentado de 15s (default) pra 45s: esse endpoint
