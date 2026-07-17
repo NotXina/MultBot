@@ -241,17 +241,29 @@ var AutoFarm = class extends MultUtil {
 
     claim = async () => {
         const isCaptainActive = uw.GameDataPremium.isAdvisorActivated('captain');
-        const polis_list = this.generateList();
 
-        /* Confirmado funcionar (17/07) por comparacao com um script de
-           terceiros de confianca: chama claim_loads_multiple DIRETO,
-           sem nenhuma etapa de simular abertura de janela antes (nem
-           fakeOpening, nem fakeSelectAll). O payload tambem e minimo -
-           sem town_id, sem nl_init. Se ainda assim falhar, cai pro
-           modo GUI (abre a janela de verdade) como fallback. */
-        if (isCaptainActive) {
+        if (isCaptainActive && !this.gui) {
+            /* Caminho rapido sem interface: fakeOpening -> espera humana
+               -> fakeSelectAll -> espera humana -> claimMultiple (base/
+               boost escolhidos pela duracao configurada) -> fakeUpdate.
+               Payloads simplificados (sem town_id/nl_init em nenhuma
+               das chamadas), confirmado funcionar contra referencia de
+               confianca. Se falhar em qualquer etapa, cai pro modo GUI
+               (abre a janela de verdade) como fallback. */
             try {
-                await this.claimMultiple();
+                await this.fakeOpening();
+                await this.sleep(2000, 500);
+                await this.fakeSelectAll();
+                await this.sleep(2000, 500);
+
+                if (this.timing <= 600_000) {
+                    await this.claimMultiple(300, 600);
+                } else {
+                    await this.claimMultiple(1200, 2400);
+                }
+
+                await this.fakeUpdate();
+                setTimeout(() => uw.WMap.removeFarmTownLootCooldownIconAndRefreshLootTimers(), 2000);
                 return;
             } catch (e) {
                 this.console.log('[AutoFarm] Caminho AJAX direto falhou (' + (e?.message ?? e) + '), tentando via GUI (abre a janela)...');
@@ -262,11 +274,18 @@ var AutoFarm = class extends MultUtil {
                     this.console.log('[AutoFarm] Caminho do Captain (GUI) também falhou (' + (e2?.message ?? e2) + '), usando coleta individual como alternativa.');
                 }
             }
+        } else if (isCaptainActive && this.gui) {
+            try {
+                await this.fakeGuiUpdate();
+                return;
+            } catch (e) {
+                this.console.log('[AutoFarm] Modo GUI falhou (' + (e?.message ?? e) + '), usando coleta individual como alternativa.');
+            }
         }
 
-        // Se o Captain nao esta ativo (ou os dois caminhos acima
-        // falharam), coleta as resources uma por uma, respeitando o
-        // limite por ciclo.
+        // Se o Captain nao esta ativo (ou os caminhos acima falharam),
+        // coleta as resources uma por uma, respeitando o limite por ciclo.
+        const polis_list = this.generateList();
         await this._claimOneByOne(polis_list);
     };
 
@@ -407,17 +426,12 @@ var AutoFarm = class extends MultUtil {
     /* Pretend that the window it's opening */
     fakeOpening = async () => {
         try {
-            /* Confirmado via captura real de rede: a chamada nativa de
-               'index' manda {town_id, nl_init:true}. TENTATIVA NOVA:
-               delay entre chamadas aumentado de 10ms pra ~1.2s (mais
-               proximo do tempo real entre cliques humanos) - suspeita
-               de que o servidor precisa de um tempo minimo pra
-               "assentar" o estado da janela entre um passo e outro,
-               ja que o payload em si ja foi confirmado correto antes
-               e mesmo assim travava com timeout. */
-            const town_id = uw.ITowns.getCurrentTown().id;
-            await this.ajaxGetWithTimeout('farm_town_overviews', 'index', { town_id: town_id, nl_init: true });
-            await this.sleep(1200, 150);
+            /* Simplificado pra bater com referencia de confianca:
+               payload vazio {} - sem town_id/nl_init, que eram
+               suposicoes nossas nunca de fato confirmadas como
+               necessarias pra essa chamada especifica. */
+            await this.ajaxGetWithTimeout('farm_town_overviews', 'index', {});
+            await this.sleep(10);
             await this.fakeUpdate();
         } catch (e) {
             this.console.log('[AutoFarm] Erro em fakeOpening: ' + (e?.message ?? e));
@@ -427,12 +441,10 @@ var AutoFarm = class extends MultUtil {
 
     /* Fake the user selecting the list */
     fakeSelectAll = async () => {
-        /* Confirmado via captura real de rede: faltavam town_id (cidade
-           atual) e nl_init:true - mandavamos só town_ids antes. */
+        /* Simplificado pra bater com referencia de confianca: so
+           town_ids - sem town_id/nl_init inventados. */
         const data = {
             town_ids: this.polis_list,
-            town_id: uw.ITowns.getCurrentTown().id,
-            nl_init: true,
         };
         try {
             await this.ajaxGetWithTimeout('farm_town_overviews', 'get_farm_towns_from_multiple_towns', data);
@@ -447,6 +459,8 @@ var AutoFarm = class extends MultUtil {
         const town = uw.ITowns.getCurrentTown();
         const { attributes: booty } = town.getResearches();
         const { attributes: trade_office } = town.getBuildings();
+        /* Simplificado pra bater com referencia de confianca - sem
+           town_id/nl_init inventados. */
         const data = {
             island_x: town.getIslandCoordinateX(),
             island_y: town.getIslandCoordinateY(),
@@ -454,12 +468,6 @@ var AutoFarm = class extends MultUtil {
             booty_researched: booty ? 1 : 0,
             diplomacy_researched: '',
             trade_office: trade_office ? 1 : 0,
-            /* Somado (não confirmado por captura específica desta chamada,
-               mas presente nas outras 2 chamadas da mesma janela que já
-               capturamos - town_id + nl_init:true parecem ser um padrão
-               comum a toda a sequência do farm_town_overviews). */
-            town_id: town.id,
-            nl_init: true,
         };
         try {
             await this.ajaxGetWithTimeout('farm_town_overviews', 'get_farm_towns_for_town', data);
