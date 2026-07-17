@@ -119,14 +119,6 @@ var Sniper = class extends MultUtil {
             const today = new Date();
             const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
 
-            const closest = this._getClosestOwnTowns(windowEl, 5);
-            const closestHtml = closest.length
-                ? closest.map((t, i) => `<div style="display:flex;justify-content:space-between;padding:2px 0;">
-                    <span>${i + 1}. ${t.name}</span>
-                    <span style="color:#8a7a5a;">${this.t('sniper_distance_units', { dist: t.dist.toFixed(1) })}</span>
-                   </div>`).join('')
-                : `<div style="color:#8a7a5a;">${this.t('sniper_no_closest_found')}</div>`;
-
             const panelId = 'mult_sniper_panel_' + targetId;
             const panel = document.createElement('div');
             panel.className = 'mult_sniper_panel';
@@ -146,14 +138,6 @@ var Sniper = class extends MultUtil {
                     </div>
                 </div>
                 <div class="mult_sniper_status" style="font-size:10.5px;margin-top:5px;color:#5a3a0a;"></div>
-                <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(150,110,50,0.3);">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-                        <div style="font-weight:bold;font-size:10.5px;color:#5a3a0a;">📍 ${this.t('sniper_closest_title')}</div>
-                        <span class="mult_sniper_refresh_closest" style="cursor:pointer;font-size:10px;color:#4a6fa5;text-decoration:underline;">🔄 ${this.t('sniper_refresh_btn')}</span>
-                    </div>
-                    <div class="mult_sniper_closest_list" style="font-size:10.5px;color:#3a2a0a;display:flex;flex-wrap:wrap;gap:2px 16px;">${closestHtml}</div>
-                    <div style="font-size:9.5px;color:#9a8a6a;margin-top:2px;">${this.t('sniper_closest_hint')}</div>
-                </div>
             `;
 
             // Insere no FINAL da janela inteira (largura total), nao numa
@@ -164,24 +148,9 @@ var Sniper = class extends MultUtil {
             panel.querySelector('.button_new').addEventListener('click', (ev) => {
                 this._onScheduleClick(windowEl, targetId, panel);
             });
-
-            panel.querySelector('.mult_sniper_refresh_closest').addEventListener('click', () => {
-                this._refreshClosestList(windowEl, panel);
-            });
         } catch (e) {
             this.console.log('[Sniper] ' + this.t('sniper_inject_error', { msg: e?.message ?? e }));
         }
-    }
-
-    _refreshClosestList(windowEl, panel) {
-        const closest = this._getClosestOwnTowns(windowEl, 5);
-        const closestHtml = closest.length
-            ? closest.map((t, i) => `<div style="display:flex;justify-content:space-between;padding:2px 0;">
-                <span>${i + 1}. ${t.name}</span>
-                <span style="color:#8a7a5a;">${this.t('sniper_distance_units', { dist: t.dist.toFixed(1) })}</span>
-               </div>`).join('')
-            : `<div style="color:#8a7a5a;">${this.t('sniper_no_closest_found')}</div>`;
-        panel.querySelector('.mult_sniper_closest_list').innerHTML = closestHtml;
     }
 
     /* Generico: entre todos os elementos que baterem com o
@@ -207,55 +176,6 @@ var Sniper = class extends MultUtil {
        ler "attack" mesmo com a aba Apoiar selecionada). */
     _getActiveForm(windowEl) {
         return this._getVisibleEl(windowEl, '.send_units_form');
-    }
-
-    /* FIX: as tentativas anteriores via MM.getModels().Town (so tem
-       as proprias 5 cidades do jogador) e MapChunks (nao guarda
-       coordenadas nesse formato) nao funcionavam pra cidades de
-       OUTROS jogadores. A aba "Informacao" da propria janela de
-       ataque/apoio mostra "Oceano: NN (X,Y)" em texto visivel -
-       le esse texto direto do DOM, sem depender de estrutura
-       interna nenhuma. Só funciona se a aba Informacao ja tiver
-       sido renderizada nessa janela em algum momento (pode nao
-       estar presente se o jogador nunca clicou nela). */
-    _getTargetCoordsFromWindow(windowEl) {
-        try {
-            /* FIX: innerText so pega texto de elementos VISIVEIS (respeita
-               CSS/display:none) - quando a aba "Informacao" fica escondida
-               de novo (voce volta pra aba Atacar), innerText do windowEl
-               INTEIRO ignora esse texto, mesmo que ele continue no DOM.
-               textContent nao tem esse problema - pega o texto de
-               QUALQUER elemento, visivel ou nao. Esse era o motivo real
-               de "nao funcionou" mesmo depois de clicar em Informacao. */
-            const text = windowEl.textContent || windowEl.innerText || '';
-            const match = text.match(/\((\d{2,4})\s*,\s*(\d{2,4})\)/);
-            if (match) return { x: parseInt(match[1], 10), y: parseInt(match[2], 10) };
-        } catch (e) {}
-        return null;
-    }
-
-    /* Distancia em coordenadas de ilha (unidade relativa, NAO e
-       "campos" exatos de viagem - serve so pra RANKING/ordenacao
-       entre as proprias cidades, nao pra calcular tempo). O tempo
-       de viagem real continua vindo do way_duration lido da tela,
-       depois que voce escolhe a cidade e abre o ataque de la. */
-    _getClosestOwnTowns(windowEl, limit = 5) {
-        try {
-            const targetCoords = this._getTargetCoordsFromWindow(windowEl);
-            if (!targetCoords) return [];
-
-            const ownTowns = Object.values(uw.ITowns.towns).map(t => {
-                const x = t.getIslandCoordinateX();
-                const y = t.getIslandCoordinateY();
-                const dist = Math.sqrt(Math.pow(x - targetCoords.x, 2) + Math.pow(y - targetCoords.y, 2));
-                return { id: t.id, name: t.getName(), dist };
-            });
-
-            ownTowns.sort((a, b) => a.dist - b.dist);
-            return ownTowns.slice(0, limit);
-        } catch (e) {
-            return [];
-        }
     }
 
     _onScheduleClick(windowEl, targetId, panel) {
