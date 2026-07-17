@@ -374,11 +374,6 @@ var Sniper = class extends MultUtil {
         this._renderList();
     }
 
-    /* Confirmado via captura real: cancelar um envio usa
-       frontend_bridge/execute com model_url:"Commands",
-       action_name:"cancelCommand", arguments:{id:<command_id>}. So
-       funciona por um tempo curto depois do envio (o campo
-       cancelable_until do movimento diz ate quando). */
     /* Confirmado via captura real de rede: cancelar usa command_info
        (controller) / cancel_command (action), payload direto
        {id, town_id, nl_init} - NAO e frontend_bridge/execute com
@@ -422,11 +417,6 @@ var Sniper = class extends MultUtil {
         return ids;
     }
 
-    /* Acha o comando NOVO que apareceu depois do envio (nao estava no
-       conjunto "antes"). Aumentado de 6 tentativas (~1.8s) pra 15
-       tentativas (~6s) com espera maior - o movimento pode demorar
-       mais que o esperado inicialmente pra aparecer na collection
-       local depois do envio. */
     /* Acha o comando NOVO que apareceu depois do envio (nao estava no
        conjunto "antes"). Reduzido de 15 tentativas/400ms (ate 6s) pra
        8 tentativas/200ms (ate 1.6s) - a busca longa estava consumindo
@@ -473,23 +463,6 @@ var Sniper = class extends MultUtil {
 
         const command = await this._findNewCommand(snipe.originTownId, snipe.targetId, existingIds);
         return { ok: true, command };
-    }
-
-    /* Tenta ate 10 vezes: envia, confere o horario REAL de chegada
-       (que o proprio jogo calculou pro comando resultante) contra o
-       desejado, e se nao bater dentro de 1 segundo de tolerancia -
-       E ainda der tempo e tentativas - cancela e tenta de novo.
-       Pedido explicitamente: imitar tentativa humana repetida ate
-       acertar o segundo exato, em vez de confiar cegamente no
-       primeiro envio. */
-    /* Faixa aceitavel por tipo de comando (assimetrica, nao +/- igual):
-       - Ataque: nunca atrasado (perderia a janela certa) - aceita de
-         1s adiantado ate exatamente no horario (min:-1, max:0).
-       - Apoio: nunca adiantado (nao ajuda em nada chegar cedo) -
-         aceita do horario exato ate 2s atrasado (min:0, max:2). */
-    _getToleranceRange(type) {
-        if (type === 'support') return { min: 0, max: 2 };
-        return { min: -1, max: 0 }; // attack (padrao)
     }
 
     /* Tenta ate MAX_ATTEMPTS vezes: envia, confere o horario REAL de
