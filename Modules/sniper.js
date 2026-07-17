@@ -276,16 +276,20 @@ var Sniper = class extends MultUtil {
        contra uma captura real - o preview no console (compSummary
        acima) existe justamente pra conferir visualmente antes de
        confiar no agendamento. */
+    /* CONFIRMADO via codigo fonte real do jogo
+       (WndHandlerAttack.prototype.getSelectedUnits): o seletor certo
+       e "input.unit_input" - cada input tem .name (id da unidade) e
+       .value (quantidade). Antes isso era uma tentativa adivinhada
+       (3 seletores diferentes, nenhum confirmado). */
     _readComposition(windowEl) {
         const composition = {};
         try {
-            const allUnitIds = Object.keys(uw.GameData.units);
-            for (const unitId of allUnitIds) {
-                const input = windowEl.querySelector(`input[name="${unitId}"], #unit_id_wrap_${unitId} input, [data-unit="${unitId}"] input`);
-                if (!input) continue;
+            const inputs = windowEl.querySelectorAll('input.unit_input');
+            inputs.forEach((input) => {
+                const name = input.name;
                 const val = parseInt(input.value, 10);
-                if (val > 0) composition[unitId] = val;
-            }
+                if (name && val > 0) composition[name] = val;
+            });
         } catch (e) {
             this.console.log('[Sniper] ' + this.t('sniper_read_composition_error', { msg: e?.message ?? e }));
         }
