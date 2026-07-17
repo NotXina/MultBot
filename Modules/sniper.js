@@ -441,7 +441,12 @@ var Sniper = class extends MultUtil {
        fechar), fazendo o retry desistir na primeira tentativa mesmo
        quando ainda daria tempo de corrigir. */
     async _findNewCommand(originId, targetId, existingIds) {
-        for (let attempt = 0; attempt < 8; attempt++) {
+        // FIX (pedido explicito): reagir mais rapido a cada tentativa -
+        // reduzido de 8x200ms (1.6s max) pra 16x100ms (1.6s max, mesmo
+        // teto, mas detecta o comando novo em media 2x mais rapido) -
+        // sobra mais tempo de verdade pro reenvio corrigido quando da
+        // pra tentar de novo.
+        for (let attempt = 0; attempt < 16; attempt++) {
             try {
                 const models = uw.MM.getModels().MovementsUnits;
                 for (const key in models) {
@@ -454,7 +459,7 @@ var Sniper = class extends MultUtil {
                     return mv;
                 }
             } catch (e) {}
-            await this.sleep(200);
+            await this.sleep(100);
         }
         return null;
     }
@@ -504,6 +509,9 @@ var Sniper = class extends MultUtil {
        poucos, nao na hora) - poll a cada 500ms, ate maxWaitMs ou ate
        ficar pronto, o que vier primeiro. */
     async _waitForTroopsAvailable(snipe, maxWaitMs) {
+        // FIX (pedido explicito): poll de 500ms -> 200ms, pra detectar o
+        // retorno das tropas mais rapido e sobrar mais tempo real pro
+        // reenvio corrigido.
         const start = Date.now();
         while (Date.now() - start < maxWaitMs) {
             try {
@@ -514,7 +522,7 @@ var Sniper = class extends MultUtil {
                 );
                 if (ready) return true;
             } catch (e) {}
-            await this.sleep(500);
+            await this.sleep(200);
         }
         return false;
     }
@@ -560,17 +568,35 @@ var Sniper = class extends MultUtil {
                     return;
                 }
 
-                // Nao bateu - checa se ainda vale a pena cancelar e tentar
-                // de novo: precisa ainda ser cancelavel, e precisa sobrar
-                // tempo suficiente pra (1) as tropas voltarem e (2) viajar
-                // de novo ate o alvo antes do horario desejado.
-                // FIX: usa a duracao de viagem OBSERVADA nesse proprio
-                // envio (arrival_at real menos agora), nao mais a
-                // estimativa original do way_duration - se a viagem real
-                // for mais rapida que a estimada (diff negativo, chegou
-                // adiantado), usar a estimativa antiga (mais lenta) fazia
-                // a conta dar negativa e desistir na hora, mesmo sobrando
-                // tempo de verdade.
+                // FIX (pedido explicito): se chegou DEPOIS do horario
+                // desejado (diffSeconds > toleranceMax), desiste na hora -
+                // nao tenta de novo. Motivo estrutural: so descobrimos que
+                // chegou atrasado DEPOIS que a chegada real ja aconteceu,
+                // ou seja, o horario desejado (snipe.arrivalAt) ja ficou no
+                // passado no momento em que estamos avaliando esse
+                // resultado. Reenviar nao pode "voltar no tempo" - qualquer
+                // novo envio vai necessariamente chegar ainda mais tarde
+                // (cancelar + esperar tropas + reenviar consome mais tempo
+                // real). So vale tentar de novo quando chegou ADIANTADO
+                // (diffSeconds < toleranceMin) - nesse caso o horario
+                // desejado ainda esta no futuro e da pra mirar certo.
+                if (diffSeconds > toleranceMax) {
+                    snipe.status = 'sent';
+                    const msg = this.t('sniper_fired_ok_imprecise', { target: snipe.targetName, diff: diffSeconds, attempts: attempt, reason: this.t('sniper_reason_late_no_retry') });
+                    this.console.log('[Sniper] ' + msg);
+                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
+                    return;
+                }
+
+                // Chegou ADIANTADO (diffSeconds < toleranceMin) - ainda da
+                // tempo de corrigir. Checa se ainda vale a pena cancelar e
+                // tentar de novo: precisa ainda ser cancelavel, e precisa
+                // sobrar tempo suficiente pra (1) as tropas voltarem e (2)
+                // viajar de novo ate o alvo antes do horario desejado.
+                // observedTravelMs: duracao de viagem OBSERVADA nesse
+                // proprio envio (arrival_at real menos agora) - mais
+                // confiavel que a estimativa original do way_duration, que
+                // foi exatamente o que errou a conta da primeira vez.
                 const cancelableUntil = result.command.cancelable_until;
                 const canCancel = cancelableUntil && (Date.now() / 1000) < cancelableUntil;
                 const observedTravelMs = Math.max(0, (actualArrivalSec * 1000) - Date.now());
@@ -580,7 +606,7 @@ var Sniper = class extends MultUtil {
                 if (attempt === MAX_ATTEMPTS || !canCancel || maxWaitForTroopsMs < 500) {
                     // DIAGNOSTICO: antes essa mensagem sempre dizia o mesmo
                     // texto generico ("ran out of time/attempts/cancel
-                    // window"), sem dizer QUAL dos 3 motivos foi. Agora
+                    // window"), sem dizer QUAL dos motivos foi. Agora
                     // aponta o motivo exato, pra nao precisar adivinhar na
                     // proxima vez que isso acontecer.
                     let reasonKey;
@@ -609,6 +635,25 @@ var Sniper = class extends MultUtil {
                     snipe.error = this.t('sniper_troops_not_back_error');
                     this.console.log('[Sniper] ' + this.t('sniper_fired_fail', { target: snipe.targetName, reason: snipe.error }));
                     return;
+                }
+
+                // FIX PRINCIPAL (pedido explicito - "ainda estamos errando
+                // o tempo"): antes, assim que as tropas voltavam, o proximo
+                // envio disparava NA HORA (via o topo do proximo loop),
+                // sem nenhuma correcao - reenviava exatamente no mesmo
+                // "erro" da tentativa anterior, so que mais tarde ainda
+                // (porque cancelar+esperar tropas consome tempo real). Essa
+                // e provavelmente a causa principal do sniper errar o
+                // horario de forma consistente. Agora, com a duracao de
+                // viagem REAL observada (nao mais a estimativa original),
+                // calcula o momento exato de disparo pra essa tentativa e
+                // ESPERA ate la antes de reenviar - mesma logica usada no
+                // agendamento original (_onScheduleClick), so que com o
+                // dado real em vez do estimado.
+                const correctedSendAt = snipe.arrivalAt - observedTravelMs - this.EARLY_MARGIN_MS;
+                const waitForCorrectSendMs = correctedSendAt - Date.now();
+                if (waitForCorrectSendMs > 0) {
+                    await this.sleep(waitForCorrectSendMs);
                 }
             } catch (e) {
                 snipe.status = 'failed';
