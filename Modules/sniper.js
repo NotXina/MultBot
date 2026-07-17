@@ -547,6 +547,28 @@ var Sniper = class extends MultUtil {
                     return;
                 }
 
+                // IMPORTANTE: so cancela se ainda tiver tropa suficiente
+                // pra reenviar a MESMA composicao. Cancelar nao devolve as
+                // tropas na hora - elas ficam "voltando" por um tempo, e um
+                // reenvio imediato com a mesma composicao vai falhar (nao
+                // tem tropa disponivel), deixando a gente SEM NENHUM ataque
+                // de verdade (pior do que aceitar o primeiro, mesmo
+                // impreciso). So vale cancelar se sobrar tropa suficiente
+                // alem dessas (ex: guarnicao maior que o enviado).
+                const town = uw.ITowns.towns[snipe.originTownId];
+                const available = town ? town.units() : {};
+                const hasEnoughTroops = Object.entries(snipe.composition).every(
+                    ([unit, qty]) => (available[unit] || 0) >= qty
+                );
+
+                if (!hasEnoughTroops) {
+                    snipe.status = 'sent';
+                    const msg = this.t('sniper_fired_ok_no_retry_troops', { target: snipe.targetName, diff: diffSeconds });
+                    this.console.log('[Sniper] ' + msg);
+                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
+                    return;
+                }
+
                 await this._cancelCommand(snipe.originTownId, result.command.command_id);
                 await this.sleep(400, 100);
             } catch (e) {
