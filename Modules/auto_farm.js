@@ -399,27 +399,23 @@ var AutoFarm = class extends MultUtil {
     };
 
     /* Claim resources from multiple polis */
-    claimMultiple = async (base = 600, boost = 600) => {
+    claimMultiple = async (base = 300, boost = 600) => {
         const polis_list = this.generateList();
         const data = {
             towns: polis_list,
-            time_option_base: base,
-            time_option_booty: boost,
+            /* FIX: a captura real de rede (17/07) mostrou os dois
+               valores como STRING ("300", "600"), nao numero puro -
+               o servidor pode ser rigoroso quanto ao tipo, mesmo com
+               o mesmo valor aparente. Tambem confirma que 300 E, sim,
+               um valor valido (nossa suposicao anterior de que so
+               600/2400/10800/28800 eram validos estava errada - 300
+               deve ser uma opcao "rapida" a parte, nao vista na busca
+               anterior por .fto_time_checkbox). */
+            time_option_base: String(base),
+            time_option_booty: String(boost),
             claim_factor: 'normal',
-            /* Confirmado agora via codigo fonte real do jogo
-               (wndhandler_farm_town_overviews.js, funcao
-               claimLoadsMultiple): o payload nativo NAO tem
-               nl_init - so tem os 4 campos acima + town_id (que
-               a funcao ajaxRequest do jogo adiciona sozinha se nao
-               vier no objeto).
-               FIX MAIS IMPORTANTE: time_option_base/booty NAO
-               aceitam qualquer numero - sao um enum fixo, confirmado
-               via DOM (.fto_time_checkbox[data-option]): 600, 2400,
-               10800, 28800 (10min/40min/3h/8h). O valor antigo (300)
-               NUNCA foi valido - bem provavel causa real do timeout
-               de 45s (servidor recebendo um valor de enum invalido
-               e travando em vez de responder rapido com erro). */
             town_id: uw.ITowns.getCurrentTown().id,
+            nl_init: true,
         };
         try {
             /* Timeout aumentado de 15s (default) pra 45s: esse endpoint
