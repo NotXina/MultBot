@@ -243,19 +243,15 @@ var AutoFarm = class extends MultUtil {
         const isCaptainActive = uw.GameDataPremium.isAdvisorActivated('captain');
         const polis_list = this.generateList();
 
-        /* TENTATIVA NOVA (14/07): o caminho AJAX direto tinha travado
-           com timeout de 45s nos testes anteriores mesmo com payload
-           confirmado correto - suspeita de que faltava tempo entre as
-           chamadas pro servidor "assentar" o estado da janela (nossas
-           chamadas disparavam quase instantaneas, bem mais rapido que
-           um clique humano real). Agora com delays de ~1-1.5s entre
-           cada passo, tenta esse caminho primeiro - sem abrir nenhuma
-           janela visualmente. Se ainda assim falhar, cai pro modo GUI
-           (que ja e confirmado funcionar, mas abre a janela de
-           verdade) como fallback. */
+        /* Confirmado funcionar (17/07) por comparacao com um script de
+           terceiros de confianca: chama claim_loads_multiple DIRETO,
+           sem nenhuma etapa de simular abertura de janela antes (nem
+           fakeOpening, nem fakeSelectAll). O payload tambem e minimo -
+           sem town_id, sem nl_init. Se ainda assim falhar, cai pro
+           modo GUI (abre a janela de verdade) como fallback. */
         if (isCaptainActive) {
             try {
-                await this.claimViaDirectAjax();
+                await this.claimMultiple();
                 return;
             } catch (e) {
                 this.console.log('[AutoFarm] Caminho AJAX direto falhou (' + (e?.message ?? e) + '), tentando via GUI (abre a janela)...');
@@ -272,18 +268,6 @@ var AutoFarm = class extends MultUtil {
         // falharam), coleta as resources uma por uma, respeitando o
         // limite por ciclo.
         await this._claimOneByOne(polis_list);
-    };
-
-    /* Sequencia completa do caminho AJAX direto, com delays humanos
-       entre cada passo (ver nota em fakeOpening/fakeSelectAll). Nao
-       abre nenhuma janela visualmente - se funcionar, e o caminho
-       ideal (mais rapido e sem interface piscando na tela). */
-    claimViaDirectAjax = async () => {
-        await this.fakeOpening();
-        await this.sleep(1300, 150);
-        await this.fakeSelectAll();
-        await this.sleep(1300, 150);
-        await this.claimMultiple();
     };
 
     /* Coleta cidade a cidade, respeitando o limite de 60 por ciclo.
@@ -401,29 +385,18 @@ var AutoFarm = class extends MultUtil {
     /* Claim resources from multiple polis */
     claimMultiple = async (base = 300, boost = 600) => {
         const polis_list = this.generateList();
+        /* Confirmado funcionar por um script de terceiros de
+           confianca (base original do projeto, Sau1707) - chama
+           direto, SEM simular abertura de janela antes (sem
+           fakeOpening/fakeSelectAll) e com payload minimo: sem
+           town_id, sem nl_init, valores como numero puro. */
         const data = {
             towns: polis_list,
-            /* FIX: a captura real de rede (17/07) mostrou os dois
-               valores como STRING ("300", "600"), nao numero puro -
-               o servidor pode ser rigoroso quanto ao tipo, mesmo com
-               o mesmo valor aparente. Tambem confirma que 300 E, sim,
-               um valor valido (nossa suposicao anterior de que so
-               600/2400/10800/28800 eram validos estava errada - 300
-               deve ser uma opcao "rapida" a parte, nao vista na busca
-               anterior por .fto_time_checkbox). */
-            time_option_base: String(base),
-            time_option_booty: String(boost),
+            time_option_base: base,
+            time_option_booty: boost,
             claim_factor: 'normal',
-            town_id: uw.ITowns.getCurrentTown().id,
-            nl_init: true,
         };
         try {
-            /* Timeout aumentado de 15s (default) pra 45s: esse endpoint
-               processa TODAS as cidades de uma vez no servidor (ao
-               contrario das outras chamadas do bot, que sao rapidas e
-               pontuais) - com muitas cidades, 15s pode simplesmente nao
-               ser tempo suficiente pra resposta chegar, mesmo que o
-               pedido esteja correto e vá dar certo. */
             await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data, 45000);
         } catch (e) {
             this.console.log('[AutoFarm] Erro em claimMultiple: ' + (e?.message ?? e));
