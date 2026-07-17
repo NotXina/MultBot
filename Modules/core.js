@@ -1488,8 +1488,16 @@ var MultUtil = class {
         return { $activity, $count };
     }
 
-    createPopup = (left, width, height, $content) => {
-        const $box = uw.$('<div class="sandy-box js-dropdown-list" id="toolbar_activity_recruits_list"></div>').css({
+    /* PDCA: o id do popup era fixo ("toolbar_activity_recruits_list"),
+       copiado do template original. Esse id segue o padrao nativo
+       que o proprio jogo usa pros seus popups de atividade (recrutas,
+       movimentos, mensagens, etc) - ha risco real de colidir com um
+       elemento nativo do jogo com o MESMO id, fazendo o clique no
+       nosso popup (ex: ON/OFF do AutoFarm) acionar sem querer o
+       handler nativo do jogo pra abrir a janela de recrutas de
+       verdade. Agora cada chamador passa um id proprio, unico. */
+    createPopup = (id, left, width, height, $content) => {
+        const $box = uw.$('<div class="sandy-box js-dropdown-list"></div>').attr('id', id).css({
             "left": `${left}px`,
             "position": "absolute",
             "width": `${width}px`,
