@@ -492,8 +492,46 @@ var Sniper = class extends MultUtil {
         return { min: -1, max: 0 }; // attack (padrao)
     }
 
+    /* Tenta ate MAX_ATTEMPTS vezes: envia, confere o horario REAL de
+       chegada (que o proprio jogo calculou pro comando resultante)
+       contra o desejado, e se nao bater dentro da janela aceitavel -
+       cancela e ESPERA de verdade as tropas voltarem (elas nao ficam
+       disponiveis na hora so por cancelar) antes de reenviar. So
+       desiste se realmente nao sobrar tempo antes da chegada
+       desejada. Pedido explicitamente: ser mais insistente, mesmo
+       que precise esperar o retorno das tropas entre tentativas. */
+    /* Faixa aceitavel por tipo de comando (assimetrica, nao +/- igual):
+       - Ataque: nunca atrasado (perderia a janela certa) - aceita de
+         1s adiantado ate exatamente no horario (min:-1, max:0).
+       - Apoio: nunca adiantado (nao ajuda em nada chegar cedo) -
+         aceita do horario exato ate 2s atrasado (min:0, max:2). */
+    _getToleranceRange(type) {
+        if (type === 'support') return { min: 0, max: 2 };
+        return { min: -1, max: 0 }; // attack (padrao)
+    }
+
+    /* Espera a MESMA composicao ficar disponivel de novo na cidade de
+       origem (depois de cancelar um envio, as tropas voltam aos
+       poucos, nao na hora) - poll a cada 500ms, ate maxWaitMs ou ate
+       ficar pronto, o que vier primeiro. */
+    async _waitForTroopsAvailable(snipe, maxWaitMs) {
+        const start = Date.now();
+        while (Date.now() - start < maxWaitMs) {
+            try {
+                const town = uw.ITowns.towns[snipe.originTownId];
+                const available = town ? town.units() : {};
+                const ready = Object.entries(snipe.composition).every(
+                    ([unit, qty]) => (available[unit] || 0) >= qty
+                );
+                if (ready) return true;
+            } catch (e) {}
+            await this.sleep(500);
+        }
+        return false;
+    }
+
     async _fire(snipe) {
-        const MAX_ATTEMPTS = 10;
+        const MAX_ATTEMPTS = 30;
         const { min: toleranceMin, max: toleranceMax } = this._getToleranceRange(snipe.type);
 
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -533,13 +571,17 @@ var Sniper = class extends MultUtil {
                     return;
                 }
 
-                // Nao bateu - so vale cancelar e tentar de novo se ainda
-                // houver tempo/tentativas e o comando ainda for cancelavel.
+                // Nao bateu - checa se ainda vale a pena cancelar e tentar
+                // de novo: precisa ainda ser cancelavel, e precisa sobrar
+                // tempo suficiente pra (1) as tropas voltarem e (2) viajar
+                // de novo ate o alvo antes do horario desejado.
                 const cancelableUntil = result.command.cancelable_until;
                 const canCancel = cancelableUntil && (Date.now() / 1000) < cancelableUntil;
+                const travelMs = (snipe.durationSeconds || 0) * 1000;
                 const timeLeftMs = snipe.arrivalAt - Date.now();
+                const maxWaitForTroopsMs = timeLeftMs - travelMs - 1000; // 1s de folga pro reenvio em si
 
-                if (attempt === MAX_ATTEMPTS || !canCancel || timeLeftMs < 1500) {
+                if (attempt === MAX_ATTEMPTS || !canCancel || maxWaitForTroopsMs < 500) {
                     snipe.status = 'sent';
                     const msg = this.t('sniper_fired_ok_imprecise', { target: snipe.targetName, diff: diffSeconds, attempts: attempt });
                     this.console.log('[Sniper] ' + msg);
@@ -547,30 +589,21 @@ var Sniper = class extends MultUtil {
                     return;
                 }
 
-                // IMPORTANTE: so cancela se ainda tiver tropa suficiente
-                // pra reenviar a MESMA composicao. Cancelar nao devolve as
-                // tropas na hora - elas ficam "voltando" por um tempo, e um
-                // reenvio imediato com a mesma composicao vai falhar (nao
-                // tem tropa disponivel), deixando a gente SEM NENHUM ataque
-                // de verdade (pior do que aceitar o primeiro, mesmo
-                // impreciso). So vale cancelar se sobrar tropa suficiente
-                // alem dessas (ex: guarnicao maior que o enviado).
-                const town = uw.ITowns.towns[snipe.originTownId];
-                const available = town ? town.units() : {};
-                const hasEnoughTroops = Object.entries(snipe.composition).every(
-                    ([unit, qty]) => (available[unit] || 0) >= qty
-                );
+                await this._cancelCommand(snipe.originTownId, result.command.command_id);
+                this.console.log('[Sniper] ' + this.t('sniper_waiting_troops_log', { target: snipe.targetName }));
 
-                if (!hasEnoughTroops) {
-                    snipe.status = 'sent';
-                    const msg = this.t('sniper_fired_ok_no_retry_troops', { target: snipe.targetName, diff: diffSeconds });
-                    this.console.log('[Sniper] ' + msg);
-                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
+                const troopsReady = await this._waitForTroopsAvailable(snipe, maxWaitForTroopsMs);
+                if (!troopsReady) {
+                    // As tropas nao voltaram a tempo - nao da mais pra
+                    // reenviar e chegar no horario. O comando anterior ja
+                    // foi cancelado, entao registra como falha (melhor ser
+                    // honesto que fingir sucesso de um envio que nao existe
+                    // mais).
+                    snipe.status = 'failed';
+                    snipe.error = this.t('sniper_troops_not_back_error');
+                    this.console.log('[Sniper] ' + this.t('sniper_fired_fail', { target: snipe.targetName, reason: snipe.error }));
                     return;
                 }
-
-                await this._cancelCommand(snipe.originTownId, result.command.command_id);
-                await this.sleep(400, 100);
             } catch (e) {
                 snipe.status = 'failed';
                 snipe.error = e?.message ?? String(e);
