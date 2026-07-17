@@ -36,37 +36,37 @@ var AutoSendResources = class extends MultUtil {
             <div class="game_border_left"></div><div class="game_border_right"></div>
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            ${this.getTitleHtml('asr_title', 'Auto Envio de Recursos', this.toggle, '', this._active)}
+            ${this.getTitleHtml('asr_title', this.t('asr_title'), this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
-                Envia recursos de cidades ociosas para a cidade menos desenvolvida (com espaço no armazém).
+                ${this.t('asr_desc')}
             </div>
             <div style="padding:2px 10px 4px;font-size:11px;color:#5a3a0a;">
-                Remetente: qualquer cidade com mercado disponível e algum recurso acima de 50% do storage (não precisa estar ociosa). Destino: menor soma de níveis de construção, com margem de 5% de espaço livre no armazém.
+                ${this.t('asr_desc2')}
             </div>
 
             <div style="padding:4px 10px;display:flex;gap:6px;align-items:center;">
-                <label style="font-size:11px;font-weight:bold;">Verificar a cada</label>
+                <label style="font-size:11px;font-weight:bold;">${this.t('asr_check_every_label')}</label>
                 <input id="asr_interval_input" type="number" min="1" max="1440" value="${this.checkIntervalMinutes}" style="width:55px;padding:2px 5px;" />
-                <span style="font-size:11px;">min</span>
-                ${this.getButtonHtml('asr_interval_save_btn', 'Salvar', this.saveInterval)}
+                <span style="font-size:11px;">${this.t('asr_min_unit')}</span>
+                ${this.getButtonHtml('asr_interval_save_btn', this.t('asr_save'), this.saveInterval)}
                 <span id="asr_interval_status" style="font-size:11px;color:#5a3a0a;"></span>
             </div>
 
             <div style="padding:4px 10px;display:flex;gap:6px;">
-                ${this.getButtonHtml('asr_mode_auto', 'Automático', this.setMode, 'auto')}
-                ${this.getButtonHtml('asr_mode_manual', 'Manual (90%)', this.setMode, 'manual')}
+                ${this.getButtonHtml('asr_mode_auto', this.t('asr_mode_auto'), this.setMode, 'auto')}
+                ${this.getButtonHtml('asr_mode_manual', this.t('asr_mode_manual'), this.setMode, 'manual')}
             </div>
 
             <div id="asr_manual_controls" style="padding:4px 10px;display:none;">
-                <label style="font-size:11px;font-weight:bold;">Cidade Destino (envia quando alguma cidade atingir 90% de armazém)</label><br>
+                <label style="font-size:11px;font-weight:bold;">${this.t('asr_manual_target_label')}</label><br>
                 <div style="display:flex;gap:6px;align-items:center;margin-top:3px;">
                     <select id="asr_manual_target_select" style="flex:1;padding:3px;">
                         ${this._getTownOptionsHtml()}
                     </select>
-                    ${this.getButtonHtml('asr_manual_save_btn', 'Salvar', this.saveManualTarget)}
+                    ${this.getButtonHtml('asr_manual_save_btn', this.t('asr_save'), this.saveManualTarget)}
                 </div>
                 <div id="asr_manual_target_status" style="font-size:11px;color:#5a3a0a;margin-top:3px;">
-                    ${this.manualTargetId ? '✓ Destino atual: ' + (uw.ITowns.towns[this.manualTargetId]?.getName?.() ?? '#' + this.manualTargetId) : 'Nenhum destino configurado.'}
+                    ${this.manualTargetId ? this.t('asr_target_current', { name: uw.ITowns.towns[this.manualTargetId]?.getName?.() ?? '#' + this.manualTargetId }) : this.t('asr_no_target_configured')}
                 </div>
             </div>
 
@@ -84,7 +84,7 @@ var AutoSendResources = class extends MultUtil {
         this._active = true;
         this.storage.save('asr_active', true);
         this._updateTitle();
-        this.console.log('[AutoRecursos] Iniciado. Intervalo: ' + this.checkIntervalMinutes + ' min.');
+        this.console.log('[AutoRecursos] ' + this.t('asr_started_log', { min: this.checkIntervalMinutes }));
         this._tick();
         this._intervalId = this.createGuardedInterval(() => this._tick(), this.checkIntervalMinutes * 60 * 1000);
     }
@@ -94,7 +94,7 @@ var AutoSendResources = class extends MultUtil {
         this.storage.save('asr_active', false);
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
         this._updateTitle();
-        this.console.log('[AutoRecursos] Parado.');
+        this.console.log('[AutoRecursos] ' + this.t('asr_stopped_log'));
     }
 
     _updateTitle() {
@@ -106,7 +106,7 @@ var AutoSendResources = class extends MultUtil {
         this.mode = mode;
         this.storage.save('asr_mode', mode);
         this._updateModeButtons();
-        this.console.log('[AutoRecursos] Modo alterado para: ' + (mode === 'manual' ? 'Manual (90%)' : 'Automático'));
+        this.console.log('[AutoRecursos] ' + this.t('asr_mode_changed_log', { mode: mode === 'manual' ? this.t('asr_mode_manual') : this.t('asr_mode_auto') }));
     };
 
     // Salva o intervalo de verificação (em minutos) e, se o módulo já
@@ -115,14 +115,14 @@ var AutoSendResources = class extends MultUtil {
     saveInterval = () => {
         const val = parseInt(uw.$('#asr_interval_input').val(), 10);
         if (!val || val < 1) {
-            uw.$('#asr_interval_status').text('Intervalo inválido (mínimo 1 min).').css('color', '#f87171');
+            uw.$('#asr_interval_status').text(this.t('asr_invalid_interval_status')).css('color', '#f87171');
             return;
         }
 
         this.checkIntervalMinutes = val;
         this.storage.save('asr_interval_min', val);
-        uw.$('#asr_interval_status').text('✓ Intervalo salvo: ' + val + ' min.').css('color', '#1a6b2a');
-        this.console.log('[AutoRecursos] Intervalo alterado para ' + val + ' min.');
+        uw.$('#asr_interval_status').text(this.t('asr_interval_saved_status', { val })).css('color', '#1a6b2a');
+        this.console.log('[AutoRecursos] ' + this.t('asr_interval_changed_log', { val }));
 
         if (this._active) {
             if (this._intervalId) clearInterval(this._intervalId);
@@ -145,14 +145,14 @@ var AutoSendResources = class extends MultUtil {
     saveManualTarget = () => {
         const id = uw.$('#asr_manual_target_select').val();
         if (!id) {
-            uw.$('#asr_manual_target_status').text('Selecione uma cidade.').css('color', '#f87171');
+            uw.$('#asr_manual_target_status').text(this.t('asr_select_town_status')).css('color', '#f87171');
             return;
         }
         this.manualTargetId = id;
         this.storage.save('asr_manual_target', id);
         const name = uw.ITowns.towns[id]?.getName?.() ?? '#' + id;
-        uw.$('#asr_manual_target_status').text('✓ Destino atual: ' + name).css('color', '#1a6b2a');
-        this.console.log('[AutoRecursos] Destino manual salvo: ' + name);
+        uw.$('#asr_manual_target_status').text(this.t('asr_target_current', { name })).css('color', '#1a6b2a');
+        this.console.log('[AutoRecursos] ' + this.t('asr_manual_target_saved_log', { name }));
     };
 
     _getTownOptionsHtml() {
@@ -164,7 +164,7 @@ var AutoSendResources = class extends MultUtil {
                 const nameB = towns[b].getName ? towns[b].getName() : '';
                 return nameA.localeCompare(nameB);
             });
-            let html = '<option value="">Selecione...</option>';
+            let html = '<option value="">' + this.t('asr_select_placeholder') + '</option>';
             for (const id of keys) {
                 const t = towns[id];
                 const name = t.getName ? t.getName() : ('#' + id);
@@ -173,13 +173,13 @@ var AutoSendResources = class extends MultUtil {
             }
             return html;
         } catch (e) {
-            return '<option value="">Erro ao carregar cidades</option>';
+            return '<option value="">' + this.t('asr_towns_load_error') + '</option>';
         }
     }
 
     async _tick() {
         try {
-            this.console.log('[AutoRecursos] Verificando cidades...');
+            this.console.log('[AutoRecursos] ' + this.t('asr_checking_log'));
 
             const townIds = Object.keys(uw.ITowns.towns);
             if (townIds.length < 2) return;
@@ -196,12 +196,12 @@ var AutoSendResources = class extends MultUtil {
             if (targets.length === 0) return;
 
             const targetNames = targets.map(id => uw.ITowns.towns[id].getName()).join(', ');
-            this.console.log(`[AutoRecursos] Destinos (menos desenvolvidas primeiro, com espaço no armazém): ${targetNames}`);
+            this.console.log('[AutoRecursos] ' + this.t('asr_targets_log', { names: targetNames }));
 
             const senders = townIds.filter(id => !targets.includes(id) && this._isEligibleSender(id));
             if (!senders.length) {
-                this.console.log('[AutoRecursos] Nenhuma cidade elegível para envio.');
-                uw.$('#asr_log').text('Nenhuma cidade elegível para envio.');
+                this.console.log('[AutoRecursos] ' + this.t('asr_no_senders_log'));
+                uw.$('#asr_log').text(this.t('asr_no_senders_log'));
                 return;
             }
 
@@ -214,12 +214,12 @@ var AutoSendResources = class extends MultUtil {
 
             const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
             const msg = totalSent > 0
-                ? `✓ Recursos enviados de ${totalSent} cidade(s) para ${targets.length} destino(s)`
-                : 'Nenhuma cidade elegível para envio.';
+                ? this.t('asr_cycle_complete_log', { count: totalSent, targets: targets.length })
+                : this.t('asr_no_senders_log');
             this.console.log('[AutoRecursos] ' + msg);
             uw.$('#asr_log').text(msg);
         } catch (e) {
-            this.console.log('[AutoRecursos] Excecao no ciclo: ' + (e?.message ?? e));
+            this.console.log('[AutoRecursos] ' + this.t('asr_cycle_exception_log', { msg: e?.message ?? e }));
         }
     }
 
@@ -230,27 +230,27 @@ var AutoSendResources = class extends MultUtil {
        um balanceamento entre cidades. */
     async _tickManual(townIds) {
         if (!this.manualTargetId) {
-            this.console.log('[AutoRecursos] Modo manual: nenhuma cidade destino configurada ainda.');
-            uw.$('#asr_log').text('Configure uma cidade destino no modo manual.').css('color', '#f87171');
+            this.console.log('[AutoRecursos] ' + this.t('asr_manual_no_target_log'));
+            uw.$('#asr_log').text(this.t('asr_manual_no_target_status')).css('color', '#f87171');
             return;
         }
 
         const targetTown = uw.ITowns.towns[this.manualTargetId];
         if (!targetTown) {
-            this.console.log('[AutoRecursos] Modo manual: cidade destino #' + this.manualTargetId + ' não encontrada (saiu do cache ou não é mais sua).');
-            uw.$('#asr_log').text('Cidade destino não encontrada.').css('color', '#f87171');
+            this.console.log('[AutoRecursos] ' + this.t('asr_manual_target_missing_log', { id: this.manualTargetId }));
+            uw.$('#asr_log').text(this.t('asr_manual_target_missing_status')).css('color', '#f87171');
             return;
         }
         const targetName = targetTown.getName();
 
         const senders = townIds.filter(id => id !== this.manualTargetId && this._isOverflowing(id));
         if (!senders.length) {
-            this.console.log('[AutoRecursos] Modo manual: nenhuma cidade em 90%+ de armazém no momento.');
-            uw.$('#asr_log').text('Nenhuma cidade em 90%+ de armazém no momento.');
+            this.console.log('[AutoRecursos] ' + this.t('asr_manual_no_senders_log'));
+            uw.$('#asr_log').text(this.t('asr_manual_no_senders_log'));
             return;
         }
 
-        this.console.log(`[AutoRecursos] Modo manual: ${senders.length} cidade(s) em 90%+ de armazém, enviando para ${targetName}...`);
+        this.console.log('[AutoRecursos] ' + this.t('asr_manual_sending_log', { count: senders.length, target: targetName }));
 
         const results = await Promise.allSettled(
             senders.map(fromId => this._sendResources(fromId, this.manualTargetId))
@@ -258,8 +258,8 @@ var AutoSendResources = class extends MultUtil {
 
         const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
         const msg = totalSent > 0
-            ? `✓ Recursos enviados de ${totalSent} cidade(s) → ${targetName}`
-            : 'Nenhum envio concluído (destino sem espaço ou remetentes sem excedente).';
+            ? this.t('asr_manual_complete_log', { count: totalSent, target: targetName })
+            : this.t('asr_manual_none_sent_log');
         this.console.log('[AutoRecursos] ' + msg);
         uw.$('#asr_log').text(msg);
     }
@@ -394,15 +394,15 @@ var AutoSendResources = class extends MultUtil {
             const toName   = to?.getName?.() ?? '#' + toId;
             const data = { id: parseInt(toId), wood, stone, iron, town_id: parseInt(fromId), nl_init: true };
 
-            this.console.log(`[AutoRecursos] ${fromName} → ${toName}: ${wood}🪵 ${stone}🪨 ${iron}⚙`);
+            this.console.log('[AutoRecursos] ' + this.t('asr_send_log', { from: fromName, to: toName, wood, stone, iron }));
 
             const res = await this.ajaxPostWithTimeout('town_info', 'trade', data, 15000, true);
             if (res && !res.error) return true;
 
-            this.console.log(`[AutoRecursos] ✗ Erro trade: ${res?.error ?? JSON.stringify(res)}`);
+            this.console.log('[AutoRecursos] ' + this.t('asr_send_trade_error_log', { err: res?.error ?? JSON.stringify(res) }));
             return false;
         } catch (e) {
-            this.console.log('[AutoRecursos] Exceção: ' + (e?.message ?? e));
+            this.console.log('[AutoRecursos] ' + this.t('asr_send_exception_log', { msg: e?.message ?? e }));
             return false;
         }
     };
