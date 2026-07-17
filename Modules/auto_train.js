@@ -523,7 +523,20 @@ var AutoTrain = class extends MultUtil {
 
     /* Check the given town, for ground or naval - sem risco de loop infinito.
        Miticas de deus errado sao puladas antes de gastar qualquer verificacao. */
-    checkPolis = (type, town_id) => {
+    // FIX (bug real observado em log de producao): buildPost() e async
+    // (faz um POST com ate 15s de timeout), mas era chamado aqui SEM
+    // "await" - checkPolis "terminava" (do ponto de vista de quem
+    // chama) antes da requisicao de verdade sequer voltar. Como main()
+    // tambem nao aguardava checkPolis, isso desativava na pratica a
+    // protecao do createGuardedInterval contra ciclos sobrepostos: o
+    // proximo tick (1-10s depois) comecava um NOVO recrutamento pro
+    // MESMO alvo antes do anterior responder, empilhando dezenas de
+    // requisicoes identicas em paralelo pro mesmo endpoint (visivel no
+    // log real: "recrutando 158x Espadachim" repetindo a cada 1-2s
+    // enquanto os erros de timeout de 15s chegavam bem mais devagar e
+    // fora de ordem - sinal classico de requisicoes acumuladas).
+    // Agora checkPolis e async e aguarda buildPost de verdade.
+    checkPolis = async (type, town_id) => {
         const order_count = this.getUnitOrdersCount(type, town_id);
         if (order_count > 6) return 0;
 
@@ -540,7 +553,7 @@ var AutoTrain = class extends MultUtil {
             const count = this.getTroopCount(unit, town_id);
             if (count === 0) continue; // meta atingida
             if (count < 0) continue;   // sem recursos/favor agora
-            this.buildPost(town_id, unit, count);
+            await this.buildPost(town_id, unit, count);
             return true;
         }
         return 0;
@@ -603,22 +616,24 @@ var AutoTrain = class extends MultUtil {
     };
 
     /* Main function - treina ground + naval em todas as cidades */
-    main = () => {
+    // FIX: main() agora e async e REALMENTE espera todas as cidades
+    // terminarem (Promise.allSettled, mesmo padrao usado em
+    // auto_build.js) antes de retornar - e o que faz o
+    // createGuardedInterval conseguir bloquear ciclos sobrepostos de
+    // verdade (ver comentario em checkPolis acima pro bug que isso
+    // corrige). Cidades continuam isoladas por try/catch, processadas
+    // em paralelo entre si (nao sequencial) - so o TICK inteiro que
+    // agora so libera o proximo depois que todas responderem.
+    main = async () => {
         if (window.__multbot_captcha_active) return;
         try {
             const town_list = this.getActiveList();
             if (!town_list.length) return;
-            // FIX: cada cidade agora tem seu proprio try/catch - antes, uma
-            // excecao numa cidade (ex: checkPolis/getTroopCount lancando por
-            // dado inesperado) escapava do forEach inteiro e cancelava o
-            // processamento das cidades SEGUINTES nesse mesmo tick, sem
-            // nenhum log. Isolar por cidade evita que uma falha derrube o
-            // ciclo todo.
-            town_list.forEach(town_id => {
+            await Promise.allSettled(town_list.map(async (town_id) => {
                 try {
                     if (town_id in uw.ITowns.towns) {
-                        this.checkPolis('naval', town_id);
-                        this.checkPolis('ground', town_id);
+                        await this.checkPolis('naval', town_id);
+                        await this.checkPolis('ground', town_id);
                     } else {
                         delete this.city_troops[town_id];
                         this.storage.save('troops', this.city_troops);
@@ -626,7 +641,7 @@ var AutoTrain = class extends MultUtil {
                 } catch (e) {
                     this.console.log('[AutoTrain] ' + this.t('error') + ': ' + (e?.message ?? e));
                 }
-            });
+            }));
         } catch (e) {
             this.console.log('[AutoTrain] ' + this.t('error') + ': ' + (e?.message ?? e));
         }
