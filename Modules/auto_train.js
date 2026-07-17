@@ -78,6 +78,16 @@ var AutoTrain = class extends MultUtil {
         godsent:            [5,   1],
     };
 
+    /* Cooldown curto pra quando o servidor rejeita um recrutamento por
+       falta de recursos/populacao mesmo depois do getTroopCount local
+       ter estimado que dava (estimativa fica desatualizada por causa
+       do round-trip da requisicao, ou populacao/recursos consumidos
+       por outra ordem no meio do caminho). Evita re-tentar a MESMA
+       unidade na MESMA cidade a cada tick (1-10s) enquanto os
+       recursos nao tiveram tempo de acumular - mesma ideia do
+       cooldown de recursos do AutoBuild. */
+    RESOURCE_BLOCK_COOLDOWN_MS = 60 * 1000;
+
     constructor(c, s) {
         super(c, s);
 
@@ -85,8 +95,23 @@ var AutoTrain = class extends MultUtil {
         this.percentual = this.storage.load('at_per', 1);
         this.city_troops = this.storage.load('troops', {});
         this.shiftHeld = false;
+        /* town_id:unit -> timestamp ate quando fica bloqueado apos o
+           servidor rejeitar por falta de recursos/populacao (ver
+           RESOURCE_BLOCK_COOLDOWN_MS acima e buildPost mais abaixo) */
+        this._trainBlockedUntil = {};
 
         this.interval = this.createGuardedInterval(this.main, this.getRandomDelay(1000, 10000));
+    }
+
+    _trainKey(town_id, unit) {
+        return town_id + ':' + unit;
+    }
+    _isTrainBlocked(town_id, unit) {
+        const until = this._trainBlockedUntil[this._trainKey(town_id, unit)];
+        return !!(until && until > Date.now());
+    }
+    _blockTrain(town_id, unit, cooldownMs = this.RESOURCE_BLOCK_COOLDOWN_MS) {
+        this._trainBlockedUntil[this._trainKey(town_id, unit)] = Date.now() + cooldownMs;
     }
 
     getRandomDelay(min, max) {
@@ -550,6 +575,7 @@ var AutoTrain = class extends MultUtil {
         for (const unit of unitOrder) {
             if (!troops[unit]) continue; // nao configurada
             if (this._isWrongGodMythical(unit, town_id)) continue; // deus errado, pula
+            if (this._isTrainBlocked(town_id, unit)) continue; // rejeitado por recursos/populacao recentemente, aguardando cooldown
             const count = this.getTroopCount(unit, town_id);
             if (count === 0) continue; // meta atingida
             if (count < 0) continue;   // sem recursos/favor agora
@@ -602,7 +628,16 @@ var AutoTrain = class extends MultUtil {
         try {
             const res = await this.ajaxPostWithTimeout(endpoint, 'build', data);
             if (res && res.error) {
-                this.console.log('[AutoTrain] ' + this.t('error') + ': ' + res.error);
+                if (this.isResourceOrCapacityMessage(res.error)) {
+                    // Recursos/populacao insuficientes: estimativa local
+                    // (getTroopCount) ficou desatualizada ate a resposta
+                    // voltar - NAO loga (esperado, se repetiria a cada
+                    // tick), so bloqueia essa unidade nessa cidade por um
+                    // cooldown curto ate os recursos acumularem de novo.
+                    this._blockTrain(town_id, unit);
+                } else {
+                    this.console.log('[AutoTrain] ' + this.t('error') + ': ' + res.error);
+                }
             }
         } catch (e) {
             this.console.log('[AutoTrain] ' + this.t('error') + ': ' + (e?.message ?? e));
