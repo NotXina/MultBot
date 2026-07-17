@@ -575,11 +575,18 @@ var Sniper = class extends MultUtil {
                 // de novo: precisa ainda ser cancelavel, e precisa sobrar
                 // tempo suficiente pra (1) as tropas voltarem e (2) viajar
                 // de novo ate o alvo antes do horario desejado.
+                // FIX: usa a duracao de viagem OBSERVADA nesse proprio
+                // envio (arrival_at real menos agora), nao mais a
+                // estimativa original do way_duration - se a viagem real
+                // for mais rapida que a estimada (diff negativo, chegou
+                // adiantado), usar a estimativa antiga (mais lenta) fazia
+                // a conta dar negativa e desistir na hora, mesmo sobrando
+                // tempo de verdade.
                 const cancelableUntil = result.command.cancelable_until;
                 const canCancel = cancelableUntil && (Date.now() / 1000) < cancelableUntil;
-                const travelMs = (snipe.durationSeconds || 0) * 1000;
+                const observedTravelMs = Math.max(0, (actualArrivalSec * 1000) - Date.now());
                 const timeLeftMs = snipe.arrivalAt - Date.now();
-                const maxWaitForTroopsMs = timeLeftMs - travelMs - 1000; // 1s de folga pro reenvio em si
+                const maxWaitForTroopsMs = timeLeftMs - observedTravelMs - 1000; // 1s de folga pro reenvio em si
 
                 if (attempt === MAX_ATTEMPTS || !canCancel || maxWaitForTroopsMs < 500) {
                     snipe.status = 'sent';
