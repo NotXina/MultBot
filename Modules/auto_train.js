@@ -11,7 +11,7 @@ var AutoTrain = class extends MultUtil {
        maximo. Sem essa trava, o bot manda uma ordem de "1 unidade" a
        cada tick, enchendo a fila de pedidos minusculos em vez de
        treinar em lotes maiores.
-       MIN_BATCH_RATIO = fracao do byStorage (o teto que o percentual
+       minBatchRatio = fracao do byStorage (o teto que o percentual
        de armazem configurado permite) que precisa estar disponivel
        AGORA pra a ordem valer a pena disparar. Ex: 0.3 = so dispara
        quando der pra pagar pelo menos 30% do teto do armazem de uma
@@ -19,8 +19,15 @@ var AutoTrain = class extends MultUtil {
        longas entre ordens) ou desce pra reagir mais rapido (lotes
        menores, mais ordens). Sempre dispara direto, ignorando essa
        trava, quando o lote calculado ja fecha 100% da meta restante -
-       nesse caso nao ha motivo pra esperar mais. */
-    MIN_BATCH_RATIO = 0.3;
+       nesse caso nao ha motivo pra esperar mais.
+       PDCA (pedido explicito - "esta demorando o ciclo de conferir os
+       recursos"): virou configuravel pela UI (era fixo em 0.3 = 30%).
+       Diagnostico ao vivo confirmou que um recurso desbalanceado (ex:
+       pedra bem mais escassa que madeira/ferro) podia travar horas
+       esperando acumular 30% do armazem pra uma unidade cara. Default
+       tambem baixou de 0.3 pra 0.1, pra reagir bem mais rapido logo de
+       cara. */
+    DEFAULT_MIN_BATCH_RATIO = 0.1;
 
     // Mapeamento de fallback (usado so se GameData.units[troop].god_id nao existir
     // nesse mundo especifico). godsent nao precisa entrar aqui - seu god_id real
@@ -93,6 +100,7 @@ var AutoTrain = class extends MultUtil {
 
         this.spell = this.storage.load('at_spell', false);
         this.percentual = this.storage.load('at_per', 1);
+        this.minBatchRatio = this.storage.load('at_min_batch_ratio', this.DEFAULT_MIN_BATCH_RATIO);
         this.city_troops = this.storage.load('troops', {});
         this.shiftHeld = false;
         /* town_id:unit -> timestamp ate quando fica bloqueado apos o
@@ -128,6 +136,7 @@ var AutoTrain = class extends MultUtil {
             this.setPolisInSettings(uw.ITowns.getCurrentTown().id);
             this.updatePolisInSettings(uw.ITowns.getCurrentTown().id);
             this.handlePercentual(this.percentual);
+            this.handleMinBatch(this._minBatchLevelFromRatio(this.minBatchRatio));
             this.handleSpell(this.spell);
 
             uw.$.Observer(uw.GameEvents.town.town_switch).subscribe(() => {
@@ -164,6 +173,13 @@ var AutoTrain = class extends MultUtil {
                 ${this.getButtonHtml('train_percentuals_1', '80%', this.handlePercentual, 1)}
                 ${this.getButtonHtml('train_percentuals_2', '90%', this.handlePercentual, 2)}
                 ${this.getButtonHtml('train_percentuals_3', '100%', this.handlePercentual, 3)}
+                </div>
+
+                <div style="padding:0 5px 2px;font-size:10px;color:#5a3a0a;" title="${this.t('at_min_batch_tip')}">${this.t('at_min_batch_label')}</div>
+                <div id="train_min_batch" style="padding: 5px;">
+                ${this.getButtonHtml('train_min_batch_1', this.t('at_min_batch_fast'), this.handleMinBatch, 1)}
+                ${this.getButtonHtml('train_min_batch_2', this.t('at_min_batch_normal'), this.handleMinBatch, 2)}
+                ${this.getButtonHtml('train_min_batch_3', this.t('at_min_batch_big'), this.handleMinBatch, 3)}
                 </div>
             </div>
         </div>
@@ -209,6 +225,32 @@ var AutoTrain = class extends MultUtil {
         if (this.percentual != n) {
             this.percentual = n;
             this.storage.save('at_per', n);
+        }
+    };
+
+    /* Niveis do lote minimo (ver minBatchRatio): 1=rapido (5%),
+       2=padrao (10%, era 30% fixo antes), 3=lote grande (30%, o
+       comportamento antigo pra quem preferir esperar lotes maiores). */
+    MIN_BATCH_LEVELS = { 1: 0.05, 2: 0.1, 3: 0.3 };
+
+    _minBatchLevelFromRatio = ratio => {
+        let best = 2, bestDiff = Infinity;
+        for (const [level, r] of Object.entries(this.MIN_BATCH_LEVELS)) {
+            const diff = Math.abs(r - ratio);
+            if (diff < bestDiff) { bestDiff = diff; best = Number(level); }
+        }
+        return best;
+    };
+
+    handleMinBatch = n => {
+        let box = uw.$('#train_min_batch');
+        let buttons = box.find('.button_new');
+        buttons.addClass('disabled');
+        uw.$(`#train_min_batch_${n}`).removeClass('disabled');
+        const ratio = this.MIN_BATCH_LEVELS[n] ?? this.DEFAULT_MIN_BATCH_RATIO;
+        if (this.minBatchRatio != ratio) {
+            this.minBatchRatio = ratio;
+            this.storage.save('at_min_batch_ratio', ratio);
         }
     };
 
@@ -531,15 +573,15 @@ var AutoTrain = class extends MultUtil {
         const toRecruit = Math.min(count, byResources, byFavor, byPop, byStorage);
         if (toRecruit <= 0) return -1;
 
-        /* So dispara quando o lote vale a pena (ver MIN_BATCH_RATIO
-           acima) - evita ficar mandando ordem de 1 unidade a cada
-           tick assim que o armazem esvazia depois do primeiro lote
-           grande. So se aplica a unidades com custo em recursos -
-           godsent (custo 0/0/0) sempre dispara direto, ja que nao
-           tem esse gargalo de "esperar acumular". Tambem dispara
-           direto se esse lote ja fecha 100% da meta restante. */
+        /* So dispara quando o lote vale a pena (ver minBatchRatio,
+           configuravel na UI) - evita ficar mandando ordem de 1
+           unidade a cada tick assim que o armazem esvazia depois do
+           primeiro lote grande. So se aplica a unidades com custo em
+           recursos - godsent (custo 0/0/0) sempre dispara direto, ja
+           que nao tem esse gargalo de "esperar acumular". Tambem
+           dispara direto se esse lote ja fecha 100% da meta restante. */
         if (wood > 0 || stone > 0 || iron > 0) {
-            const minWorthwhile = Math.max(1, Math.floor(byStorage * this.MIN_BATCH_RATIO));
+            const minWorthwhile = Math.max(1, Math.floor(byStorage * this.minBatchRatio));
             if (toRecruit < minWorthwhile && toRecruit < count) return -1;
         }
 
