@@ -26,6 +26,12 @@ var AutoQuest = class extends MultUtil {
         this._interval = null;
         this._decidedThisSession = new Set();
         this._challengedThisSession = new Set();
+        // Controla o throttling da mensagem "3/3 vagas cheias" - so
+        // loga a cada X minutos em vez de todo ciclo de 20s, pra nao
+        // atravancar o console (missoes aceitas demoram bem mais que
+        // 20s pra concluir, entao checar/logar com essa frequencia
+        // so gera ruido sem necessidade).
+        this._lastFullLogAt = 0;
 
         if (this.storage.load('aq_active', false)) {
             setTimeout(() => this.start(), 2500);
@@ -308,13 +314,26 @@ var AutoQuest = class extends MultUtil {
             //    mesmo tempo (running + satisfied ocupam vaga).
             let slotsAvailable = this.MAX_ACCEPTED_QUESTS - this._getAcceptedQuestCount();
 
+            // Throttling: so loga "vagas cheias" a cada 3 minutos, nao
+            // todo ciclo de 20s - missoes aceitas demoram bem mais que
+            // isso pra concluir, entao repetir esse log com tanta
+            // frequencia so atravanca o console sem necessidade.
+            const now = Date.now();
+            const shouldLogFull = (now - this._lastFullLogAt) > 180000;
+
             if (slotsAvailable <= 0) {
-                this.console.log('[AutoQuest] ' + this.t('aq_max_accepted_log', { max: this.MAX_ACCEPTED_QUESTS }));
+                if (shouldLogFull) {
+                    this.console.log('[AutoQuest] ' + this.t('aq_max_accepted_log', { max: this.MAX_ACCEPTED_QUESTS }));
+                    this._lastFullLogAt = now;
+                }
             } else {
                 const challengeable = this._getChallengeableBearEffectQuests();
                 for (const quest of challengeable) {
                     if (slotsAvailable <= 0) {
-                        this.console.log('[AutoQuest] ' + this.t('aq_max_accepted_log', { max: this.MAX_ACCEPTED_QUESTS }));
+                        if (shouldLogFull) {
+                            this.console.log('[AutoQuest] ' + this.t('aq_max_accepted_log', { max: this.MAX_ACCEPTED_QUESTS }));
+                            this._lastFullLogAt = now;
+                        }
                         break;
                     }
 
