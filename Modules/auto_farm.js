@@ -243,31 +243,47 @@ var AutoFarm = class extends MultUtil {
         const isCaptainActive = uw.GameDataPremium.isAdvisorActivated('captain');
         const polis_list = this.generateList();
 
-        /* Confirmado por teste real (13/07): o caminho AJAX direto
-           (fakeOpening -> fakeSelectAll -> claimMultiple) tem o
-           payload 100% correto (validado por captura de rede) mas
-           trava com timeout de 45s TODA vez - a chamada nativa
-           equivalente responde em ~225ms, entao nao e lentidao do
-           servidor. O modo Gui (clica nos elementos reais da janela
-           do Captain, em vez de simular so o AJAX por fora) foi
-           testado e FUNCIONA de forma confiavel. Por isso, agora o
-           Gui e sempre usado quando o Captain esta ativo, sem
-           depender do toggle - o caminho AJAX direto (fakeOpening/
-           fakeSelectAll/claimMultiple, mais abaixo no arquivo) fica
-           mantido no codigo apenas como referencia/depuracao futura,
-           mas nao e mais chamado daqui. */
+        /* TENTATIVA NOVA (14/07): o caminho AJAX direto tinha travado
+           com timeout de 45s nos testes anteriores mesmo com payload
+           confirmado correto - suspeita de que faltava tempo entre as
+           chamadas pro servidor "assentar" o estado da janela (nossas
+           chamadas disparavam quase instantaneas, bem mais rapido que
+           um clique humano real). Agora com delays de ~1-1.5s entre
+           cada passo, tenta esse caminho primeiro - sem abrir nenhuma
+           janela visualmente. Se ainda assim falhar, cai pro modo GUI
+           (que ja e confirmado funcionar, mas abre a janela de
+           verdade) como fallback. */
         if (isCaptainActive) {
             try {
-                await this.fakeGuiUpdate();
+                await this.claimViaDirectAjax();
                 return;
             } catch (e) {
-                this.console.log('[AutoFarm] Caminho do Captain (GUI) falhou (' + (e?.message ?? e) + '), usando coleta individual como alternativa.');
+                this.console.log('[AutoFarm] Caminho AJAX direto falhou (' + (e?.message ?? e) + '), tentando via GUI (abre a janela)...');
+                try {
+                    await this.fakeGuiUpdate();
+                    return;
+                } catch (e2) {
+                    this.console.log('[AutoFarm] Caminho do Captain (GUI) também falhou (' + (e2?.message ?? e2) + '), usando coleta individual como alternativa.');
+                }
             }
         }
 
-        // Se o Captain nao esta ativo (ou o caminho GUI falhou acima),
-        // coleta as resources uma por uma, respeitando o limite por ciclo.
+        // Se o Captain nao esta ativo (ou os dois caminhos acima
+        // falharam), coleta as resources uma por uma, respeitando o
+        // limite por ciclo.
         await this._claimOneByOne(polis_list);
+    };
+
+    /* Sequencia completa do caminho AJAX direto, com delays humanos
+       entre cada passo (ver nota em fakeOpening/fakeSelectAll). Nao
+       abre nenhuma janela visualmente - se funcionar, e o caminho
+       ideal (mais rapido e sem interface piscando na tela). */
+    claimViaDirectAjax = async () => {
+        await this.fakeOpening();
+        await this.sleep(1300, 150);
+        await this.fakeSelectAll();
+        await this.sleep(1300, 150);
+        await this.claimMultiple();
     };
 
     /* Coleta cidade a cidade, respeitando o limite de 60 por ciclo.
@@ -415,13 +431,16 @@ var AutoFarm = class extends MultUtil {
     fakeOpening = async () => {
         try {
             /* Confirmado via captura real de rede: a chamada nativa de
-               'index' manda {town_id, nl_init:true} - antes mandavamos
-               um objeto vazio {}, o que pode nao inicializar o contexto
-               certo no servidor pros passos seguintes (select_all,
-               update, claim_loads_multiple). */
+               'index' manda {town_id, nl_init:true}. TENTATIVA NOVA:
+               delay entre chamadas aumentado de 10ms pra ~1.2s (mais
+               proximo do tempo real entre cliques humanos) - suspeita
+               de que o servidor precisa de um tempo minimo pra
+               "assentar" o estado da janela entre um passo e outro,
+               ja que o payload em si ja foi confirmado correto antes
+               e mesmo assim travava com timeout. */
             const town_id = uw.ITowns.getCurrentTown().id;
             await this.ajaxGetWithTimeout('farm_town_overviews', 'index', { town_id: town_id, nl_init: true });
-            await this.sleep(10);
+            await this.sleep(1200, 150);
             await this.fakeUpdate();
         } catch (e) {
             this.console.log('[AutoFarm] Erro em fakeOpening: ' + (e?.message ?? e));
