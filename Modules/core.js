@@ -1205,6 +1205,28 @@ var MultUtil = class {
         return '#' + ids;
     };
 
+    /* Detecta mensagens nativas do jogo (banners de erro / campo
+       "error" das respostas ajax) que significam "sem recursos" ou
+       "sem espaco/capacidade" (populacao, limite de unidades, fila
+       cheia por falta de espaco de armazem, etc) - casos ESPERADOS
+       que acontecem o tempo todo enquanto os recursos ainda nao
+       acumularam, e que NAO devem gerar log/notificacao repetida a
+       cada tentativa (isso so gera flood sem trazer informacao nova).
+       Baseado nas mensagens nativas confirmadas em capturas reais do
+       jogo: "Nao ha recursos suficientes." e "Voce nao pode recrutar
+       mais do que N <unidade>.". Qualquer outra mensagem (timeout de
+       rede, requisitos de construcao nao atendidos, erro de sessao,
+       etc) NAO cai aqui e continua sendo logada normalmente, pois
+       essas sim sao acionaveis/uteis de ver no console. */
+    isResourceOrCapacityMessage = message => {
+        if (!message) return false;
+        const msg = String(message);
+        return /recursos\s+suficientes/i.test(msg)
+            || /n[aã]o\s+pode\s+(recrutar|construir)\s+mais/i.test(msg)
+            || /espa[çc]o/i.test(msg)
+            || /popula[çc][aã]o/i.test(msg);
+    };
+
     /* extraFlag: some game endpoints (e.g. town_info/trade) expect
        `true` in this 4th parameter of the native ajaxPost. Default
        false preserves the behavior of all existing callers. */
