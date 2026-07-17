@@ -466,37 +466,163 @@ var Sniper = class extends MultUtil {
         this._renderList();
     }
 
-    async _fire(snipe) {
-        const fireStartedAt = Date.now();
-        const localDeltaMs = fireStartedAt - snipe.sendAt; // positivo = disparou depois do alvo, negativo = antes
-
+    /* Confirmado via captura real: cancelar um envio usa
+       frontend_bridge/execute com model_url:"Commands",
+       action_name:"cancelCommand", arguments:{id:<command_id>}. So
+       funciona por um tempo curto depois do envio (o campo
+       cancelable_until do movimento diz ate quando). */
+    async _cancelCommand(townId, commandId) {
         try {
             const data = {
-                ...snipe.composition,
-                id: parseInt(snipe.targetId, 10),
-                type: snipe.type,
-                town_id: parseInt(snipe.originTownId, 10),
+                model_url: 'Commands',
+                action_name: 'cancelCommand',
+                captcha: null,
+                arguments: { id: commandId },
+                town_id: parseInt(townId, 10),
                 nl_init: true,
             };
-
-            const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data);
-            const roundTripMs = Date.now() - fireStartedAt;
-
-            if (res && !res.error) {
-                snipe.status = 'sent';
-                const msg = this.t('sniper_fired_ok', { target: snipe.targetName });
-                this.console.log('[Sniper] ' + msg);
-                this.console.log('[Sniper] ' + this.t('sniper_timing_debug_log', { localDelta: localDeltaMs, roundTrip: roundTripMs }));
-                if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
-            } else {
-                snipe.status = 'failed';
-                snipe.error = res?.error ?? '?';
-                this.console.log('[Sniper] ' + this.t('sniper_fired_fail', { target: snipe.targetName, reason: snipe.error }));
-            }
+            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
+            return !!(res && !res.error);
         } catch (e) {
-            snipe.status = 'failed';
-            snipe.error = e?.message ?? String(e);
-            this.console.log('[Sniper] ' + this.t('sniper_fired_fail', { target: snipe.targetName, reason: snipe.error }));
+            this.console.log('[Sniper] ' + this.t('sniper_cancel_error', { msg: e?.message ?? e }));
+            return false;
+        }
+    }
+
+    /* IDs de comandos JA existentes entre essas duas cidades (do tipo
+       certo) antes de disparar - usado pra achar sem ambiguidade qual
+       comando NOVO apareceu depois do envio. */
+    _getExistingCommandIds(originId, targetId, type) {
+        const ids = new Set();
+        try {
+            const models = uw.MM.getModels().MovementsUnits;
+            for (const key in models) {
+                const mv = models[key]?.attributes;
+                if (!mv) continue;
+                if (String(mv.home_town_id) !== String(originId)) continue;
+                if (String(mv.target_town_id) !== String(targetId)) continue;
+                if (mv.type !== type) continue;
+                ids.add(mv.command_id);
+            }
+        } catch (e) {}
+        return ids;
+    }
+
+    /* Acha o comando NOVO que apareceu depois do envio (nao estava no
+       conjunto "antes"). Tenta algumas vezes com um pequeno espaco,
+       ja que o movimento pode demorar um instante pra aparecer na
+       collection depois do envio. */
+    async _findNewCommand(originId, targetId, type, existingIds) {
+        for (let attempt = 0; attempt < 6; attempt++) {
+            try {
+                const models = uw.MM.getModels().MovementsUnits;
+                for (const key in models) {
+                    const mv = models[key]?.attributes;
+                    if (!mv) continue;
+                    if (String(mv.home_town_id) !== String(originId)) continue;
+                    if (String(mv.target_town_id) !== String(targetId)) continue;
+                    if (mv.type !== type) continue;
+                    if (existingIds.has(mv.command_id)) continue;
+                    return mv;
+                }
+            } catch (e) {}
+            await this.sleep(300);
+        }
+        return null;
+    }
+
+    /* Um unico envio - manda e retorna o comando resultante (se
+       achou), sem decidir nada sobre repetir. */
+    async _fireOnce(snipe) {
+        const data = {
+            ...snipe.composition,
+            id: parseInt(snipe.targetId, 10),
+            type: snipe.type,
+            town_id: parseInt(snipe.originTownId, 10),
+            nl_init: true,
+        };
+
+        const existingIds = this._getExistingCommandIds(snipe.originTownId, snipe.targetId, snipe.type);
+        const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data);
+
+        if (!res || res.error) {
+            return { ok: false, error: res?.error ?? '?' };
+        }
+
+        const command = await this._findNewCommand(snipe.originTownId, snipe.targetId, snipe.type, existingIds);
+        return { ok: true, command };
+    }
+
+    /* Tenta ate 10 vezes: envia, confere o horario REAL de chegada
+       (que o proprio jogo calculou pro comando resultante) contra o
+       desejado, e se nao bater dentro de 1 segundo de tolerancia -
+       E ainda der tempo e tentativas - cancela e tenta de novo.
+       Pedido explicitamente: imitar tentativa humana repetida ate
+       acertar o segundo exato, em vez de confiar cegamente no
+       primeiro envio. */
+    async _fire(snipe) {
+        const MAX_ATTEMPTS = 10;
+        const TOLERANCE_SECONDS = 1;
+
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                const result = await this._fireOnce(snipe);
+
+                if (!result.ok) {
+                    snipe.status = 'failed';
+                    snipe.error = result.error;
+                    this.console.log('[Sniper] ' + this.t('sniper_fired_fail', { target: snipe.targetName, reason: snipe.error }));
+                    return;
+                }
+
+                if (!result.command) {
+                    // Enviou mas nao achou o comando resultante pra conferir -
+                    // aceita como enviado, nao arrisca cancelar as cegas.
+                    snipe.status = 'sent';
+                    const msg = this.t('sniper_fired_ok', { target: snipe.targetName });
+                    this.console.log('[Sniper] ' + msg + ' ' + this.t('sniper_no_command_found'));
+                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
+                    return;
+                }
+
+                const actualArrivalSec = result.command.arrival_at;
+                const desiredArrivalSec = Math.floor(snipe.arrivalAt / 1000);
+                const diffSeconds = actualArrivalSec - desiredArrivalSec;
+
+                this.console.log('[Sniper] ' + this.t('sniper_attempt_log', {
+                    attempt, max: MAX_ATTEMPTS, target: snipe.targetName, diff: diffSeconds,
+                }));
+
+                if (Math.abs(diffSeconds) <= TOLERANCE_SECONDS) {
+                    snipe.status = 'sent';
+                    const msg = this.t('sniper_fired_ok_precise', { target: snipe.targetName, diff: diffSeconds });
+                    this.console.log('[Sniper] ' + msg);
+                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
+                    return;
+                }
+
+                // Nao bateu - so vale cancelar e tentar de novo se ainda
+                // houver tempo/tentativas e o comando ainda for cancelavel.
+                const cancelableUntil = result.command.cancelable_until;
+                const canCancel = cancelableUntil && (Date.now() / 1000) < cancelableUntil;
+                const timeLeftMs = snipe.arrivalAt - Date.now();
+
+                if (attempt === MAX_ATTEMPTS || !canCancel || timeLeftMs < 3000) {
+                    snipe.status = 'sent';
+                    const msg = this.t('sniper_fired_ok_imprecise', { target: snipe.targetName, diff: diffSeconds, attempts: attempt });
+                    this.console.log('[Sniper] ' + msg);
+                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
+                    return;
+                }
+
+                await this._cancelCommand(snipe.originTownId, result.command.command_id);
+                await this.sleep(400, 100);
+            } catch (e) {
+                snipe.status = 'failed';
+                snipe.error = e?.message ?? String(e);
+                this.console.log('[Sniper] ' + this.t('sniper_fired_fail', { target: snipe.targetName, reason: snipe.error }));
+                return;
+            }
         }
     }
 
