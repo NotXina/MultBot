@@ -38,7 +38,6 @@ var Sniper = class extends MultUtil {
         this._observer = null;
         this._checkerInterval = null;
         this._armedTimeouts = {};
-        this._networkCompensationMs = this.storage.load('sniper_network_comp', 300);
 
         this._startWatching();
         this._startChecker();
@@ -61,22 +60,8 @@ var Sniper = class extends MultUtil {
             <div style="padding:0 10px 6px;font-size:11px;color:#8a5a2a;">
                 ⚠ ${this.t('sniper_background_warning')}
             </div>
-            <div style="margin:0 10px 8px;padding:6px 8px;background:rgba(0,0,0,0.04);border-radius:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                <label style="font-size:11px;font-weight:bold;">${this.t('sniper_network_comp_label')}</label>
-                <input type="number" id="sniper_network_comp_input" min="0" max="5000" step="50" value="${this._networkCompensationMs}" style="width:65px;padding:2px 5px;" />
-                <span style="font-size:11px;">ms</span>
-                ${this.getButtonHtml('sniper_network_comp_save', this.t('apply'), this._saveNetworkComp)}
-                <span style="font-size:10px;color:#8a7a5a;">(${this.t('sniper_network_comp_hint')})</span>
-            </div>
             <div id="sniper_list" style="padding:0 10px 10px;"></div>
         </div>`;
-    };
-
-    _saveNetworkComp = () => {
-        const val = parseInt(uw.$('#sniper_network_comp_input').val(), 10);
-        this._networkCompensationMs = (!isNaN(val) && val >= 0) ? val : 0;
-        this.storage.save('sniper_network_comp', this._networkCompensationMs);
-        this.console.log('[Sniper] ' + this.t('sniper_network_comp_saved_log', { ms: this._networkCompensationMs }));
     };
 
     /* Observa a pagina inteira por qualquer elemento que apareca
@@ -333,8 +318,7 @@ var Sniper = class extends MultUtil {
     _armTimeout(snipe) {
         if (this._armedTimeouts[snipe.id]) clearTimeout(this._armedTimeouts[snipe.id]);
 
-        const target = snipe.sendAt - this._networkCompensationMs;
-        const delay = target - Date.now();
+        const delay = snipe.sendAt - Date.now();
 
         if (delay <= 0) {
             this._fireIfPending(snipe.id);
@@ -491,9 +475,19 @@ var Sniper = class extends MultUtil {
        Pedido explicitamente: imitar tentativa humana repetida ate
        acertar o segundo exato, em vez de confiar cegamente no
        primeiro envio. */
+    /* Faixa aceitavel por tipo de comando (assimetrica, nao +/- igual):
+       - Ataque: nunca atrasado (perderia a janela certa) - aceita de
+         1s adiantado ate exatamente no horario (min:-1, max:0).
+       - Apoio: nunca adiantado (nao ajuda em nada chegar cedo) -
+         aceita do horario exato ate 2s atrasado (min:0, max:2). */
+    _getToleranceRange(type) {
+        if (type === 'support') return { min: 0, max: 2 };
+        return { min: -1, max: 0 }; // attack (padrao)
+    }
+
     async _fire(snipe) {
         const MAX_ATTEMPTS = 10;
-        const TOLERANCE_SECONDS = 1;
+        const { min: toleranceMin, max: toleranceMax } = this._getToleranceRange(snipe.type);
 
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
@@ -524,7 +518,7 @@ var Sniper = class extends MultUtil {
                     attempt, max: MAX_ATTEMPTS, target: snipe.targetName, diff: diffSeconds,
                 }));
 
-                if (Math.abs(diffSeconds) <= TOLERANCE_SECONDS) {
+                if (diffSeconds >= toleranceMin && diffSeconds <= toleranceMax) {
                     snipe.status = 'sent';
                     const msg = this.t('sniper_fired_ok_precise', { target: snipe.targetName, diff: diffSeconds });
                     this.console.log('[Sniper] ' + msg);
