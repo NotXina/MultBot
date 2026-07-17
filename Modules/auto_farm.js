@@ -311,7 +311,14 @@ var AutoFarm = class extends MultUtil {
                     if (relation.attributes.relation_status !== 1) continue;
                     if (relation.attributes.lootable_at !== null && now < relation.attributes.lootable_at) continue;
 
-                    this.claimSingle(town_id, relation.attributes.farm_town_id, relation.id, Math.ceil(this.timing / 600_000));
+                    // FIX: adiciona await - claimSingle e async; sem isso a
+                    // requisicao ficava "solta" enquanto o loop ja avancava
+                    // pro proximo alvo (o sleep(500) seguinte amenizava mas
+                    // nao eliminava sobreposicao). Baixo risco (bem menor
+                    // que o caso do auto_train.js, ja que aqui o main() que
+                    // chama esse loop ja e async e aguardado corretamente),
+                    // mas mais correto assim.
+                    await this.claimSingle(town_id, relation.attributes.farm_town_id, relation.id, Math.ceil(this.timing / 600_000));
                     await this.sleep(500);
                     if (!max) return;
                     else max -= 1;
