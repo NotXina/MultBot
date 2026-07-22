@@ -1,79 +1,123 @@
 // ══════════════════════════════════════════════════════
-//  MODULE: AutoSendResources
-//  Condições para enviar da cidade X para cidade Y:
-//  - Cidade X (remetente): pop < 200, sem construção em fila,
-//    mercado ativo, recurso acima de 50% do storage
-//  - Cidade Y (destino): cidade do jogador com MENOR soma de
-//    níveis de construção (proxy de "menos desenvolvida"),
-//    entre as que ainda têm espaço de sobra no armazém
-//  Envia o excedente do remetente, mas nunca mais do que o
-//  espaço livre no armazém do destino (margem de 5%) - evita
-//  desperdiçar recurso que "estoura" o armazém de lá.
+//  MODULE: AutoSendResources  (v2.0 - Balanceamento)
+//
+//  MODOS DE OPERACAO:
+//  ─────────────────────────────────────────────────────
+//  [balance]  Balanceamento global:
+//             Calcula a media de cada recurso entre TODAS
+//             as cidades. Cidades acima da media enviam o
+//             excedente para cidades abaixo da media.
+//             Gatilho extra: qualquer cidade que bater 90%
+//             do armazem envia IMEDIATAMENTE para a cidade
+//             com menor desenvolvimento (valvula de alivio).
+//
+//  [manual]   Destino FIXO escolhido pelo usuario.
+//             Cidades que batem 90% de armazem enviam para
+//             essa cidade escolhida. Mesma logica de antes,
+//             agora com percentual de gatilho configuravel.
+//
+//  REGRAS GERAIS:
+//  - Remetente precisa ter mercado ativo (nivel >= 1)
+//  - Capacidade minima de 200 unidades de comercio
+//  - Nunca envia se o destino ja tiver > 95% de armazem
+//  - Margem de seguranca de 5% no destino (nao estoura)
 // ══════════════════════════════════════════════════════
 var AutoSendResources = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
-        this._active     = false;
-        this._intervalId = null;
-        this._lastRun    = null;
-        this.mode                = this.storage.load('asr_mode', 'auto'); // 'auto' | 'manual'
-        this.manualTargetId      = this.storage.load('asr_manual_target', null);
-        this.checkIntervalMinutes = this.storage.load('asr_interval_min', 30);
+        this._active        = false;
+        this._intervalId    = null;
+        this._urgentQueue   = []; // cidades em 90%+ aguardando envio urgente
+
+        this.mode                 = this.storage.load('asr_mode', 'balance');
+        this.manualTargetId       = this.storage.load('asr_manual_target', null);
+        this.checkIntervalMinutes = this.storage.load('asr_interval_min', 20);
+        this.overflowThreshold    = this.storage.load('asr_overflow_pct', 90); // % do armazem
+        this.sendThreshold        = this.storage.load('asr_send_pct', 60);     // excedente acima de X%
 
         if (this.storage.load('asr_active', false)) {
             setTimeout(() => this.start(), 2500);
         }
     }
 
+    // ── Lista de tipos de construcao (para calculo de pontuacao) ──
+    BUILDING_TYPES = [
+        'main', 'storage', 'farm', 'academy', 'temple',
+        'barracks', 'docks', 'market', 'hide',
+        'lumber', 'stoner', 'ironer', 'wall'
+    ];
+
+    // ─────────────────────────────────────────────────────────────
+    //  UI - Settings Panel
+    // ─────────────────────────────────────────────────────────────
     settings = () => {
         requestAnimationFrame(() => {
             this._updateTitle();
             this._updateModeButtons();
         });
-        return `
-        <div class="game_border" style="margin-bottom:20px;">
-            <div class="game_border_top"></div><div class="game_border_bottom"></div>
-            <div class="game_border_left"></div><div class="game_border_right"></div>
-            <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
-            <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            ${this.getTitleHtml('asr_title', this.t('asr_title'), this.toggle, '', this._active)}
-            <div style="padding:5px 10px;font-weight:bold;">
-                ${this.t('asr_desc')}
-            </div>
-            <div style="padding:2px 10px 4px;font-size:11px;color:#5a3a0a;">
-                ${this.t('asr_desc2')}
-            </div>
+        return '' +
+        '<div class="game_border" style="margin-bottom:20px;">' +
+        '  <div class="game_border_top"></div><div class="game_border_bottom"></div>' +
+        '  <div class="game_border_left"></div><div class="game_border_right"></div>' +
+        '  <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
+        '  <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
+        this.getTitleHtml('asr_title', '⚖ Auto Envio de Recursos', this.toggle, '', this._active) +
 
-            <div style="padding:4px 10px;display:flex;gap:6px;align-items:center;">
-                <label style="font-size:11px;font-weight:bold;">${this.t('asr_check_every_label')}</label>
-                <input id="asr_interval_input" type="number" min="1" max="1440" value="${this.checkIntervalMinutes}" style="width:55px;padding:2px 5px;" />
-                <span style="font-size:11px;">${this.t('asr_min_unit')}</span>
-                ${this.getButtonHtml('asr_interval_save_btn', this.t('asr_save'), this.saveInterval)}
-                <span id="asr_interval_status" style="font-size:11px;color:#5a3a0a;"></span>
-            </div>
+        // Descricao do modo
+        '  <div style="padding:5px 10px 2px;font-weight:bold;font-size:12px;">' +
+        '    Balanceia recursos entre cidades e aciona envio urgente quando alguma cidade bater o limite de armazém.' +
+        '  </div>' +
 
-            <div style="padding:4px 10px;display:flex;gap:6px;">
-                ${this.getButtonHtml('asr_mode_auto', this.t('asr_mode_auto'), this.setMode, 'auto')}
-                ${this.getButtonHtml('asr_mode_manual', this.t('asr_mode_manual'), this.setMode, 'manual')}
-            </div>
+        // Seletor de modo
+        '  <div style="padding:4px 10px;display:flex;gap:6px;align-items:center;">' +
+        '    <span style="font-size:11px;font-weight:bold;">Modo:</span>' +
+        this.getButtonHtml('asr_mode_balance', '⚖ Balancear', this.setMode, 'balance') +
+        this.getButtonHtml('asr_mode_manual',  '📌 Manual',   this.setMode, 'manual') +
+        '  </div>' +
 
-            <div id="asr_manual_controls" style="padding:4px 10px;display:none;">
-                <label style="font-size:11px;font-weight:bold;">${this.t('asr_manual_target_label')}</label><br>
-                <div style="display:flex;gap:6px;align-items:center;margin-top:3px;">
-                    <select id="asr_manual_target_select" style="flex:1;padding:3px;">
-                        ${this._getTownOptionsHtml()}
-                    </select>
-                    ${this.getButtonHtml('asr_manual_save_btn', this.t('asr_save'), this.saveManualTarget)}
-                </div>
-                <div id="asr_manual_target_status" style="font-size:11px;color:#5a3a0a;margin-top:3px;">
-                    ${this.manualTargetId ? this.t('asr_target_current', { name: uw.ITowns.towns[this.manualTargetId]?.getName?.() ?? '#' + this.manualTargetId }) : this.t('asr_no_target_configured')}
-                </div>
-            </div>
+        // Parametros globais
+        '  <div style="padding:4px 10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
 
-            <div id="asr_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
-        </div>`;
+        '    <span style="font-size:11px;font-weight:bold;">Verificar a cada</span>' +
+        '    <input id="asr_interval_input" type="number" min="1" max="1440" value="' + this.checkIntervalMinutes + '" style="width:50px;padding:2px 4px;" />' +
+        '    <span style="font-size:11px;">min</span>' +
+
+        '    <span style="font-size:11px;font-weight:bold;margin-left:8px;">Alarme armazém</span>' +
+        '    <input id="asr_overflow_input" type="number" min="50" max="99" value="' + this.overflowThreshold + '" style="width:45px;padding:2px 4px;" />' +
+        '    <span style="font-size:11px;">%</span>' +
+
+        '    <span style="font-size:11px;font-weight:bold;margin-left:8px;">Enviar excedente ></span>' +
+        '    <input id="asr_send_input" type="number" min="10" max="90" value="' + this.sendThreshold + '" style="width:45px;padding:2px 4px;" />' +
+        '    <span style="font-size:11px;">%</span>' +
+
+        this.getButtonHtml('asr_save_params_btn', '💾 Salvar', this._saveParams) +
+        '  </div>' +
+        '  <div id="asr_param_status" style="padding:0 10px 2px;font-size:11px;color:#5a3a0a;min-height:14px;"></div>' +
+
+        // Controles do modo Manual
+        '  <div id="asr_manual_controls" style="padding:4px 10px 6px;display:none;">' +
+        '    <label style="font-size:11px;font-weight:bold;">🏙 Cidade Destino Fixa</label><br>' +
+        '    <div style="display:flex;gap:6px;align-items:center;margin-top:3px;">' +
+        '      <select id="asr_manual_target_select" style="flex:1;padding:3px;">' + this._getTownOptionsHtml() + '</select>' +
+        this.getButtonHtml('asr_manual_save_btn', 'Salvar', this.saveManualTarget) +
+        '    </div>' +
+        '    <div id="asr_manual_target_status" style="font-size:11px;color:#5a3a0a;margin-top:3px;">' +
+        (this.manualTargetId
+            ? '✓ Destino: ' + (uw.ITowns.towns[this.manualTargetId] && uw.ITowns.towns[this.manualTargetId].getName
+                ? uw.ITowns.towns[this.manualTargetId].getName()
+                : '#' + this.manualTargetId)
+            : 'Nenhum destino configurado.') +
+        '    </div>' +
+        '  </div>' +
+
+        // Log
+        '  <div id="asr_log" style="padding:3px 10px 8px;font-size:11px;color:#5a3a0a;min-height:32px;white-space:pre-line;"></div>' +
+        '</div>';
     };
 
+    // ─────────────────────────────────────────────────────────────
+    //  Controles: start / stop / toggle
+    // ─────────────────────────────────────────────────────────────
     toggle = () => {
         if (this._active) this.stop();
         else this.start();
@@ -84,7 +128,7 @@ var AutoSendResources = class extends MultUtil {
         this._active = true;
         this.storage.save('asr_active', true);
         this._updateTitle();
-        this.console.log('[AutoRecursos] ' + this.t('asr_started_log', { min: this.checkIntervalMinutes }));
+        this.console.log('[AutoRecursos] Iniciado. Modo: ' + this.mode + ' | Intervalo: ' + this.checkIntervalMinutes + ' min | Alarme: ' + this.overflowThreshold + '%');
         this._tick();
         this._intervalId = this.createGuardedInterval(() => this._tick(), this.checkIntervalMinutes * 60 * 1000);
     }
@@ -94,7 +138,8 @@ var AutoSendResources = class extends MultUtil {
         this.storage.save('asr_active', false);
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
         this._updateTitle();
-        this.console.log('[AutoRecursos] ' + this.t('asr_stopped_log'));
+        this.console.log('[AutoRecursos] Parado.');
+        this._setLog('⏹ Módulo parado.');
     }
 
     _updateTitle() {
@@ -102,192 +147,325 @@ var AutoSendResources = class extends MultUtil {
             ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
 
+    // ─────────────────────────────────────────────────────────────
+    //  Controles de UI
+    // ─────────────────────────────────────────────────────────────
     setMode = (mode) => {
         this.mode = mode;
         this.storage.save('asr_mode', mode);
         this._updateModeButtons();
-        this.console.log('[AutoRecursos] ' + this.t('asr_mode_changed_log', { mode: mode === 'manual' ? this.t('asr_mode_manual') : this.t('asr_mode_auto') }));
+        this.console.log('[AutoRecursos] Modo: ' + mode);
     };
 
-    // Salva o intervalo de verificação (em minutos) e, se o módulo já
-    // estiver ativo, reinicia o ciclo na hora com o novo valor - não
-    // precisa desligar e ligar de novo pra a mudança valer.
-    saveInterval = () => {
-        const val = parseInt(uw.$('#asr_interval_input').val(), 10);
-        if (!val || val < 1) {
-            uw.$('#asr_interval_status').text(this.t('asr_invalid_interval_status')).css('color', '#f87171');
+    _updateModeButtons() {
+        if (this.mode === 'manual') {
+            uw.$('#asr_mode_balance').addClass('disabled');
+            uw.$('#asr_mode_manual').removeClass('disabled');
+            uw.$('#asr_manual_controls').show();
+        } else {
+            uw.$('#asr_mode_manual').addClass('disabled');
+            uw.$('#asr_mode_balance').removeClass('disabled');
+            uw.$('#asr_manual_controls').hide();
+        }
+    }
+
+    _saveParams = () => {
+        const interval = parseInt(uw.$('#asr_interval_input').val(), 10);
+        const overflow = parseInt(uw.$('#asr_overflow_input').val(), 10);
+        const send     = parseInt(uw.$('#asr_send_input').val(), 10);
+
+        if (!interval || interval < 1) {
+            uw.$('#asr_param_status').text('✗ Intervalo inválido (mín. 1 min).').css('color', '#f87171');
+            return;
+        }
+        if (!overflow || overflow < 50 || overflow > 99) {
+            uw.$('#asr_param_status').text('✗ Alarme deve ser entre 50% e 99%.').css('color', '#f87171');
+            return;
+        }
+        if (!send || send < 10 || send > 90) {
+            uw.$('#asr_param_status').text('✗ Excedente deve ser entre 10% e 90%.').css('color', '#f87171');
             return;
         }
 
-        this.checkIntervalMinutes = val;
-        this.storage.save('asr_interval_min', val);
-        uw.$('#asr_interval_status').text(this.t('asr_interval_saved_status', { val })).css('color', '#1a6b2a');
-        this.console.log('[AutoRecursos] ' + this.t('asr_interval_changed_log', { val }));
+        this.checkIntervalMinutes = interval;
+        this.overflowThreshold    = overflow;
+        this.sendThreshold        = send;
+        this.storage.save('asr_interval_min', interval);
+        this.storage.save('asr_overflow_pct', overflow);
+        this.storage.save('asr_send_pct',     send);
+
+        uw.$('#asr_param_status').text('✓ Parâmetros salvos: ' + interval + ' min | alarme ' + overflow + '% | excedente >' + send + '%').css('color', '#1a6b2a');
 
         if (this._active) {
             if (this._intervalId) clearInterval(this._intervalId);
             this._intervalId = this.createGuardedInterval(() => this._tick(), this.checkIntervalMinutes * 60 * 1000);
         }
+        this.console.log('[AutoRecursos] Parâmetros salvos: intervalo=' + interval + 'min, alarme=' + overflow + '%, excedente>' + send + '%');
     };
-
-    _updateModeButtons() {
-        if (this.mode === 'manual') {
-            uw.$('#asr_mode_auto').addClass('disabled');
-            uw.$('#asr_mode_manual').removeClass('disabled');
-            uw.$('#asr_manual_controls').show();
-        } else {
-            uw.$('#asr_mode_manual').addClass('disabled');
-            uw.$('#asr_mode_auto').removeClass('disabled');
-            uw.$('#asr_manual_controls').hide();
-        }
-    }
 
     saveManualTarget = () => {
         const id = uw.$('#asr_manual_target_select').val();
         if (!id) {
-            uw.$('#asr_manual_target_status').text(this.t('asr_select_town_status')).css('color', '#f87171');
+            uw.$('#asr_manual_target_status').text('Selecione uma cidade.').css('color', '#f87171');
             return;
         }
         this.manualTargetId = id;
         this.storage.save('asr_manual_target', id);
-        const name = uw.ITowns.towns[id]?.getName?.() ?? '#' + id;
-        uw.$('#asr_manual_target_status').text(this.t('asr_target_current', { name })).css('color', '#1a6b2a');
-        this.console.log('[AutoRecursos] ' + this.t('asr_manual_target_saved_log', { name }));
+        const name = uw.ITowns.towns[id] && uw.ITowns.towns[id].getName ? uw.ITowns.towns[id].getName() : '#' + id;
+        uw.$('#asr_manual_target_status').text('✓ Destino: ' + name).css('color', '#1a6b2a');
+        this.console.log('[AutoRecursos] Destino manual: ' + name);
     };
 
     _getTownOptionsHtml() {
         try {
             const towns = uw.ITowns.towns;
-            const keys = Object.keys(towns);
+            const keys  = Object.keys(towns);
             keys.sort((a, b) => {
                 const nameA = towns[a].getName ? towns[a].getName() : '';
                 const nameB = towns[b].getName ? towns[b].getName() : '';
                 return nameA.localeCompare(nameB);
             });
-            let html = '<option value="">' + this.t('asr_select_placeholder') + '</option>';
+            let html = '<option value="">Selecione...</option>';
             for (const id of keys) {
-                const t = towns[id];
+                const t    = towns[id];
                 const name = t.getName ? t.getName() : ('#' + id);
-                const selected = (String(id) === String(this.manualTargetId)) ? ' selected' : '';
-                html += '<option value="' + id + '"' + selected + '>' + name + ' (#' + id + ')</option>';
+                const sel  = (String(id) === String(this.manualTargetId)) ? ' selected' : '';
+                html += '<option value="' + id + '"' + sel + '>' + name + '</option>';
             }
             return html;
         } catch (e) {
-            return '<option value="">' + this.t('asr_towns_load_error') + '</option>';
+            return '<option value="">Erro ao carregar cidades</option>';
         }
     }
 
+    _setLog(msg) {
+        uw.$('#asr_log').text(msg);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  TICK PRINCIPAL
+    // ─────────────────────────────────────────────────────────────
     async _tick() {
-        try {
-            this.console.log('[AutoRecursos] ' + this.t('asr_checking_log'));
+        const townIds = Object.keys(uw.ITowns.towns);
+        if (townIds.length < 2) return;
 
-            const townIds = Object.keys(uw.ITowns.towns);
-            if (townIds.length < 2) return;
+        this.console.log('[AutoRecursos] ── Tick (' + this.mode + ') ──');
 
-            if (this.mode === 'manual') {
-                await this._tickManual(townIds);
-                return;
-            }
-
-            // Lista de cidades carentes (menos desenvolvidas primeiro), nao
-            // so a mais pobre - assim varias cidades sao ajudadas no mesmo
-            // ciclo, em vez de uma por vez.
-            const targets = this._findLeastDevelopedTowns(townIds);
-            if (targets.length === 0) return;
-
-            const targetNames = targets.map(id => uw.ITowns.towns[id].getName()).join(', ');
-            this.console.log('[AutoRecursos] ' + this.t('asr_targets_log', { names: targetNames }));
-
-            const senders = townIds.filter(id => !targets.includes(id) && this._isEligibleSender(id));
-            if (!senders.length) {
-                this.console.log('[AutoRecursos] ' + this.t('asr_no_senders_log'));
-                uw.$('#asr_log').text(this.t('asr_no_senders_log'));
-                return;
-            }
-
-            // Cada remetente manda pra um destino diferente, girando pela
-            // lista de carentes - as mais pobres aparecem primeiro e recebem
-            // prioridade quando ha mais remetentes do que destinos.
-            const results = await Promise.allSettled(
-                senders.map((fromId, i) => this._sendResources(fromId, targets[i % targets.length]))
-            );
-
-            const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
-            const msg = totalSent > 0
-                ? this.t('asr_cycle_complete_log', { count: totalSent, targets: targets.length })
-                : this.t('asr_no_senders_log');
-            this.console.log('[AutoRecursos] ' + msg);
-            uw.$('#asr_log').text(msg);
-        } catch (e) {
-            this.console.log('[AutoRecursos] ' + this.t('asr_cycle_exception_log', { msg: e?.message ?? e }));
+        if (this.mode === 'manual') {
+            await this._tickManual(townIds);
+        } else {
+            await this._tickBalance(townIds);
         }
     }
 
-    /* Modo manual: destino FIXO escolhido por voce. Diferente do modo
-       automatico, aqui NAO checa pop/fila de construcao/mercado - o
-       unico gatilho e "algum recurso bateu 90% do armazem". E uma
-       valvula de seguranca contra desperdicio por armazem cheio, nao
-       um balanceamento entre cidades. */
+    // ─────────────────────────────────────────────────────────────
+    //  MODO BALANCEAMENTO
+    //  Logica:
+    //  1. Detecta cidades em 90%+ (urgente) → envia imediatamente
+    //     para a cidade menos desenvolvida com espaco no armazem.
+    //  2. Calcula a media de cada recurso entre todas as cidades.
+    //  3. Cidades muito acima da media (> sendThreshold%) enviam
+    //     o excedente para cidades abaixo da media.
+    // ─────────────────────────────────────────────────────────────
+    async _tickBalance(townIds) {
+        const lines = [];
+
+        // ── PASSO 1: Urgente (90%+) ──────────────────────────────
+        const urgentSenders = townIds.filter(id => this._isOverflowing(id));
+        if (urgentSenders.length > 0) {
+            lines.push('🚨 ' + urgentSenders.length + ' cidade(s) com armazém em ' + this.overflowThreshold + '%+');
+            this.console.log('[AutoRecursos] [URGENTE] ' + urgentSenders.length + ' cidade(s) em ' + this.overflowThreshold + '%+');
+
+            // Destino: menos desenvolvida com espaco
+            const devTargets = this._findLeastDevelopedTowns(townIds);
+            for (const fromId of urgentSenders) {
+                // Encontra o melhor destino (que nao seja o proprio remetente)
+                const toId = devTargets.find(id => id !== fromId);
+                if (!toId) continue;
+
+                const fromName = this.getTownName(fromId);
+                const toName   = this.getTownName(toId);
+                this.console.log('[AutoRecursos] [URGENTE] ' + fromName + ' → ' + toName);
+
+                const ok = await this._sendResources(fromId, toId, true);
+                lines.push((ok ? '  ✓ ' : '  ✗ ') + fromName + ' → ' + toName);
+            }
+        }
+
+        // ── PASSO 2: Calcular medias por recurso ──────────────────
+        let totalW = 0, totalS = 0, totalI = 0;
+        let validCount = 0;
+
+        for (const id of townIds) {
+            try {
+                const res = uw.ITowns.towns[id].resources();
+                totalW += res.wood;
+                totalS += res.stone;
+                totalI += res.iron;
+                validCount++;
+            } catch (e) {}
+        }
+
+        if (validCount < 2) return;
+
+        const avgW = totalW / validCount;
+        const avgS = totalS / validCount;
+        const avgI = totalI / validCount;
+
+        this.console.log('[AutoRecursos] Medias: 🪵' + Math.floor(avgW) + ' 🪨' + Math.floor(avgS) + ' ⚙' + Math.floor(avgI));
+
+        // ── PASSO 3: Balancear remetentes → destinatarios ─────────
+        // Remetentes: cidades com pelo menos 1 recurso muito acima da media
+        // Destinatarios: cidades com todos os recursos abaixo da media
+        const senders    = [];
+        const receivers  = [];
+
+        for (const id of townIds) {
+            try {
+                const town     = uw.ITowns.towns[id];
+                const res      = town.resources();
+                const storage  = res.storage;
+                const sendPct  = this.sendThreshold / 100;
+
+                const hasExcess = (
+                    res.wood  > avgW * 1.15 && res.wood  > storage * sendPct ||
+                    res.stone > avgS * 1.15 && res.stone > storage * sendPct ||
+                    res.iron  > avgI * 1.15 && res.iron  > storage * sendPct
+                );
+
+                // Verifica se tem mercado disponivel
+                const buildings = town.buildings().attributes;
+                const hasMkt    = buildings.market && buildings.market >= 1;
+                const hasCap    = town.getAvailableTradeCapacity() >= 200;
+
+                if (hasExcess && hasMkt && hasCap) {
+                    senders.push(id);
+                } else {
+                    // Destinatario: tem espaco e esta abaixo da media em pelo menos 1 recurso
+                    const roomLeft = (storage - res.wood) + (storage - res.stone) + (storage - res.iron);
+                    const needsRes = res.wood < avgW || res.stone < avgS || res.iron < avgI;
+                    if (roomLeft > 200 && needsRes && !this._isAlmostFull(id)) {
+                        receivers.push({ id, score: this._getDevelopmentScore(town) });
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Ordena destinatarios pelo menos desenvolvidos primeiro
+        receivers.sort((a, b) => a.score - b.score);
+
+        if (senders.length === 0) {
+            const noMsg = urgentSenders.length === 0
+                ? 'Recursos equilibrados entre todas as cidades.'
+                : '';
+            if (noMsg) { lines.push('⚖ ' + noMsg); }
+            this._setLog(lines.join('\n'));
+            return;
+        }
+
+        lines.push('⚖ Balanceando: ' + senders.length + ' remetente(s) → ' + receivers.length + ' destino(s)');
+        this.console.log('[AutoRecursos] ' + senders.length + ' remetente(s) / ' + receivers.length + ' destino(s)');
+
+        if (receivers.length === 0) {
+            lines.push('Sem destinos disponíveis para balancear.');
+            this._setLog(lines.join('\n'));
+            return;
+        }
+
+        // Cada remetente envia para um destino (rotativo pelos menos desenvolvidos)
+        const balanceResults = await Promise.allSettled(
+            senders.map((fromId, i) => {
+                const toId = receivers[i % receivers.length].id;
+                return this._sendResources(fromId, toId, false).then(ok => {
+                    return { fromId, toId, ok };
+                });
+            })
+        );
+
+        let sentCount = 0;
+        for (const r of balanceResults) {
+            if (r.status === 'fulfilled' && r.value) {
+                if (r.value.ok) sentCount++;
+                const fName = this.getTownName(r.value.fromId);
+                const tName = this.getTownName(r.value.toId);
+                lines.push('  ' + (r.value.ok ? '✓' : '✗') + ' ' + fName + ' → ' + tName);
+            }
+        }
+
+        const summary = sentCount > 0
+            ? '✓ ' + sentCount + ' envio(s) realizados com sucesso.'
+            : 'Nenhum envio concluído (sem excedente real ou destinos cheios).';
+        lines.push(summary);
+        this.console.log('[AutoRecursos] ' + summary);
+        this._setLog(lines.join('\n'));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  MODO MANUAL
+    //  Destino fixo. Gatilho: cidade atinge overflowThreshold%.
+    // ─────────────────────────────────────────────────────────────
     async _tickManual(townIds) {
         if (!this.manualTargetId) {
-            this.console.log('[AutoRecursos] ' + this.t('asr_manual_no_target_log'));
-            uw.$('#asr_log').text(this.t('asr_manual_no_target_status')).css('color', '#f87171');
+            this._setLog('⚠ Configure uma cidade destino no modo manual.');
             return;
         }
 
         const targetTown = uw.ITowns.towns[this.manualTargetId];
         if (!targetTown) {
-            this.console.log('[AutoRecursos] ' + this.t('asr_manual_target_missing_log', { id: this.manualTargetId }));
-            uw.$('#asr_log').text(this.t('asr_manual_target_missing_status')).css('color', '#f87171');
+            this._setLog('✗ Cidade destino não encontrada.');
             return;
         }
-        const targetName = targetTown.getName();
 
         const senders = townIds.filter(id => id !== this.manualTargetId && this._isOverflowing(id));
         if (!senders.length) {
-            this.console.log('[AutoRecursos] ' + this.t('asr_manual_no_senders_log'));
-            uw.$('#asr_log').text(this.t('asr_manual_no_senders_log'));
+            const msg = 'Nenhuma cidade em ' + this.overflowThreshold + '%+ de armazém.';
+            this.console.log('[AutoRecursos] [Manual] ' + msg);
+            this._setLog(msg);
             return;
         }
 
-        this.console.log('[AutoRecursos] ' + this.t('asr_manual_sending_log', { count: senders.length, target: targetName }));
+        const targetName = targetTown.getName();
+        this.console.log('[AutoRecursos] [Manual] ' + senders.length + ' cidade(s) enviando para ' + targetName);
 
         const results = await Promise.allSettled(
-            senders.map(fromId => this._sendResources(fromId, this.manualTargetId))
+            senders.map(fromId => this._sendResources(fromId, this.manualTargetId, true))
         );
 
         const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
         const msg = totalSent > 0
-            ? this.t('asr_manual_complete_log', { count: totalSent, target: targetName })
-            : this.t('asr_manual_none_sent_log');
-        this.console.log('[AutoRecursos] ' + msg);
-        uw.$('#asr_log').text(msg);
+            ? '✓ ' + totalSent + ' cidade(s) enviaram para ' + targetName
+            : 'Nenhum envio concluído (' + targetName + ' sem espaço?).';
+        this.console.log('[AutoRecursos] [Manual] ' + msg);
+        this._setLog(msg);
     }
 
-    // Verdadeiro se algum recurso da cidade estiver em 90% ou mais do
-    // armazem - o gatilho do modo manual.
+    // ─────────────────────────────────────────────────────────────
+    //  HELPERS de Estado
+    // ─────────────────────────────────────────────────────────────
+
+    // Verdadeiro se algum recurso atingiu o threshold de alarme (padrão 90%)
     _isOverflowing(townId) {
         try {
-            const town = uw.ITowns.towns[townId];
-            const res  = town.resources();
-            const threshold = res.storage * 0.9;
+            const res       = uw.ITowns.towns[townId].resources();
+            const threshold = res.storage * (this.overflowThreshold / 100);
             return res.wood >= threshold || res.stone >= threshold || res.iron >= threshold;
         } catch (e) {
             return false;
         }
     }
 
-    // Soma dos niveis de todas as construcoes de uma cidade - usado
-    // como indicador de "quao desenvolvida" ela e (uma cidade nova/
-    // recem-fundada tem essa soma bem menor que uma ja consolidada).
-    // Lista de construcoes de verdade (mesma do auto_build.js) - usada
-    // pra filtrar SOMENTE niveis de construcao, ignorando outros campos
-    // numericos que existem em buildings().attributes (id, town_id,
-    // timestamps de atualizacao, etc) que iriam corromper a soma se
-    // entrassem no calculo (um timestamp e um numero gigante e sozinho
-    // ja dominaria a pontuacao inteira).
-    BUILDING_TYPES = ['main', 'storage', 'farm', 'academy', 'temple', 'barracks', 'docks', 'market', 'hide', 'lumber', 'stoner', 'ironer', 'wall'];
+    // Verdadeiro se a cidade esta quase cheia (>= 95%) — exclui de ser destino
+    _isAlmostFull(townId) {
+        try {
+            const res  = uw.ITowns.towns[townId].resources();
+            const cap  = res.storage * 0.95;
+            return res.wood >= cap && res.stone >= cap && res.iron >= cap;
+        } catch (e) {
+            return true;
+        }
+    }
 
+    // Pontuacao de desenvolvimento (soma de niveis de construcao)
     _getDevelopmentScore(town) {
         try {
             const buildings = town.buildings().attributes;
@@ -298,111 +476,89 @@ var AutoSendResources = class extends MultUtil {
             }
             return sum;
         } catch (e) {
-            return Infinity; // erro ao ler -> nunca escolhe essa cidade como alvo
+            return Infinity;
         }
     }
 
-    // Lista de cidades candidatas a destino, ordenada da MENOS
-    // DESENVOLVIDA (menor soma de niveis de construcao) pra mais -
-    // entre as que ainda tem espaco de sobra no armazem. Cidades com
-    // o armazem praticamente cheio sao excluidas aqui, pra nao virar
-    // alvo de um envio que so vai desperdicar recurso estourando.
+    // Lista de cidades candidatas a destino, ordenadas da MENOS desenvolvida
+    // para a mais, filtrando as que estao quase cheias (>= 95% do armazem).
     _findLeastDevelopedTowns(townIds) {
         const candidates = [];
-
         for (const id of townIds) {
             try {
-                const town = uw.ITowns.towns[id];
-                const res  = town.resources();
-
-                // Espaco livre total (soma dos 3 recursos) - se sobrar
-                // pouco, nem vale considerar essa cidade como destino.
-                const roomLeft = (res.storage - res.wood) + (res.storage - res.stone) + (res.storage - res.iron);
-                if (roomLeft < 300) continue;
-
-                const score = this._getDevelopmentScore(town);
-                candidates.push({ id, score });
-            } catch(e) {}
+                const town   = uw.ITowns.towns[id];
+                const res    = town.resources();
+                const room   = (res.storage - res.wood) + (res.storage - res.stone) + (res.storage - res.iron);
+                if (room < 150) continue;
+                if (this._isAlmostFull(id)) continue;
+                candidates.push({ id, score: this._getDevelopmentScore(town) });
+            } catch (e) {}
         }
-
         candidates.sort((a, b) => a.score - b.score);
         return candidates.map(c => c.id);
     }
 
-    // Verifica se a cidade pode enviar recursos
-    /* IMPORTANTE: nao exige mais que a cidade esteja "ociosa" (pop
-       livre baixa + fila de construcao vazia) - essa exigencia
-       excluia exatamente as cidades desenvolvidas/ativas, que sao
-       as que mais acumulam recurso parado (sempre construindo ou
-       recrutando, mas com excedente de sobra). Manda o excedente
-       de QUALQUER cidade com mercado disponivel, esteja ela ociosa
-       ou nao - tirar o excedente (acima de 50%) nao atrapalha nada
-       que ja esta em andamento. */
-    _isEligibleSender(townId) {
+    // ─────────────────────────────────────────────────────────────
+    //  ENVIO DE RECURSOS
+    //  urgent=true  → envia TODO o excedente acima de 5% (modo urgente)
+    //  urgent=false → envia excedente acima de sendThreshold% (balancear)
+    // ─────────────────────────────────────────────────────────────
+    _sendResources = async (fromId, toId, urgent) => {
         try {
-            const town      = uw.ITowns.towns[townId];
-            const buildings = town.buildings().attributes;
-            const res       = town.resources();
+            const from    = uw.ITowns.towns[fromId];
+            const to      = uw.ITowns.towns[toId];
+            const fromRes = from.resources();
+            const toRes   = to.resources();
+            const cap     = from.getAvailableTradeCapacity();
 
-            // Mercado ativo com capacidade > 500
-            if (!buildings.market || buildings.market < 1) return false;
-            if (town.getAvailableTradeCapacity() < 500) return false;
+            if (cap < 100) return false;
 
-            // Pelo menos um recurso acima de 50% do storage
-            const threshold = res.storage * 0.5;
-            const hasExcess = res.wood > threshold || res.stone > threshold || res.iron > threshold;
-            if (!hasExcess) return false;
+            // Limite inferior para o remetente
+            const keepPct  = urgent ? 0.05 : (this.sendThreshold / 100);
+            const keepAmt  = fromRes.storage * keepPct;
 
-            return true;
-        } catch(e) { return false; }
-    }
+            const excessW = Math.max(0, Math.floor(fromRes.wood  - keepAmt));
+            const excessS = Math.max(0, Math.floor(fromRes.stone - keepAmt));
+            const excessI = Math.max(0, Math.floor(fromRes.iron  - keepAmt));
 
-    // Envia o excedente acima de 50% do storage do remetente, mas
-    // NUNCA mais do que o espaço livre no armazém do destino - deixa
-    // uma margem de segurança de 5% no destino, pra sobrar espaço
-    // mesmo com a produção normal da cidade entre o envio e a chegada.
-    _sendResources = async (fromId, toId) => {
-        try {
-            const from     = uw.ITowns.towns[fromId];
-            const to       = uw.ITowns.towns[toId];
-            const fromRes  = from.resources();
-            const toRes    = to.resources();
-            const capacity = from.getAvailableTradeCapacity();
+            // Espaco livre no destino (margem de seguranca de 5%)
+            const safe  = toRes.storage * 0.05;
+            const roomW = Math.max(0, Math.floor(toRes.storage - toRes.wood  - safe));
+            const roomS = Math.max(0, Math.floor(toRes.storage - toRes.stone - safe));
+            const roomI = Math.max(0, Math.floor(toRes.storage - toRes.iron  - safe));
 
-            if (capacity < 100) return false;
-
-            const threshold = fromRes.storage * 0.5;
-            const excessW = Math.max(0, Math.floor(fromRes.wood  - threshold));
-            const excessS = Math.max(0, Math.floor(fromRes.stone - threshold));
-            const excessI = Math.max(0, Math.floor(fromRes.iron  - threshold));
-
-            // Espaço livre no destino, por recurso, com margem de 5%
-            const safetyMargin = toRes.storage * 0.05;
-            const roomW = Math.max(0, Math.floor(toRes.storage - toRes.wood  - safetyMargin));
-            const roomS = Math.max(0, Math.floor(toRes.storage - toRes.stone - safetyMargin));
-            const roomI = Math.max(0, Math.floor(toRes.storage - toRes.iron  - safetyMargin));
-
-            const perRes = Math.floor(capacity / 3);
+            // Distribui a capacidade de comercio igualmente entre os 3 recursos
+            const perRes = Math.floor(cap / 3);
             const wood   = Math.min(perRes, excessW, roomW);
             const stone  = Math.min(perRes, excessS, roomS);
             const iron   = Math.min(perRes, excessI, roomI);
             const total  = wood + stone + iron;
 
-            if (total < 100) return false;
+            if (total < 50) return false;
 
-            const fromName = from.getName();
-            const toName   = to?.getName?.() ?? '#' + toId;
-            const data = { id: parseInt(toId), wood, stone, iron, town_id: parseInt(fromId), nl_init: true };
+            const fromName = from.getName ? from.getName() : ('#' + fromId);
+            const toName   = to.getName   ? to.getName()   : ('#' + toId);
 
-            this.console.log('[AutoRecursos] ' + this.t('asr_send_log', { from: fromName, to: toName, wood, stone, iron }));
+            this.console.log('[AutoRecursos] ' + (urgent ? '[URGENTE] ' : '') +
+                fromName + ' → ' + toName + ': ' +
+                '🪵' + wood + ' 🪨' + stone + ' ⚙' + iron);
+
+            const data = {
+                id:       parseInt(toId),
+                wood:     wood,
+                stone:    stone,
+                iron:     iron,
+                town_id:  parseInt(fromId),
+                nl_init:  true
+            };
 
             const res = await this.ajaxPostWithTimeout('town_info', 'trade', data, 15000, true);
             if (res && !res.error) return true;
 
-            this.console.log('[AutoRecursos] ' + this.t('asr_send_trade_error_log', { err: res?.error ?? JSON.stringify(res) }));
+            this.console.log('[AutoRecursos] ✗ Erro trade: ' + (res && res.error ? res.error : JSON.stringify(res)));
             return false;
         } catch (e) {
-            this.console.log('[AutoRecursos] ' + this.t('asr_send_exception_log', { msg: e?.message ?? e }));
+            this.console.log('[AutoRecursos] Exceção: ' + (e && e.message ? e.message : e));
             return false;
         }
     };
