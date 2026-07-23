@@ -148,7 +148,6 @@ __MultBotI18N.dict = {
 		mt_title: 'Building Presets',
 		mt_buildings_label: 'Buildings',
 		mt_buildings_desc: 'Max everything. Barracks→5, Wall→0.',
-		mt_colonize_label: 'Colonize Ships',
 		mt_colonize_desc: 'Max colonize_ship in all cities.',
 		mt_research_label: 'Auto Research',
 		mt_research_desc: 'Turns on auto research in all cities.',
@@ -158,11 +157,6 @@ __MultBotI18N.dict = {
 		mt_naval_applied: '✓ Colonize ship set up in {count} cities.',
 		mt_research_applied: '✓ Auto Research active in {count} cities.',
 		at_settings: 'Settings',
-		at_min_batch_label: 'Minimum batch:',
-		at_min_batch_tip: 'How much of the storage cap needs to be affordable right now before AutoTrain fires an order. Lower = reacts faster with smaller batches (good when one resource, like stone, is a bottleneck). Higher = waits for bigger batches, fewer orders.',
-		at_min_batch_fast: 'Fast (5%)',
-		at_min_batch_normal: 'Normal (10%)',
-		at_min_batch_big: 'Big batch (30%)',
 		at_passive: 'Passive',
 		at_spell: 'Spell',
 		at_title: 'Auto Train',
@@ -254,8 +248,6 @@ __MultBotI18N.dict = {
 		arl_unlocked_log: 'Island {island}: unlocked {name}',
 		arl_upgraded_log: 'Island {island}: upgraded {name}',
 		arl_main_error: 'Error in main loop: {msg}',
-		arl_unlock_fail_log: 'Failed to unlock {name} (island {island}): {reason}',
-		arl_upgrade_fail_log: 'Failed to upgrade {name} (island {island}): {reason}',
 		abc_title: 'Auto Bootcamp',
 		abc_only_off: 'Only off',
 		abc_off_def: 'Off & Def',
@@ -270,165 +262,9 @@ __MultBotI18N.dict = {
 		ah_store_error: 'Error storing iron: {msg}',
 		ah_eligible_count: '{count} eligible cit(ies) (hideout level 10)',
 		ah_stored_log: '✓ {town}: {amount} iron stored',
-		am_title: 'Auto Militia',
-		am_desc: 'Activates militia ~8s before impact in towns under attack.',
-		am_started_log: 'Started. Monitoring attacks...',
-		am_stopped_log: 'Stopped.',
-		am_scheduled_log: 'Scheduled: {town} in {sec}s',
-		am_tick_error: 'Error: {msg}',
-		am_activating_log: 'Activating militia in {town}...',
-		am_activated_log: '✓ Militia activated in {town}',
-		am_activate_fail_log: '✗ Failed in {town}: {reason}',
-		am_activate_exception_log: 'Exception/timeout in #{id}: {msg}',
-		ad_title: 'Auto Dodge',
-		ad_tooltip: 'Sends reinforcement to any known town on the island. If none exist in the cache, the evacuation is skipped.',
-		ad_desc: 'Evacuates troops {sec}s before impact to a random town on the same island, with automatic return.',
-		ad_started_log: 'Started. Monitoring attacks...',
-		ad_stopped_log: 'Stopped.',
-		ad_island_scraper_active_log: 'Island learning active (watching windows opened on the map).',
-		ad_learned_towns_log: 'Learned {n} new town(s) in the island cache.',
-		ad_safety_evac_log: 'Safety net: {town} is {sec}s from impact - evacuating immediately.',
-		ad_evac_scheduled_log: 'Evacuation scheduled: {from} -> {to} in {sec}s ({lead}s before impact).',
-		ad_evac_scheduled_no_island_log: 'Warning: {town} scheduled in {sec}s, but NO known town on the same island yet.',
-		ad_tick_error: 'Error in tick: {msg}',
-		ad_find_island_error: 'Error looking for a town on the same island: {msg}',
-		ad_evac_no_island_log: 'Warning: {town} - no known town on the same island. Evacuation skipped.',
-		ad_evac_no_island_status: 'Warning: {town} has no town on the same island.',
-		ad_no_troops_log: '{town}: no troops to evacuate.',
-		ad_evacuating_log: 'Evacuating {town} to {safe}...',
-		ad_no_land_troops_log: '{town}: no land troops, skipping this group.',
-		ad_no_naval_troops_log: '{town}: no naval troops, skipping this group.',
-		ad_evacuated_log: '{town} evacuated to {safe}!',
-		ad_evacuate_error: 'Error evacuating #{id}: {msg}',
-		ad_group_response_log: 'Server response ({label}): {res}',
-		ad_command_found_log: '{town} ({label}): commandId found: #{id}',
-		ad_command_not_found_log: 'Warning: {town} ({label}) - command id not found. Manual recall needed.',
-		ad_command_not_found_status: 'Warning: {town} ({label}) - automatic recall unavailable.',
-		ad_send_group_fail_log: 'FAILED to send {label} from {town}: {msg}',
-		ad_recall_scheduled_log: '{town} ({label}): return scheduled for {sec}s from now (command #{id}).',
-		ad_reconcile_start_log: 'Reconciling {n} pending recall(s) after load...',
-		ad_reconcile_fire_now_log: 'Recall for {town} ({label}) should have already fired - firing now.',
-		ad_reconcile_reschedule_log: 'Recall for {town} ({label}) rescheduled for {sec}s from now.',
-		ad_reconcile_error: 'Error reconciling pending recalls: {msg}',
-		ad_recall_calling_log: '{town} ({label}): calling troops back (command #{id})...',
-		ad_recall_response_log: 'Recall response ({label}): {res}',
-		ad_recall_success_log: '{town} ({label}): troops returning!',
-		ad_recall_fail_log: 'Failed to recall {town} ({label}): {res}',
-		ad_recall_fail_status: 'Recall failed for {town} ({label}). Bring back manually.',
-		ad_recall_network_error: 'Error recalling {town} ({label}): {msg}',
-		aat_title: 'Auto Attack',
-		aat_desc: 'Attacks automatically once the composition is available. Checks every 20s.',
-		aat_origin_label: 'Attacking City',
-		aat_rest_tooltip: 'Wait before re-attacking the same target, +-10% variation. 0 = no wait.',
-		aat_rest_label: 'Rest (min)',
-		aat_hero_tooltip: 'Optional. Sends this hero along with the attack, if it is available in the attacking city at the moment of firing.',
-		aat_hero_label: 'Hero (optional)',
-		aat_unit_label: 'Unit',
-		aat_qty_label: 'Qty',
-		aat_max_tooltip: 'Always sends ALL available units of this type at the moment of the attack.',
-		aat_max_label: 'Max',
-		aat_add_unit_btn: '+ Unit',
-		aat_targets_label: 'Target cities (ID, comma or line separated)',
-		aat_targets_placeholder: 'e.g.: 12345, 67890',
-		aat_add_plan_btn: '+ Add Plan',
-		aat_active_plans_label: 'Active plans:',
-		aat_select_placeholder: 'Select...',
-		aat_towns_load_error: 'Error loading towns',
-		aat_units_load_error: 'Error loading units',
-		aat_naval_tag: ' (naval)',
-		aat_land_tag: ' (land)',
-		aat_hero_none: 'None',
-		aat_max_entry: 'MAX x {label}',
-		aat_qty_entry: '{qty}x {label}',
-		aat_old_plan_migrated_log: 'Old plan migrated: town #{id} ({unit} x{qty}).',
-		aat_invalid_plan_removed_log: 'Warning: invalid plan removed (no units defined).',
-		aat_rest_migrated_log: 'Plan #{id}: rest migrated from "per target" to "whole plan interval".',
-		aat_select_unit_first_log: 'Error: select a unit before adding.',
-		aat_select_unit_first_status: 'Error: select a unit.',
-		aat_invalid_qty_log: 'Error: invalid quantity.',
-		aat_invalid_qty_status: 'Error: enter a valid quantity or check Max.',
-		aat_unit_added_log: 'Unit added to composition: {entry}',
-		aat_no_staging_units: 'No units in the composition yet.',
-		aat_started_log: 'Started. Monitoring attack plans...',
-		aat_stopped_log: 'Stopped.',
-		aat_no_origin_log: 'Error: no attacking city selected.',
-		aat_no_origin_status: 'Error: select an attacking city.',
-		aat_no_units_in_plan_log: 'Error: add at least one unit to the composition.',
-		aat_no_units_in_plan_status: 'Error: add at least one unit.',
-		aat_no_targets_log: 'Error: no valid target city informed.',
-		aat_no_targets_status: 'Error: enter at least one valid target city.',
-		aat_plan_updated_log: 'Plan updated: {origin} [{units}] -> {count} target(s).',
-		aat_plan_updated_status: 'Plan updated successfully!',
-		aat_plan_not_found_log: 'Error: plan not found to edit.',
-		aat_editing_plan_log: 'Editing plan: {town}.',
-		aat_editing_plan_status: 'Editing plan for {town} - make changes and click "Save Changes".',
-		aat_edit_cancelled_status: 'Edit cancelled.',
-		aat_save_changes_btn: '💾 Save Changes',
-		aat_cancel_edit_link: 'Cancel edit',
-		aat_edit_tooltip: 'Edit plan',
-		aat_no_plans_configured: 'No plan configured.',
-		aat_plan_removed_log: 'Plan removed.',
-		aat_rest_suffix: ', rest {min}min',
-		aat_hero_suffix: ', hero: {name}',
-		aat_plan_added_log: 'Plan added: {origin} [{units}] -> {count} target(s){rest}{hero}.',
-		aat_plan_added_status: 'Plan added successfully!',
-		aat_rest_display: ' | rest {min}min',
-		aat_next_label: ' (next in ~{min}min)',
-		aat_hero_display: ' + hero {name}',
-		aat_plan_invalid_composition_log: 'Warning: plan for town #{id} has no valid composition, skipped.',
-		aat_town_not_found_log: 'Warning: town #{id} not found (not yours or fell out of cache).',
-		aat_attack_ok_log: 'OK: {from} -> {to}: attack with [{comp}] sent!',
-		aat_attack_ok_status: 'OK: {from} attacked {to} [{comp}]',
-		aat_next_attack_log: '{town}: next attack from this plan in approximately {min}min.',
-		aat_attack_fail_log: 'FAILED to attack {to} from {from}: {msg}',
-		aat_attack_fail_status: 'FAILED to attack {to}: {msg}',
-		aat_unexpected_error_log: 'Unexpected error in plan #{id}: {msg}',
-		asr_title: 'Auto Resource Sending',
-		asr_desc: 'Sends resources from idle towns to the least developed town (with storage room).',
-		asr_desc2: 'Sender: any town with an available market and some resource above 50% of storage (does not need to be idle). Target: lowest sum of building levels, with a 5% storage room margin.',
-		asr_check_every_label: 'Check every',
-		asr_save: 'Save',
-		asr_min_unit: 'min',
-		asr_mode_auto: 'Automatic',
-		asr_mode_manual: 'Manual (90%)',
-		asr_manual_target_label: 'Target town (sends when any town reaches 90% storage)',
-		asr_target_current: '✓ Current target: {name}',
-		asr_no_target_configured: 'No target configured.',
-		asr_started_log: 'Started. Interval: {min} min.',
-		asr_stopped_log: 'Stopped.',
-		asr_mode_changed_log: 'Mode changed to: {mode}',
-		asr_invalid_interval_status: 'Invalid interval (minimum 1 min).',
-		asr_interval_saved_status: '✓ Interval saved: {val} min.',
-		asr_interval_changed_log: 'Interval changed to {val} min.',
-		asr_select_town_status: 'Select a town.',
-		asr_manual_target_saved_log: 'Manual target saved: {name}',
-		asr_select_placeholder: 'Select...',
-		asr_towns_load_error: 'Error loading towns',
-		asr_checking_log: 'Checking towns...',
-		asr_targets_log: 'Targets (least developed first, with storage room): {names}',
-		asr_no_senders_log: 'No eligible town to send from.',
-		asr_cycle_complete_log: '✓ Resources sent from {count} town(s) to {targets} target(s)',
-		asr_cycle_exception_log: 'Exception in cycle: {msg}',
-		asr_manual_no_target_log: 'Manual mode: no target town configured yet.',
-		asr_manual_no_target_status: 'Configure a target town in manual mode.',
-		asr_manual_target_missing_log: 'Manual mode: target town #{id} not found (fell out of cache or is no longer yours).',
-		asr_manual_target_missing_status: 'Target town not found.',
-		asr_manual_no_senders_log: 'Manual mode: no town at 90%+ storage right now.',
-		asr_manual_sending_log: 'Manual mode: {count} town(s) at 90%+ storage, sending to {target}...',
-		asr_manual_complete_log: '✓ Resources sent from {count} town(s) → {target}',
-		asr_manual_none_sent_log: 'No transfer completed (target has no room or senders have no excess).',
-		asr_send_log: '{from} → {to}: {wood}🪵 {stone}🪨 {iron}⚙',
-		asr_send_trade_error_log: '✗ Trade error: {err}',
-		asr_send_exception_log: 'Exception: {msg}',
 		sniper_title: '🎯 Sniper',
 		sniper_desc: 'Open a native attack/support window, choose troops and target as usual, then use the panel that appears inside that window to schedule the SEND so it ARRIVES at an exact time you choose.',
 		sniper_background_warning: '⚠ For precision, keep the game tab in the foreground close to the scheduled time - browsers delay timers in background tabs.',
-		sniper_cfg_tol_attack_label: 'Attack tolerance:',
-		sniper_cfg_tol_attack_tip: 'How many seconds early is accepted for an attack (it will never retry to arrive late - only earlier than desired).',
-		sniper_cfg_tol_support_label: 'Support tolerance:',
-		sniper_cfg_tol_support_tip: 'How many seconds late is accepted for support (it will never retry to arrive early - only later than desired).',
-		sniper_cfg_early_margin_label: 'Safety margin:',
-		sniper_cfg_early_margin_tip: 'How much earlier than the calculated time the send fires, to cover network/lag delay between the local click and the server registering it. 3000ms = 3s is a safe default; raise it if you notice sends consistently arriving late, lower it if they consistently arrive very early.',
 		sniper_panel_title: 'Sniper - schedule arrival',
 		sniper_schedule_btn: 'Schedule',
 		sniper_missing_datetime: 'Set a date and time.',
@@ -467,14 +303,10 @@ __MultBotI18N.dict = {
 		sniper_no_command_found: '(could not verify the resulting command, but the send appears to have gone through)',
 		sniper_attempt_log: 'Attempt {attempt}/{max} for {target}: landed {diff}s off target',
 		sniper_fired_ok_precise: '✓ Sent to {target} — landed within {diff}s of target!',
-		sniper_fired_ok_imprecise: '⚠ Sent to {target} after {attempts} attempt(s) — best result was {diff}s off target ({reason}).',
+		sniper_fired_ok_imprecise: '⚠ Sent to {target} after {attempts} attempt(s) — best result was {diff}s off target (ran out of time/attempts/cancel window).',
 		sniper_fired_ok_no_retry_troops: '⚠ Sent to {target} ({diff}s off target) — not retrying: the same troops are not available yet to resend (cancelling does not return them instantly).',
 		sniper_waiting_troops_log: '⏳ Cancelled — waiting for the troops to come back home before resending to {target}...',
 		sniper_troops_not_back_error: 'The troops did not return in time to resend before the desired arrival (the previous send was already cancelled).',
-		sniper_reason_max_attempts: 'ran out of attempts',
-		sniper_reason_not_cancelable: 'send window already closed, could not cancel to retry',
-		sniper_reason_no_time_for_retry: 'not enough time left to wait for troops to return and resend',
-		sniper_reason_late_no_retry: 'arrived after the desired time - the window already passed, retrying cannot fix it',
 		da_title: '🔔 Discord Alert',
 		da_desc: 'Sends a Discord webhook notification as soon as an incoming attack is detected. Checks every 15s.',
 		da_webhook_label: 'Webhook URL:',
@@ -645,7 +477,6 @@ __MultBotI18N.dict = {
 		mt_title: 'Preset de Construções',
 		mt_buildings_label: 'Construções',
 		mt_buildings_desc: 'Máximo em tudo. Quartel→5, Muro→0.',
-		mt_colonize_label: 'Navios Colonizadores',
 		mt_colonize_desc: 'Máximo de colonize_ship em todas.',
 		mt_research_label: 'Auto Pesquisa',
 		mt_research_desc: 'Liga a pesquisa automática em todas.',
@@ -655,11 +486,6 @@ __MultBotI18N.dict = {
 		mt_naval_applied: '✓ Colonize ship configurado em {count} cidade(s).',
 		mt_research_applied: '✓ Auto Pesquisa ativo em {count} cidade(s).',
 		at_settings: 'Configurações',
-		at_min_batch_label: 'Lote mínimo:',
-		at_min_batch_tip: 'Quanto do teto do armazém precisa estar disponível AGORA pro AutoTrain disparar um pedido. Menor = reage mais rápido com lotes menores (bom quando um recurso, tipo pedra, é o gargalo). Maior = espera lotes maiores, menos pedidos.',
-		at_min_batch_fast: 'Rápido (5%)',
-		at_min_batch_normal: 'Normal (10%)',
-		at_min_batch_big: 'Lote grande (30%)',
 		at_passive: 'Passiva',
 		at_spell: 'Feitiço',
 		at_title: 'Auto Recrutamento',
@@ -751,8 +577,6 @@ __MultBotI18N.dict = {
 		arl_unlocked_log: 'Ilha {island}: {name} desbloqueado',
 		arl_upgraded_log: 'Ilha {island}: {name} evoluído',
 		arl_main_error: 'Erro no ciclo principal: {msg}',
-		arl_unlock_fail_log: 'Falha ao desbloquear {name} (ilha {island}): {reason}',
-		arl_upgrade_fail_log: 'Falha ao evoluir {name} (ilha {island}): {reason}',
 		abc_title: 'Auto Bootcamp',
 		abc_only_off: 'Só desligar',
 		abc_off_def: 'Desligar e Def',
@@ -767,165 +591,9 @@ __MultBotI18N.dict = {
 		ah_store_error: 'Erro ao guardar ferro: {msg}',
 		ah_eligible_count: '{count} cidade(s) elegível(is) (esconderijo nível 10)',
 		ah_stored_log: '✓ {town}: {amount} de ferro guardado',
-		am_title: 'Auto Milícia',
-		am_desc: 'Ativa milícia ~8s antes do impacto em cidades sob ataque.',
-		am_started_log: 'Iniciado. Monitorando ataques...',
-		am_stopped_log: 'Parado.',
-		am_scheduled_log: 'Agendado: {town} em {sec}s',
-		am_tick_error: 'Erro: {msg}',
-		am_activating_log: 'Ativando milícia em {town}...',
-		am_activated_log: '✓ Milícia ativada em {town}',
-		am_activate_fail_log: '✗ Falha em {town}: {reason}',
-		am_activate_exception_log: 'Exceção/timeout em #{id}: {msg}',
-		ad_title: 'Auto Fuga (Dodge)',
-		ad_tooltip: 'Envia reforço para qualquer cidade conhecida da ilha. Se nenhuma existir no cache, a evacuação é pulada.',
-		ad_desc: 'Evacua tropas {sec}s antes do impacto para uma cidade aleatória na mesma ilha, com retorno automático.',
-		ad_started_log: 'Iniciado. Monitorando ataques...',
-		ad_stopped_log: 'Parado.',
-		ad_island_scraper_active_log: 'Aprendizado de ilhas ativo (observando janelas abertas no mapa).',
-		ad_learned_towns_log: 'Aprendidas {n} cidade(s) nova(s) no cache de ilhas.',
-		ad_safety_evac_log: 'Rede de segurança: {town} está a {sec}s do impacto - evacuando imediatamente.',
-		ad_evac_scheduled_log: 'Evacuação agendada: {from} -> {to} em {sec}s ({lead}s antes do impacto).',
-		ad_evac_scheduled_no_island_log: 'Aviso: {town} agendada em {sec}s, mas SEM cidade conhecida na mesma ilha ainda.',
-		ad_tick_error: 'Erro no tick: {msg}',
-		ad_find_island_error: 'Erro ao procurar cidade na mesma ilha: {msg}',
-		ad_evac_no_island_log: 'Aviso: {town} - nenhuma cidade conhecida na mesma ilha. Evacuação pulada.',
-		ad_evac_no_island_status: 'Aviso: {town} sem cidade na mesma ilha.',
-		ad_no_troops_log: '{town}: sem tropas para evacuar.',
-		ad_evacuating_log: 'Evacuando {town} para {safe}...',
-		ad_no_land_troops_log: '{town}: sem tropas terrestres, pulando esse grupo.',
-		ad_no_naval_troops_log: '{town}: sem tropas navais, pulando esse grupo.',
-		ad_evacuated_log: '{town} evacuada para {safe}!',
-		ad_evacuate_error: 'Erro ao evacuar #{id}: {msg}',
-		ad_group_response_log: 'Resposta do servidor ({label}): {res}',
-		ad_command_found_log: '{town} ({label}): commandId encontrado: #{id}',
-		ad_command_not_found_log: 'Aviso: {town} ({label}) - id do comando não encontrado. Recall manual necessário.',
-		ad_command_not_found_status: 'Aviso: {town} ({label}) - recall automático indisponível.',
-		ad_send_group_fail_log: 'FALHA ao enviar {label} de {town}: {msg}',
-		ad_recall_scheduled_log: '{town} ({label}): retorno agendado para daqui a {sec}s (comando #{id}).',
-		ad_reconcile_start_log: 'Reconciliando {n} recall(s) pendente(s) após carregamento...',
-		ad_reconcile_fire_now_log: 'Recall de {town} ({label}) já deveria ter disparado - disparando agora.',
-		ad_reconcile_reschedule_log: 'Recall de {town} ({label}) reagendado para daqui a {sec}s.',
-		ad_reconcile_error: 'Erro ao reconciliar recalls pendentes: {msg}',
-		ad_recall_calling_log: '{town} ({label}): chamando as tropas de volta (comando #{id})...',
-		ad_recall_response_log: 'Resposta do recall ({label}): {res}',
-		ad_recall_success_log: '{town} ({label}): tropas retornando!',
-		ad_recall_fail_log: 'Falha ao chamar de volta {town} ({label}): {res}',
-		ad_recall_fail_status: 'Falha no recall de {town} ({label}). Traga manualmente.',
-		ad_recall_network_error: 'Erro no recall de {town} ({label}): {msg}',
-		aat_title: 'Auto Ataque',
-		aat_desc: 'Ataca automaticamente quando a composição estiver disponível. Verifica a cada 20s.',
-		aat_origin_label: 'Cidade Atacante',
-		aat_rest_tooltip: 'Espera antes de reatacar o mesmo alvo, +-10% de variação. 0 = sem espera.',
-		aat_rest_label: 'Descanso (min)',
-		aat_hero_tooltip: 'Opcional. Envia esse herói junto com o ataque, se ele estiver disponível na cidade atacante no momento do disparo.',
-		aat_hero_label: 'Herói (opcional)',
-		aat_unit_label: 'Unidade',
-		aat_qty_label: 'Qtde',
-		aat_max_tooltip: 'Sempre envia TUDO que estiver disponível dessa unidade no momento do ataque.',
-		aat_max_label: 'Max',
-		aat_add_unit_btn: '+ Unidade',
-		aat_targets_label: 'Cidades-alvo (ID, separadas por vírgula ou linha)',
-		aat_targets_placeholder: 'ex: 12345, 67890',
-		aat_add_plan_btn: '+ Adicionar Plano',
-		aat_active_plans_label: 'Planos ativos:',
-		aat_select_placeholder: 'Selecione...',
-		aat_towns_load_error: 'Erro ao carregar cidades',
-		aat_units_load_error: 'Erro ao carregar unidades',
-		aat_naval_tag: ' (naval)',
-		aat_land_tag: ' (terra)',
-		aat_hero_none: 'Nenhum',
-		aat_max_entry: 'MAX x {label}',
-		aat_qty_entry: '{qty}x {label}',
-		aat_old_plan_migrated_log: 'Plano antigo migrado: cidade #{id} ({unit} x{qty}).',
-		aat_invalid_plan_removed_log: 'Aviso: plano inválido removido (sem unidades definidas).',
-		aat_rest_migrated_log: 'Plano #{id}: descanso migrado de "por alvo" pra "intervalo do plano inteiro".',
-		aat_select_unit_first_log: 'Erro: selecione uma unidade antes de adicionar.',
-		aat_select_unit_first_status: 'Erro: selecione uma unidade.',
-		aat_invalid_qty_log: 'Erro: quantidade inválida.',
-		aat_invalid_qty_status: 'Erro: informe uma quantidade válida ou marque Max.',
-		aat_unit_added_log: 'Unidade adicionada à composição: {entry}',
-		aat_no_staging_units: 'Nenhuma unidade na composição ainda.',
-		aat_started_log: 'Iniciado. Monitorando planos de ataque...',
-		aat_stopped_log: 'Parado.',
-		aat_no_origin_log: 'Erro: nenhuma cidade atacante selecionada.',
-		aat_no_origin_status: 'Erro: selecione uma cidade atacante.',
-		aat_no_units_in_plan_log: 'Erro: adicione ao menos uma unidade à composição.',
-		aat_no_units_in_plan_status: 'Erro: adicione ao menos uma unidade.',
-		aat_no_targets_log: 'Erro: nenhuma cidade-alvo válida informada.',
-		aat_no_targets_status: 'Erro: informe pelo menos uma cidade-alvo válida.',
-		aat_plan_updated_log: 'Plano atualizado: {origin} [{units}] -> {count} alvo(s).',
-		aat_plan_updated_status: 'Plano atualizado com sucesso!',
-		aat_plan_not_found_log: 'Erro: plano não encontrado pra editar.',
-		aat_editing_plan_log: 'Editando plano: {town}.',
-		aat_editing_plan_status: 'Editando plano de {town} - altere e clique em "Salvar Alterações".',
-		aat_edit_cancelled_status: 'Edição cancelada.',
-		aat_save_changes_btn: '💾 Salvar Alterações',
-		aat_cancel_edit_link: 'Cancelar edição',
-		aat_edit_tooltip: 'Editar plano',
-		aat_no_plans_configured: 'Nenhum plano configurado.',
-		aat_plan_removed_log: 'Plano removido.',
-		aat_rest_suffix: ', descanso {min}min',
-		aat_hero_suffix: ', herói: {name}',
-		aat_plan_added_log: 'Plano adicionado: {origin} [{units}] -> {count} alvo(s){rest}{hero}.',
-		aat_plan_added_status: 'Plano adicionado com sucesso!',
-		aat_rest_display: ' | descanso {min}min',
-		aat_next_label: ' (próximo em ~{min}min)',
-		aat_hero_display: ' + herói {name}',
-		aat_plan_invalid_composition_log: 'Aviso: plano da cidade #{id} sem composição válida, ignorado.',
-		aat_town_not_found_log: 'Aviso: cidade #{id} não encontrada (não é sua ou saiu do cache).',
-		aat_attack_ok_log: 'OK: {from} -> {to}: ataque com [{comp}] enviado!',
-		aat_attack_ok_status: 'OK: {from} atacou {to} [{comp}]',
-		aat_next_attack_log: '{town}: próximo ataque desse plano em aproximadamente {min}min.',
-		aat_attack_fail_log: 'FALHA ao atacar {to} de {from}: {msg}',
-		aat_attack_fail_status: 'FALHA ao atacar {to}: {msg}',
-		aat_unexpected_error_log: 'Erro inesperado no plano #{id}: {msg}',
-		asr_title: 'Auto Envio de Recursos',
-		asr_desc: 'Envia recursos de cidades ociosas para a cidade menos desenvolvida (com espaço no armazém).',
-		asr_desc2: 'Remetente: qualquer cidade com mercado disponível e algum recurso acima de 50% do storage (não precisa estar ociosa). Destino: menor soma de níveis de construção, com margem de 5% de espaço livre no armazém.',
-		asr_check_every_label: 'Verificar a cada',
-		asr_save: 'Salvar',
-		asr_min_unit: 'min',
-		asr_mode_auto: 'Automático',
-		asr_mode_manual: 'Manual (90%)',
-		asr_manual_target_label: 'Cidade Destino (envia quando alguma cidade atingir 90% de armazém)',
-		asr_target_current: '✓ Destino atual: {name}',
-		asr_no_target_configured: 'Nenhum destino configurado.',
-		asr_started_log: 'Iniciado. Intervalo: {min} min.',
-		asr_stopped_log: 'Parado.',
-		asr_mode_changed_log: 'Modo alterado para: {mode}',
-		asr_invalid_interval_status: 'Intervalo inválido (mínimo 1 min).',
-		asr_interval_saved_status: '✓ Intervalo salvo: {val} min.',
-		asr_interval_changed_log: 'Intervalo alterado para {val} min.',
-		asr_select_town_status: 'Selecione uma cidade.',
-		asr_manual_target_saved_log: 'Destino manual salvo: {name}',
-		asr_select_placeholder: 'Selecione...',
-		asr_towns_load_error: 'Erro ao carregar cidades',
-		asr_checking_log: 'Verificando cidades...',
-		asr_targets_log: 'Destinos (menos desenvolvidas primeiro, com espaço no armazém): {names}',
-		asr_no_senders_log: 'Nenhuma cidade elegível para envio.',
-		asr_cycle_complete_log: '✓ Recursos enviados de {count} cidade(s) para {targets} destino(s)',
-		asr_cycle_exception_log: 'Exceção no ciclo: {msg}',
-		asr_manual_no_target_log: 'Modo manual: nenhuma cidade destino configurada ainda.',
-		asr_manual_no_target_status: 'Configure uma cidade destino no modo manual.',
-		asr_manual_target_missing_log: 'Modo manual: cidade destino #{id} não encontrada (saiu do cache ou não é mais sua).',
-		asr_manual_target_missing_status: 'Cidade destino não encontrada.',
-		asr_manual_no_senders_log: 'Modo manual: nenhuma cidade em 90%+ de armazém no momento.',
-		asr_manual_sending_log: 'Modo manual: {count} cidade(s) em 90%+ de armazém, enviando para {target}...',
-		asr_manual_complete_log: '✓ Recursos enviados de {count} cidade(s) → {target}',
-		asr_manual_none_sent_log: 'Nenhum envio concluído (destino sem espaço ou remetentes sem excedente).',
-		asr_send_log: '{from} → {to}: {wood}🪵 {stone}🪨 {iron}⚙',
-		asr_send_trade_error_log: '✗ Erro trade: {err}',
-		asr_send_exception_log: 'Exceção: {msg}',
 		sniper_title: '🎯 Sniper',
 		sniper_desc: 'Abra uma janela nativa de ataque/apoio, escolha tropas e alvo normalmente, depois use o painel que aparece dentro dessa janela pra agendar o ENVIO de forma que ele CHEGUE num horário exato escolhido por você.',
 		sniper_background_warning: '⚠ Pra precisão, deixe a aba do jogo em primeiro plano perto do horário agendado - navegadores atrasam timers em abas em segundo plano.',
-		sniper_cfg_tol_attack_label: 'Tolerância ataque:',
-		sniper_cfg_tol_attack_tip: 'Quantos segundos ADIANTADO são aceitos num ataque (nunca tenta de novo pra chegar atrasado - só mais cedo que o desejado).',
-		sniper_cfg_tol_support_label: 'Tolerância apoio:',
-		sniper_cfg_tol_support_tip: 'Quantos segundos ATRASADO são aceitos num apoio (nunca tenta de novo pra chegar adiantado - só mais tarde que o desejado).',
-		sniper_cfg_early_margin_label: 'Margem de segurança:',
-		sniper_cfg_early_margin_tip: 'Quanto antes do horário calculado o envio dispara, pra cobrir atraso de rede entre o clique local e o servidor registrar de verdade. 3000ms = 3s é um padrão seguro; aumente se perceber que os envios chegam atrasados com frequência, diminua se chegarem muito adiantados.',
 		sniper_panel_title: 'Sniper - agendar chegada',
 		sniper_schedule_btn: 'Agendar',
 		sniper_missing_datetime: 'Defina uma data e hora.',
@@ -964,14 +632,10 @@ __MultBotI18N.dict = {
 		sniper_no_command_found: '(não consegui confirmar o comando resultante, mas o envio parece ter passado)',
 		sniper_attempt_log: 'Tentativa {attempt}/{max} pra {target}: caiu {diff}s fora do alvo',
 		sniper_fired_ok_precise: '✓ Enviado pra {target} — caiu dentro de {diff}s do alvo!',
-		sniper_fired_ok_imprecise: '⚠ Enviado pra {target} depois de {attempts} tentativa(s) — melhor resultado foi {diff}s fora do alvo ({reason}).',
+		sniper_fired_ok_imprecise: '⚠ Enviado pra {target} depois de {attempts} tentativa(s) — melhor resultado foi {diff}s fora do alvo (acabou o tempo/tentativas/janela de cancelamento).',
 		sniper_fired_ok_no_retry_troops: '⚠ Enviado pra {target} ({diff}s fora do alvo) — não vou tentar de novo: as mesmas tropas ainda não estão disponíveis pra reenviar (cancelar não devolve elas na hora).',
 		sniper_waiting_troops_log: '⏳ Cancelado — aguardando as tropas voltarem pra casa antes de reenviar pra {target}...',
 		sniper_troops_not_back_error: 'As tropas não voltaram a tempo de reenviar antes do horário desejado (o envio anterior já foi cancelado).',
-		sniper_reason_max_attempts: 'acabaram as tentativas',
-		sniper_reason_not_cancelable: 'janela de cancelamento já fechou, não deu pra cancelar pra tentar de novo',
-		sniper_reason_no_time_for_retry: 'não sobrou tempo suficiente pra esperar as tropas voltarem e reenviar',
-		sniper_reason_late_no_retry: 'chegou depois do horário desejado - a janela já passou, tentar de novo não resolve',
 		da_title: '🔔 Discord Alert',
 		da_desc: 'Manda um aviso via webhook do Discord assim que um ataque a caminho é detectado. Verifica a cada 15s.',
 		da_webhook_label: 'URL do Webhook:',
@@ -1225,28 +889,6 @@ var MultUtil = class {
         } catch (e) {}
 
         return '#' + ids;
-    };
-
-    /* Detecta mensagens nativas do jogo (banners de erro / campo
-       "error" das respostas ajax) que significam "sem recursos" ou
-       "sem espaco/capacidade" (populacao, limite de unidades, fila
-       cheia por falta de espaco de armazem, etc) - casos ESPERADOS
-       que acontecem o tempo todo enquanto os recursos ainda nao
-       acumularam, e que NAO devem gerar log/notificacao repetida a
-       cada tentativa (isso so gera flood sem trazer informacao nova).
-       Baseado nas mensagens nativas confirmadas em capturas reais do
-       jogo: "Nao ha recursos suficientes." e "Voce nao pode recrutar
-       mais do que N <unidade>.". Qualquer outra mensagem (timeout de
-       rede, requisitos de construcao nao atendidos, erro de sessao,
-       etc) NAO cai aqui e continua sendo logada normalmente, pois
-       essas sim sao acionaveis/uteis de ver no console. */
-    isResourceOrCapacityMessage = message => {
-        if (!message) return false;
-        const msg = String(message);
-        return /recursos\s+suficientes/i.test(msg)
-            || /n[aã]o\s+pode\s+(recrutar|construir)\s+mais/i.test(msg)
-            || /espa[çc]o/i.test(msg)
-            || /popula[çc][aã]o/i.test(msg);
     };
 
     /* extraFlag: some game endpoints (e.g. town_info/trade) expect
@@ -1510,26 +1152,8 @@ var MultUtil = class {
         return { $activity, $count };
     }
 
-    /* PDCA: o id do popup era fixo ("toolbar_activity_recruits_list"),
-       copiado do template original. Esse id segue o padrao nativo
-       que o proprio jogo usa pros seus popups de atividade (recrutas,
-       movimentos, mensagens, etc) - ha risco real de colidir com um
-       elemento nativo do jogo com o MESMO id, fazendo o clique no
-       nosso popup (ex: ON/OFF do AutoFarm) acionar sem querer o
-       handler nativo do jogo pra abrir a janela de recrutas de
-       verdade. Agora cada chamador passa um id proprio, unico. */
-    createPopup = (id, left, width, height, $content) => {
-        // FIX (diagnosticado ao vivo via elementFromPoint): o popup nao
-        // tinha z-index nenhum, entao ficava pintado ATRAS do mapa do
-        // jogo (#index_map_image) - existia no DOM, opacity:1,
-        // visibility:visible, mas invisivel pro usuario porque o mapa
-        // desenhava por cima. Antes isso ficava mascarado pelo bug do
-        // id duplicado (ver acima) que abria a janela nativa de
-        // recrutas por engano, dando a falsa impressao de que "algo
-        // abria" ao clicar. z-index alto o suficiente pra ficar acima
-        // do mapa, mas sem exagerar (evita cobrir modais/dialogos
-        // nativos do jogo que devem ficar por cima de tudo).
-        const $box = uw.$('<div class="sandy-box js-dropdown-list"></div>').attr('id', id).css({
+    createPopup = (left, width, height, $content) => {
+        const $box = uw.$('<div class="sandy-box js-dropdown-list" id="toolbar_activity_recruits_list"></div>').css({
             "left": `${left}px`,
             "position": "absolute",
             "width": `${width}px`,
@@ -1537,7 +1161,6 @@ var MultUtil = class {
             "top": "29px",
             "margin-left": "0px",
             "display": "none",
-            "z-index": 500,
         });
 
         const $corner_tl = uw.$('<div class="corner_tl"></div>');
@@ -1884,50 +1507,95 @@ var MultStorage = class extends Compressor {
 
 	getStorage = () => {
 		const worldId = uw.Game.world_id;
-		const newKey = `${worldId}_multBot`;
-		let savedValue = localStorage.getItem(newKey);
+		const gmKey = worldId + '_multBot';
+		const lsKey = worldId + '_multBot';
+		const lsLegacyKey = worldId + '_modernBot';
 
-		/* Automatic, one-time migration: if the new key still has
-		   nothing but the old key (_modernBot, from before the class
-		   rename) has data, copy it to the new key. The old key is NOT
-		   deleted - it stays there as an inert backup, just in case.
-		   Without this, everyone would lose their saved attack
-		   plans/presets/etc as soon as this update went live. */
-		if (savedValue === null || savedValue === undefined) {
-			const legacyKey = `${worldId}_modernBot`;
-			const legacyValue = localStorage.getItem(legacyKey);
-			if (legacyValue !== null && legacyValue !== undefined) {
-				savedValue = legacyValue;
-				try {
-					localStorage.setItem(newKey, legacyValue);
-					console.log('[MultBot] Settings migrated from ' + legacyKey + ' to ' + newKey + '.');
-				} catch (e) {}
+		/* Prioridade 1: GM_setValue/GM_getValue (Tampermonkey storage).
+		   Esses dados SOBREVIVEM a qualquer limpeza de cache do navegador
+		   porque ficam no banco interno da extensao, nao no site. */
+		var gmRaw = null;
+		try {
+			if (typeof GM_getValue === 'function') {
+				gmRaw = GM_getValue(gmKey, null);
 			}
-		}
+		} catch (e) {}
 
-		let storage = {};
-
-		if (savedValue !== null && savedValue !== undefined) {
+		if (gmRaw !== null && gmRaw !== undefined) {
 			try {
-				storage = JSON.parse(savedValue);
-			} catch (error) {
-				console.error(`Error parsing localStorage data: ${error}`);
+				return JSON.parse(gmRaw);
+			} catch (e) {
+				console.error('[MultBot] Erro ao ler GM storage: ' + e);
 			}
 		}
 
-		return storage;
+		/* Prioridade 2: localStorage (chave nova _multBot).
+		   Migra automaticamente para GM storage ao encontrar - proxima
+		   leitura ja vem direto do GM, sem depender do localStorage. */
+		var lsRaw = null;
+		try {
+			lsRaw = localStorage.getItem(lsKey);
+		} catch (e) {}
+
+		/* Prioridade 3: localStorage legado (_modernBot, antes do rename). */
+		if (lsRaw === null || lsRaw === undefined) {
+			try {
+				var lsLegacyRaw = localStorage.getItem(lsLegacyKey);
+				if (lsLegacyRaw !== null && lsLegacyRaw !== undefined) {
+					lsRaw = lsLegacyRaw;
+					try {
+						localStorage.setItem(lsKey, lsLegacyRaw);
+						console.log('[MultBot] Settings migrated from ' + lsLegacyKey + ' to ' + lsKey + '.');
+					} catch (e) {}
+				}
+			} catch (e) {}
+		}
+
+		if (lsRaw !== null && lsRaw !== undefined) {
+			var parsed = {};
+			try {
+				parsed = JSON.parse(lsRaw);
+			} catch (error) {
+				console.error('[MultBot] Error parsing localStorage data: ' + error);
+			}
+			/* Migra para GM storage agora para proteger contra proxima limpeza. */
+			try {
+				if (typeof GM_setValue === 'function') {
+					GM_setValue(gmKey, JSON.stringify(parsed));
+					console.log('[MultBot] Settings migrated from localStorage to GM storage (cache-safe).');
+				}
+			} catch (e) {}
+			return parsed;
+		}
+
+		return {};
 	};
 
 	saveStorage = storage => {
+		const worldId = uw.Game.world_id;
+		const key = worldId + '_multBot';
+		const json = JSON.stringify(storage);
+		var ok = false;
+
+		/* Salva em GM storage (primario, sobrevive a limpeza de cache). */
 		try {
-			const worldId = uw.Game.world_id;
-			localStorage.setItem(`${worldId}_multBot`, JSON.stringify(storage));
-			this.lastUpdateTime = Date.now();
-			return true;
+			if (typeof GM_setValue === 'function') {
+				GM_setValue(key, json);
+				ok = true;
+			}
 		} catch (error) {
-			console.error(`Error saving data to localStorage: ${error}`);
-			return false;
+			console.error('[MultBot] Error saving to GM storage: ' + error);
 		}
+
+		/* Salva tambem em localStorage como espelho/fallback. */
+		try {
+			localStorage.setItem(key, json);
+		} catch (error) {
+			console.error('[MultBot] Error saving to localStorage: ' + error);
+		}
+
+		this.lastUpdateTime = Date.now();
+		return ok;
 	};
 
 	save = (key, content) => {
@@ -1952,40 +1620,7 @@ var MultStorage = class extends Compressor {
 				text: storage,
 			},
 		};
-
-		/* FIX: essa era a unica chamada do projeto que ainda disparava
-		   uw.gpAjax.ajaxPost direto, sem timeout nem callback de erro -
-		   MultStorage extends Compressor (nao MultUtil), entao nao tem
-		   acesso a ajaxPostWithTimeout. Replica aqui o mesmo padrao
-		   settled+timeout usado la, em vez de reestruturar a heranca de
-		   classes so por causa desse unico ponto. Sem isso, uma falha de
-		   rede (endpoint fora do ar, nota nao encontrada, etc) passava
-		   batido e o jogador achava que salvou quando na verdade nao. */
-		let settled = false;
-		const timeoutMs = 15000;
-		const timer = setTimeout(() => {
-			if (settled) return;
-			settled = true;
-			console.error('[MultStorage] Timeout (' + timeoutMs + 'ms) ao salvar nota de configuracoes.');
-		}, timeoutMs);
-
-		uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data, false,
-			(res) => {
-				if (settled) return;
-				settled = true;
-				clearTimeout(timer);
-				if (res && res.error) {
-					console.error('[MultStorage] Falha ao salvar nota de configuracoes: ' + res.error);
-				}
-			},
-			(r, status, txt) => {
-				if (settled) return;
-				settled = true;
-				clearTimeout(timer);
-				console.error('[MultStorage] Erro de rede ao salvar nota de configuracoes: ' + txt);
-			}
-		);
-
+		uw.gpAjax.ajaxPost('frontend_bridge', 'execute', data);
 		return storage;
 	};
 
@@ -2060,13 +1695,8 @@ var MultStorage = class extends Compressor {
 	getActiveNote() {
 		const noteClass = uw.$('.tab.selected').attr('class');
 		if (!noteClass) return null;
-		// FIX: sem essa checagem, uma aba selecionada sem o padrao "noteN" na
-		// classe (ex: layout do jogo mudou, ou nenhuma nota selecionada de
-		// verdade) fazia o .match() retornar null e o [1] seguinte explodia
-		// com TypeError, em vez de simplesmente reportar "nenhuma nota ativa".
-		const match = noteClass.match(/note(\d+)/);
-		if (!match) return null;
-		const note_index = parseInt(match[1]) - 1;
+		const noteX = noteClass.match(/note(\d+)/)[1];
+		const note_index = parseInt(noteX) - 1;
 
 		const collection = uw.MM.getOnlyCollectionByName('PlayerNote');
 		if (!collection) return null;
