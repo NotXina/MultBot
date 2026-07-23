@@ -5,7 +5,8 @@
 // @version      1.8.0
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
-// @grant        none
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @run-at       document-end
 // @updateURL    https://raw.githubusercontent.com/NotXina/MultBot/main/index.js
 // @downloadURL  https://raw.githubusercontent.com/NotXina/MultBot/main/index.js
