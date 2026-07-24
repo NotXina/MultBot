@@ -5,14 +5,6 @@ var AutoBuild = class extends MultUtil {
        de ser tentado de novo - evita ficar re-tentando (e logando)
        a cada ciclo do main() enquanto o requisito nao e atendido. */
     BUILD_ERROR_COOLDOWN_MS = 5 * 60 * 1000;
-    /* Cooldown curto pro caso de recursos/populacao insuficientes -
-       diferente do bloqueio por requisitos (que precisa de outra
-       construcao subir de nivel em algum outro lugar, entao 5min faz
-       sentido), aqui os recursos regeneram sozinhos com o tempo, entao
-       um cooldown mais curto e suficiente pra parar de martelar o
-       mesmo pedido a cada 5s sem esperar tanto quando ja da pra
-       tentar de novo. */
-    RESOURCE_BLOCK_COOLDOWN_MS = 60 * 1000;
 
     constructor(c, s) {
         super(c, s);
@@ -46,18 +38,13 @@ var AutoBuild = class extends MultUtil {
     /* Bloqueia um predio especifico numa cidade especifica por
        BUILD_ERROR_COOLDOWN_MS. Enquanto bloqueado, getNextBuild pula
        essa construcao e segue tentando as outras da composicao. */
-    _blockBuilding(town_id, building, cooldownMs = this.BUILD_ERROR_COOLDOWN_MS, silent = false) {
+    _blockBuilding(town_id, building) {
         const key = this._buildKey(town_id, building);
-        this._buildBlockedUntil[key] = Date.now() + cooldownMs;
-        /* silent=true: usado pro caso de recursos/populacao insuficientes -
-           bloqueia a re-tentativa mas nao loga nada (ver
-           isResourceOrCapacityMessage em core.js), pra nao floodar o
-           console com um aviso esperado que se repete o tempo todo. */
-        if (silent) return;
+        this._buildBlockedUntil[key] = Date.now() + this.BUILD_ERROR_COOLDOWN_MS;
         const town = uw.ITowns.towns[town_id];
         const townName = town && town.getName ? town.getName() : ('#' + town_id);
         const buildingName = this.getGameName ? this.getGameName('building', building) : building;
-        const minutes = Math.round(cooldownMs / 60000);
+        const minutes = Math.round(this.BUILD_ERROR_COOLDOWN_MS / 60000);
         this.console.log('[AutoBuild] ' + this.t('ab_blocked_log', { town: townName, building: buildingName, min: minutes }));
     }
     _isBuildBlocked(town_id, building) {
@@ -83,23 +70,13 @@ var AutoBuild = class extends MultUtil {
             const self = this;
             uw.HumanMessage.error = function (message, ...rest) {
                 try {
-                    // PDCA: "nao ha recursos suficientes" / "nao pode recrutar
-                    // mais do que N" sao avisos ESPERADOS que se repetem o
-                    // tempo todo enquanto os recursos nao acumulam - nao
-                    // logamos mais isso (evita floodar o console a cada
-                    // ciclo). Nota: esse hook e global (patch unico em
-                    // uw.HumanMessage.error), entao tambem captura avisos de
-                    // populacao vindos do AutoTrain - suprimir aqui cobre
-                    // esse caso tambem, sem precisar duplicar a logica la.
-                    if (!self.isResourceOrCapacityMessage(message)) {
-                        const attempt = self._lastBuildAttempt;
-                        if (attempt && (Date.now() - attempt.at) < 3000) {
-                            const buildingName = self.getGameName ? self.getGameName('building', attempt.building) : attempt.building;
-                            self.console.log('[AutoBuild] ' + self.t('ab_native_warning_log', { message, building: buildingName, town: attempt.townName }));
+                    const attempt = self._lastBuildAttempt;
+                    if (attempt && (Date.now() - attempt.at) < 3000) {
+                        const buildingName = self.getGameName ? self.getGameName('building', attempt.building) : attempt.building;
+                        self.console.log('[AutoBuild] ' + self.t('ab_native_warning_log', { message, building: buildingName, town: attempt.townName }));
 
-                            if (/requisit/i.test(message) && attempt.townId != null) {
-                                self._blockBuilding(attempt.townId, attempt.building);
-                            }
+                        if (/requisit/i.test(message) && attempt.townId != null) {
+                            self._blockBuilding(attempt.townId, attempt.building);
                         }
                     }
                 } catch (e) {
@@ -142,6 +119,7 @@ var AutoBuild = class extends MultUtil {
                 <span style="font-size:11px;font-weight:bold;" title="${this.t('ab_presets_tooltip')}">${this.t('ab_presets_label')}</span>
                 ${this.getButtonHtml('auto_build_preset_naval', this.t('ab_preset_naval'), this.applyNavalPreset)}
                 ${this.getButtonHtml('auto_build_preset_land', this.t('ab_preset_land'), this.applyLandPreset)}
+                ${this.getButtonHtml('auto_build_preset_flyer', this.t('ab_preset_flyer'), this.applyFlyerPreset)}
             </div>
             <div id="buildings_lvl_buttons"></div>
         </div> `;
@@ -192,6 +170,39 @@ var AutoBuild = class extends MultUtil {
             this.console.log('[AutoBuild] ' + msg);
         } catch (e) {
             this.console.log('[AutoBuild] ' + this.t('ab_land_error', { msg: e.message }));
+        }
+    };
+    /* Preset Voador: composição customizada para cidade voadora.
+       Senado=25, Armazém=35, Fazenda=45, Academia=31, Templo=20,
+       Quartel=30, Porto=5, Mercado=15, Esconderijo=10, Recursos=40, Muro=0.
+       Aplica SOMENTE na cidade atualmente ativa no jogo. */
+    applyFlyerPreset = () => {
+        try {
+            const town = uw.ITowns.getCurrentTown();
+            const town_id = town.getId();
+            this.towns_buildings[town_id] = this._buildBuildingsPreset({
+                main:    25,
+                storage: 35,
+                farm:    45,
+                academy: 31,
+                temple:  20,
+                barracks:30,
+                docks:   5,
+                market:  15,
+                hide:    10,
+                lumber:  40,
+                stoner:  40,
+                ironer:  40,
+                wall:    0,
+            });
+            this.storage.save('buildings', this.towns_buildings);
+            if (!this.interval) this.startInterval();
+            this.setPolisInSettings(town_id);
+            this.updateTitle();
+            const msg = this.t('ab_flyer_applied', { town: town.getName() });
+            this.console.log('[AutoBuild] ' + msg);
+        } catch (e) {
+            this.console.log('[AutoBuild] ' + this.t('ab_flyer_error', { msg: e.message }));
         }
     };
     /* API publica: aplica o mesmo preset de construcoes (overrides) em
@@ -403,25 +414,10 @@ var AutoBuild = class extends MultUtil {
             arguments: { building_id: type },
             town_id: town_id,
         };
-        // FIX: antes retornava "true" (build bem-sucedido) INCONDICIONALMENTE,
-        // mesmo no ramo "else" (res.error) e no catch - getNextBuild usava
-        // esse retorno pra incrementar seu contador local "current[build]",
-        // entao uma construcao rejeitada pelo servidor (requisitos, fila
-        // cheia numa corrida, etc) era contada como concluida dentro do
-        // mesmo ciclo, fazendo o bot pular a proxima tentativa achando que
-        // a meta ja tinha sido atingida.
-        let ok = false;
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
             if (res && !res.error) {
                 this.console.log('[AutoBuild] ' + this.t('ab_build_up_log', { town: town.getName(), building: this.getGameName('building', type) }));
-                ok = true;
-            } else if (this.isResourceOrCapacityMessage(res?.error)) {
-                // Recursos/populacao insuficientes: NAO loga (esperado, se
-                // repetiria a cada 5s) - so bloqueia essa construcao por
-                // um cooldown curto, silenciosamente, ate os recursos
-                // terem chance de acumular.
-                this._blockBuilding(town_id, type, this.RESOURCE_BLOCK_COOLDOWN_MS, true);
             } else {
                 this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: res?.error ?? JSON.stringify(res) }));
             }
@@ -429,7 +425,7 @@ var AutoBuild = class extends MultUtil {
             this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: e?.message ?? e }));
         }
         await this.sleep(1234);
-        return ok;
+        return true;
     };
     /* Make post request to tear building down */
     postTearDown = async (type, town_id, town) => {
@@ -439,15 +435,10 @@ var AutoBuild = class extends MultUtil {
             arguments: { building_id: type },
             town_id: town_id,
         };
-        // FIX: mesma correcao do postBuild - agora retorna se a
-        // demolicao foi realmente confirmada pelo servidor, em vez de
-        // getNextBuild decrementar current[build] incondicionalmente.
-        let ok = false;
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
             if (res && !res.error) {
                 this.console.log(this.t('ab_build_down_log', { town: town.getName(), building: this.getGameName('building', type) }));
-                ok = true;
             } else {
                 this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: res?.error ?? JSON.stringify(res) }));
             }
@@ -455,7 +446,6 @@ var AutoBuild = class extends MultUtil {
             this.console.log('[AutoBuild] ' + this.t('ab_build_up_error_log', { town: town.getName(), building: this.getGameName('building', type), error: e?.message ?? e }));
         }
         await this.sleep(1234);
-        return ok;
     };
     /* return true if the quee is full */
     isFullQueue = town_id => {
@@ -499,8 +489,8 @@ var AutoBuild = class extends MultUtil {
                 const built = await this.postBuild(build, town_id);
                 if (built) current[build] += 1;
             } else if (target[build] < current[build]) {
-                const torn = await this.postTearDown(build, town_id, town);
-                if (torn) current[build] -= 1;
+                await this.postTearDown(build, town_id, town);
+                current[build] -= 1;
             }
         }
     };
