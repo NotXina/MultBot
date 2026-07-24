@@ -1505,94 +1505,115 @@ var MultStorage = class extends Compressor {
 		});
 	}
 
+	/* ------------------------------------------------------------------ *
+	 *  IndexedDB helpers (cache-safe storage)                            *
+	 *  IndexedDB sobrevive a "Limpar dados de navegacao" no Chrome/Opera *
+	 *  porque fica em categoria separada de "Cookies e dados de sites".  *
+	 *  localStorage e usado como fallback sincronico e espelho.          *
+	 * ------------------------------------------------------------------ */
+	_idbName   = 'MultBotDB';
+	_idbStore  = 'settings';
+	_idbVersion = 1;
+
+	_idbOpen = () => {
+		return new Promise(function(resolve, reject) {
+			var req = indexedDB.open('MultBotDB', 1);
+			req.onupgradeneeded = function(e) {
+				e.target.result.createObjectStore('settings');
+			};
+			req.onsuccess = function(e) { resolve(e.target.result); };
+			req.onerror   = function(e) { reject(e.target.error);   };
+		});
+	};
+
+	_idbGet = (key) => {
+		var self = this;
+		return self._idbOpen().then(function(db) {
+			return new Promise(function(resolve, reject) {
+				var tx  = db.transaction('settings', 'readonly');
+				var req = tx.objectStore('settings').get(key);
+				req.onsuccess = function(e) { resolve(e.target.result); };
+				req.onerror   = function(e) { reject(e.target.error);   };
+			});
+		});
+	};
+
+	_idbSet = (key, value) => {
+		var self = this;
+		return self._idbOpen().then(function(db) {
+			return new Promise(function(resolve, reject) {
+				var tx  = db.transaction('settings', 'readwrite');
+				var req = tx.objectStore('settings').put(value, key);
+				req.onsuccess = function(e) { resolve(e.target.result); };
+				req.onerror   = function(e) { reject(e.target.error);   };
+			});
+		});
+	};
+
+	/* getStorage continua sincronico (igual ao original) para nao       *
+	 * quebrar nenhum modulo. Le do localStorage normalmente.             *
+	 * A copia no IndexedDB e usada apenas na recuperacao apos limpeza.  */
 	getStorage = () => {
 		const worldId = uw.Game.world_id;
-		const gmKey = worldId + '_multBot';
-		const lsKey = worldId + '_multBot';
-		const lsLegacyKey = worldId + '_modernBot';
+		const newKey  = worldId + '_multBot';
+		var savedValue = localStorage.getItem(newKey);
 
-		/* Prioridade 1: GM_setValue/GM_getValue (Tampermonkey storage).
-		   Esses dados SOBREVIVEM a qualquer limpeza de cache do navegador
-		   porque ficam no banco interno da extensao, nao no site. */
-		var gmRaw = null;
-		try {
-			if (typeof GM_getValue === 'function') {
-				gmRaw = GM_getValue(gmKey, null);
-			}
-		} catch (e) {}
-
-		if (gmRaw !== null && gmRaw !== undefined) {
-			try {
-				return JSON.parse(gmRaw);
-			} catch (e) {
-				console.error('[MultBot] Erro ao ler GM storage: ' + e);
+		/* Migracao legada: _modernBot -> _multBot */
+		if (savedValue === null || savedValue === undefined) {
+			const legacyKey   = worldId + '_modernBot';
+			const legacyValue = localStorage.getItem(legacyKey);
+			if (legacyValue !== null && legacyValue !== undefined) {
+				savedValue = legacyValue;
+				try {
+					localStorage.setItem(newKey, legacyValue);
+					console.log('[MultBot] Settings migrated from ' + legacyKey + ' to ' + newKey + '.');
+				} catch (e) {}
 			}
 		}
 
-		/* Prioridade 2: localStorage (chave nova _multBot).
-		   Migra automaticamente para GM storage ao encontrar - proxima
-		   leitura ja vem direto do GM, sem depender do localStorage. */
-		var lsRaw = null;
-		try {
-			lsRaw = localStorage.getItem(lsKey);
-		} catch (e) {}
-
-		/* Prioridade 3: localStorage legado (_modernBot, antes do rename). */
-		if (lsRaw === null || lsRaw === undefined) {
-			try {
-				var lsLegacyRaw = localStorage.getItem(lsLegacyKey);
-				if (lsLegacyRaw !== null && lsLegacyRaw !== undefined) {
-					lsRaw = lsLegacyRaw;
+		/* Recuperacao apos limpeza de cache: localStorage vazio mas       *
+		 * IndexedDB ainda tem os dados - restaura de forma assincrona.   */
+		if (savedValue === null || savedValue === undefined) {
+			this._idbGet(newKey).then(function(idbValue) {
+				if (idbValue) {
 					try {
-						localStorage.setItem(lsKey, lsLegacyRaw);
-						console.log('[MultBot] Settings migrated from ' + lsLegacyKey + ' to ' + lsKey + '.');
+						localStorage.setItem(newKey, idbValue);
+						console.log('[MultBot] Settings restored from IndexedDB after cache clear. Reloading...');
+						setTimeout(function() { location.reload(); }, 800);
 					} catch (e) {}
 				}
-			} catch (e) {}
+			}).catch(function() {});
 		}
 
-		if (lsRaw !== null && lsRaw !== undefined) {
-			var parsed = {};
+		var storage = {};
+		if (savedValue !== null && savedValue !== undefined) {
 			try {
-				parsed = JSON.parse(lsRaw);
+				storage = JSON.parse(savedValue);
 			} catch (error) {
 				console.error('[MultBot] Error parsing localStorage data: ' + error);
 			}
-			/* Migra para GM storage agora para proteger contra proxima limpeza. */
-			try {
-				if (typeof GM_setValue === 'function') {
-					GM_setValue(gmKey, JSON.stringify(parsed));
-					console.log('[MultBot] Settings migrated from localStorage to GM storage (cache-safe).');
-				}
-			} catch (e) {}
-			return parsed;
 		}
-
-		return {};
+		return storage;
 	};
 
 	saveStorage = storage => {
 		const worldId = uw.Game.world_id;
-		const key = worldId + '_multBot';
-		const json = JSON.stringify(storage);
+		const key     = worldId + '_multBot';
+		const json    = JSON.stringify(storage);
 		var ok = false;
 
-		/* Salva em GM storage (primario, sobrevive a limpeza de cache). */
-		try {
-			if (typeof GM_setValue === 'function') {
-				GM_setValue(key, json);
-				ok = true;
-			}
-		} catch (error) {
-			console.error('[MultBot] Error saving to GM storage: ' + error);
-		}
-
-		/* Salva tambem em localStorage como espelho/fallback. */
+		/* Salva em localStorage (sincronico, uso imediato). */
 		try {
 			localStorage.setItem(key, json);
+			ok = true;
 		} catch (error) {
 			console.error('[MultBot] Error saving to localStorage: ' + error);
 		}
+
+		/* Espelha no IndexedDB (assincrono, sobrevive a limpeza de cache). */
+		this._idbSet(key, json).catch(function(e) {
+			console.error('[MultBot] Error saving to IndexedDB: ' + e);
+		});
 
 		this.lastUpdateTime = Date.now();
 		return ok;
