@@ -94,10 +94,10 @@ var AutoAttack = class extends MultUtil {
                         targets: plan.targets || [],
                         enabled: plan.enabled !== false
                     };
-                    this.console.log('[AutoAttack] ' + this.t('aat_old_plan_migrated_log', { id: plan.originId, unit: plan.unit, qty: plan.quantity }));
+                    this.console.log('[AutoAttack] Plano antigo migrado: cidade #' + plan.originId + ' (' + plan.unit + ' x' + plan.quantity + ').');
                 } else {
                     changed = true;
-                    this.console.log('[AutoAttack] ' + this.t('aat_invalid_plan_removed_log'));
+                    this.console.log('[AutoAttack] Aviso: plano invalido removido (sem unidades definidas).');
                     continue;
                 }
             }
@@ -117,7 +117,7 @@ var AutoAttack = class extends MultUtil {
                ela, o progresso seria resetado a cada reload da pagina. */
             if (typeof migratedPlan.nextAttackAt !== 'number') {
                 if (migratedPlan.nextAllowedAt && typeof migratedPlan.nextAllowedAt === 'object') {
-                    this.console.log('[AutoAttack] ' + this.t('aat_rest_migrated_log', { id: migratedPlan.id }));
+                    this.console.log('[AutoAttack] Plano #' + migratedPlan.id + ': descanso migrado de "por alvo" pra "intervalo do plano inteiro".');
                 }
                 migratedPlan.nextAttackAt = 0;
                 migratedPlan.nextTargetIndex = 0;
@@ -168,8 +168,8 @@ var AutoAttack = class extends MultUtil {
 
     _formatUnitEntry(u) {
         const label = this._getUnitLabel(u.unit);
-        if (u.useMax) return this.t('aat_max_entry', { label });
-        return this.t('aat_qty_entry', { qty: u.quantity, label });
+        if (u.useMax) return 'MAX x ' + label;
+        return u.quantity + 'x ' + label;
     }
 
     settings = () => {
@@ -187,30 +187,30 @@ var AutoAttack = class extends MultUtil {
         html += '<div class="game_border_left"></div><div class="game_border_right"></div>';
         html += '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>';
         html += '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>';
-        html += this.getTitleHtml('attack_title', this.t('aat_title'), this.toggle, '', this._active);
+        html += this.getTitleHtml('attack_title', 'Auto Ataque', this.toggle, '', this._active);
 
         html += '<div style="padding:4px 10px;font-size:11px;font-weight:bold;">';
-        html += this.t('aat_desc');
+        html += 'Ataca automaticamente quando a composicao estiver disponivel. Verifica a cada 20s.';
         html += '</div>';
 
         html += '<div style="padding:4px 10px;">';
 
         html += '<div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">';
         html += '<div style="flex:1; min-width:180px;">';
-        html += '<label style="font-size:11px;font-weight:bold;">' + this.t('aat_origin_label') + '</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;">Cidade Atacante</label><br>';
         html += '<select id="attack_origin_select" style="width:100%;padding:3px;">';
         html += this._getTownOptionsHtml();
         html += '</select>';
         html += '</div>';
         html += '<div style="width:140px;">';
-        html += '<label style="font-size:11px;font-weight:bold;" title="' + this.t('aat_rest_tooltip') + '">' + this.t('aat_rest_label') + '</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;" title="Espera antes de reatacar o mesmo alvo, +-10% de variacao. 0 = sem espera.">Descanso (min)</label><br>';
         html += '<input type="number" id="attack_rest_minutes" min="0" placeholder="0" style="width:100%;padding:3px;" value="0">';
         html += '</div>';
         html += '</div>';
 
         html += '<div style="display:flex; gap:10px; align-items:flex-end; margin-top:6px; flex-wrap:wrap;">';
         html += '<div style="flex:1; min-width:180px;">';
-        html += '<label style="font-size:11px;font-weight:bold;" title="' + this.t('aat_hero_tooltip') + '">' + this.t('aat_hero_label') + '</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;" title="Opcional. Envia esse heroi junto com o ataque, se ele estiver disponivel na cidade atacante no momento do disparo.">Heroi (opcional)</label><br>';
         html += '<select id="attack_hero_select" style="width:100%;padding:3px;">';
         html += this._getHeroOptionsHtml();
         html += '</select>';
@@ -219,40 +219,40 @@ var AutoAttack = class extends MultUtil {
 
         html += '<div style="display:flex; gap:8px; align-items:flex-end; margin-top:6px; flex-wrap:wrap;">';
         html += '<div style="flex:1; min-width:130px;">';
-        html += '<label style="font-size:11px;font-weight:bold;">' + this.t('aat_unit_label') + '</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;">Unidade</label><br>';
         html += '<select id="attack_unit_select" style="width:100%;padding:3px;">';
         html += this._getUnitOptionsHtml();
         html += '</select>';
         html += '</div>';
         html += '<div style="width:75px;">';
-        html += '<label style="font-size:11px;font-weight:bold;">' + this.t('aat_qty_label') + '</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;">Qtde</label><br>';
         html += '<input type="number" id="attack_qty" min="1" placeholder="100" style="width:100%;padding:3px;">';
         html += '</div>';
         html += '<div style="width:60px;">';
-        html += '<label style="font-size:11px;font-weight:bold;" title="' + this.t('aat_max_tooltip') + '">&nbsp;</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;" title="Sempre envia TUDO que estiver disponivel dessa unidade no momento do ataque.">&nbsp;</label><br>';
         html += '<label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;padding:4px 0;">';
-        html += '<input type="checkbox" id="attack_qty_max" onchange="window.multBot.autoAttack.toggleMaxQty()"> ' + this.t('aat_max_label');
+        html += '<input type="checkbox" id="attack_qty_max" onchange="window.multBot.autoAttack.toggleMaxQty()"> Max';
         html += '</label>';
         html += '</div>';
         html += '<div>';
-        html += this.getButtonHtml('attack_add_unit_btn', this.t('aat_add_unit_btn'), this.addUnitToStaging);
+        html += this.getButtonHtml('attack_add_unit_btn', '+ Unidade', this.addUnitToStaging);
         html += '</div>';
         html += '</div>';
 
         html += '<div id="attack_staging_list" style="font-size:11px; margin-top:4px;"></div>';
 
         html += '<div style="margin-top:6px;">';
-        html += '<label style="font-size:11px;font-weight:bold;">' + this.t('aat_targets_label') + '</label>';
-        html += '<textarea id="attack_targets" rows="1" style="width:100%;padding:4px;box-sizing:border-box;" placeholder="' + this.t('aat_targets_placeholder') + '"></textarea>';
+        html += '<label style="font-size:11px;font-weight:bold;">Cidades-alvo (ID, separadas por virgula ou linha)</label>';
+        html += '<textarea id="attack_targets" rows="1" style="width:100%;padding:4px;box-sizing:border-box;" placeholder="ex: 12345, 67890"></textarea>';
         html += '</div>';
 
         html += '<div style="margin-top:6px;">';
-        html += this.getButtonHtml('attack_add_plan_btn', this.t('aat_add_plan_btn'), this.addPlan);
+        html += this.getButtonHtml('attack_add_plan_btn', '+ Adicionar Plano', this.addPlan);
         html += '</div>';
         html += '</div>';
 
         html += '<div style="padding:4px 10px 8px;border-top:1px solid rgba(0,0,0,0.15);">';
-        html += '<div style="font-weight:bold;font-size:11px;margin:4px 0;">' + this.t('aat_active_plans_label') + '</div>';
+        html += '<div style="font-weight:bold;font-size:11px;margin:4px 0;">Planos ativos:</div>';
         html += '<div id="attack_plans_list" style="';
         html += 'max-height:' + this.PLANS_LIST_MAX_HEIGHT + 'px;';
         html += 'overflow-y:scroll;';
@@ -282,7 +282,7 @@ var AutoAttack = class extends MultUtil {
                 return nameA.localeCompare(nameB);
             });
 
-            let html = '<option value="">' + this.t('aat_select_placeholder') + '</option>';
+            let html = '<option value="">Selecione...</option>';
             for (const id of keys) {
                 const t = towns[id];
                 const name = t.getName ? t.getName() : ('#' + id);
@@ -290,7 +290,7 @@ var AutoAttack = class extends MultUtil {
             }
             return html;
         } catch (e) {
-            return '<option value="">' + this.t('aat_towns_load_error') + '</option>';
+            return '<option value="">Erro ao carregar cidades</option>';
         }
     }
 
@@ -310,14 +310,13 @@ var AutoAttack = class extends MultUtil {
                 return a.label.localeCompare(b.label);
             });
 
-            let html = '<option value="">' + this.t('aat_select_placeholder') + '</option>';
+            let html = '<option value="">Selecione...</option>';
             for (const item of items) {
-                const typeTag = item.isNaval ? this.t('aat_naval_tag') : this.t('aat_land_tag');
-                html += '<option value="' + item.id + '">' + item.label + typeTag + '</option>';
+                html += '<option value="' + item.id + '">' + item.label + '</option>';
             }
             return html;
         } catch (e) {
-            return '<option value="">' + this.t('aat_units_load_error') + '</option>';
+            return '<option value="">Erro ao carregar unidades</option>';
         }
     }
 
@@ -338,13 +337,13 @@ var AutoAttack = class extends MultUtil {
                 return a.label.localeCompare(b.label);
             });
 
-            let html = '<option value="">' + this.t('aat_hero_none') + '</option>';
+            let html = '<option value="">Nenhum</option>';
             for (const item of items) {
                 html += '<option value="' + item.id + '">' + item.label + '</option>';
             }
             return html;
         } catch (e) {
-            return '<option value="">' + this.t('aat_hero_none') + '</option>';
+            return '<option value="">Nenhum</option>';
         }
     }
 
@@ -364,13 +363,13 @@ var AutoAttack = class extends MultUtil {
         const qty = parseInt(uw.$('#attack_qty').val(), 10);
 
         if (!unit) {
-            this.console.log('[AutoAttack] ' + this.t('aat_select_unit_first_log'));
-            uw.$('#attack_log').text(this.t('aat_select_unit_first_status')).css('color', '#f87171');
+            this.console.log('[AutoAttack] Erro: selecione uma unidade antes de adicionar.');
+            uw.$('#attack_log').text('Erro: selecione uma unidade.').css('color', '#f87171');
             return;
         }
         if (!useMax && (!qty || qty <= 0)) {
-            this.console.log('[AutoAttack] ' + this.t('aat_invalid_qty_log'));
-            uw.$('#attack_log').text(this.t('aat_invalid_qty_status')).css('color', '#f87171');
+            this.console.log('[AutoAttack] Erro: quantidade invalida.');
+            uw.$('#attack_log').text('Erro: informe uma quantidade valida ou marque Max.').css('color', '#f87171');
             return;
         }
 
@@ -411,7 +410,7 @@ var AutoAttack = class extends MultUtil {
         this._renderStagingUnits();
 
         const entryForLog = existing ? existing : this._stagingUnits[this._stagingUnits.length - 1];
-        this.console.log('[AutoAttack] ' + this.t('aat_unit_added_log', { entry: this._formatUnitEntry(entryForLog) }));
+        this.console.log('[AutoAttack] Unidade adicionada a composicao: ' + this._formatUnitEntry(entryForLog));
     };
 
     removeStagingUnit = (unit) => {
@@ -426,7 +425,7 @@ var AutoAttack = class extends MultUtil {
         if (!container.length) return;
 
         if (this._stagingUnits.length === 0) {
-            container.html('<span style="color:#7a5c2a;">' + this.t('aat_no_staging_units') + '</span>');
+            container.html('<span style="color:#7a5c2a;">Nenhuma unidade na composicao ainda.</span>');
             return;
         }
 
@@ -454,7 +453,7 @@ var AutoAttack = class extends MultUtil {
         this._active = true;
         this.storage.save('attack_active', true);
         this._updateTitle();
-        this.console.log('[AutoAttack] ' + this.t('aat_started_log'));
+        this.console.log('[AutoAttack] Iniciado. Monitorando planos de ataque...');
         this._tick();
         this._intervalId = this.createGuardedInterval(() => this._tick(), this.CHECK_INTERVAL_MS);
     }
@@ -467,7 +466,7 @@ var AutoAttack = class extends MultUtil {
             this._intervalId = null;
         }
         this._updateTitle();
-        this.console.log('[AutoAttack] ' + this.t('aat_stopped_log'));
+        this.console.log('[AutoAttack] Parado.');
     }
 
     _updateTitle() {
@@ -483,13 +482,13 @@ var AutoAttack = class extends MultUtil {
         const hero = (uw.$('#attack_hero_select').val() || '').trim() || null;
 
         if (!originId) {
-            this.console.log('[AutoAttack] ' + this.t('aat_no_origin_log'));
-            uw.$('#attack_log').text(this.t('aat_no_origin_status')).css('color', '#f87171');
+            this.console.log('[AutoAttack] Erro: nenhuma cidade atacante selecionada.');
+            uw.$('#attack_log').text('Erro: selecione uma cidade atacante.').css('color', '#f87171');
             return;
         }
         if (this._stagingUnits.length === 0) {
-            this.console.log('[AutoAttack] ' + this.t('aat_no_units_in_plan_log'));
-            uw.$('#attack_log').text(this.t('aat_no_units_in_plan_status')).css('color', '#f87171');
+            this.console.log('[AutoAttack] Erro: adicione ao menos uma unidade a composicao.');
+            uw.$('#attack_log').text('Erro: adicione ao menos uma unidade.').css('color', '#f87171');
             return;
         }
 
@@ -501,8 +500,8 @@ var AutoAttack = class extends MultUtil {
         }
 
         if (targets.length === 0) {
-            this.console.log('[AutoAttack] ' + this.t('aat_no_targets_log'));
-            uw.$('#attack_log').text(this.t('aat_no_targets_status')).css('color', '#f87171');
+            this.console.log('[AutoAttack] Erro: nenhuma cidade-alvo valida informada.');
+            uw.$('#attack_log').text('Erro: informe pelo menos uma cidade-alvo valida.').css('color', '#f87171');
             return;
         }
 
@@ -547,8 +546,8 @@ var AutoAttack = class extends MultUtil {
                 this._editingPlanId = null;
                 this._updateAddPlanButtonLabel();
 
-                this.console.log('[AutoAttack] ' + this.t('aat_plan_updated_log', { origin: originName, units: unitsSummary, count: targets.length }));
-                uw.$('#attack_log').text(this.t('aat_plan_updated_status')).css('color', '#1a6b2a');
+                this.console.log('[AutoAttack] Plano atualizado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s).');
+                uw.$('#attack_log').text('Plano atualizado com sucesso!').css('color', '#1a6b2a');
                 return;
             }
             // O plano que estava sendo editado sumiu (removido em outra aba,
@@ -580,10 +579,10 @@ var AutoAttack = class extends MultUtil {
         uw.$('#attack_rest_minutes').val('0');
         uw.$('#attack_hero_select').val('');
 
-        const restLabel = restMinutes > 0 ? this.t('aat_rest_suffix', { min: restMinutes }) : '';
-        const heroLabel = hero ? this.t('aat_hero_suffix', { name: this._getHeroLabel(hero) }) : '';
-        this.console.log('[AutoAttack] ' + this.t('aat_plan_added_log', { origin: originName, units: unitsSummary, count: targets.length, rest: restLabel, hero: heroLabel }));
-        uw.$('#attack_log').text(this.t('aat_plan_added_status')).css('color', '#1a6b2a');
+        const restLabel = restMinutes > 0 ? (', descanso ' + restMinutes + 'min') : '';
+        const heroLabel = hero ? (', heroi: ' + this._getHeroLabel(hero)) : '';
+        this.console.log('[AutoAttack] Plano adicionado: ' + originName + ' [' + unitsSummary + '] -> ' + targets.length + ' alvo(s)' + restLabel + heroLabel + '.');
+        uw.$('#attack_log').text('Plano adicionado com sucesso!').css('color', '#1a6b2a');
     };
 
     /* Carrega os dados de um plano existente de volta no formulario,
@@ -592,7 +591,7 @@ var AutoAttack = class extends MultUtil {
     editPlan = (planId) => {
         const plan = this._plans.find((p) => p.id === planId);
         if (!plan) {
-            this.console.log('[AutoAttack] ' + this.t('aat_plan_not_found_log'));
+            this.console.log('[AutoAttack] Erro: plano nao encontrado pra editar.');
             return;
         }
 
@@ -609,8 +608,8 @@ var AutoAttack = class extends MultUtil {
         this._updateAddPlanButtonLabel();
 
         const townName = this.getTownName(plan.originId);
-        this.console.log('[AutoAttack] ' + this.t('aat_editing_plan_log', { town: townName }));
-        uw.$('#attack_log').text(this.t('aat_editing_plan_status', { town: townName })).css('color', '#5a3a0a');
+        this.console.log('[AutoAttack] Editando plano: ' + townName + '.');
+        uw.$('#attack_log').text('Editando plano de ' + townName + ' - altere e clique em "Salvar Alteracoes".').css('color', '#5a3a0a');
 
         const formEl = document.getElementById('attack_origin_select');
         if (formEl && formEl.scrollIntoView) formEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -627,7 +626,7 @@ var AutoAttack = class extends MultUtil {
         uw.$('#attack_rest_minutes').val('0');
         uw.$('#attack_hero_select').val('');
         this._updateAddPlanButtonLabel();
-        uw.$('#attack_log').text(this.t('aat_edit_cancelled_status')).css('color', '#5a3a0a');
+        uw.$('#attack_log').text('Edicao cancelada.').css('color', '#5a3a0a');
     };
 
     /* Troca o texto do botao entre "+ Adicionar Plano" e "Salvar
@@ -635,7 +634,7 @@ var AutoAttack = class extends MultUtil {
        link "Cancelar edicao" ao lado dele. */
     _updateAddPlanButtonLabel() {
         const isEditing = !!this._editingPlanId;
-        const label = isEditing ? this.t('aat_save_changes_btn') : this.t('aat_add_plan_btn');
+        const label = isEditing ? '💾 Salvar Alteracoes' : '+ Adicionar Plano';
         uw.$('#attack_add_plan_btn .js-caption').html(label + ' <div class="effect js-effect"></div>');
 
         const $cancel = uw.$('#attack_cancel_edit_link');
@@ -643,7 +642,7 @@ var AutoAttack = class extends MultUtil {
             if ($cancel.length === 0) {
                 uw.$('#attack_add_plan_btn').after(
                     '<span id="attack_cancel_edit_link" onclick="window.multBot.autoAttack.cancelEditPlan()" ' +
-                    'style="cursor:pointer;color:#7a5c2a;font-size:11px;margin-left:8px;text-decoration:underline;">' + this.t('aat_cancel_edit_link') + '</span>'
+                    'style="cursor:pointer;color:#7a5c2a;font-size:11px;margin-left:8px;text-decoration:underline;">Cancelar edicao</span>'
                 );
             }
         } else {
@@ -657,7 +656,7 @@ var AutoAttack = class extends MultUtil {
         });
         this.storage.save('attack_plans', this._plans);
         this._renderPlans();
-        this.console.log('[AutoAttack] ' + this.t('aat_plan_removed_log'));
+        this.console.log('[AutoAttack] Plano removido.');
     };
 
     _renderPlans() {
@@ -665,7 +664,7 @@ var AutoAttack = class extends MultUtil {
         if (!container.length) return;
 
         if (this._plans.length === 0) {
-            container.html('<span style="font-size:11px;color:#7a5c2a;">' + this.t('aat_no_plans_configured') + '</span>');
+            container.html('<span style="font-size:11px;color:#7a5c2a;">Nenhum plano configurado.</span>');
             return;
         }
 
@@ -683,7 +682,7 @@ var AutoAttack = class extends MultUtil {
             }
 
             if (plan.hero) {
-                unitsLabel += this.t('aat_hero_display', { name: this._getHeroLabel(plan.hero) });
+                unitsLabel += ' + heroi ' + this._getHeroLabel(plan.hero);
             }
 
             let targetsLabel = '';
@@ -693,17 +692,17 @@ var AutoAttack = class extends MultUtil {
                 targetsLabel += (isNext ? '▶' : '') + this.getTownName(plan.targets[i]);
             }
 
-            let restLabel = (plan.restMinutes && plan.restMinutes > 0) ? this.t('aat_rest_display', { min: plan.restMinutes }) : '';
+            let restLabel = (plan.restMinutes && plan.restMinutes > 0) ? (' | descanso ' + plan.restMinutes + 'min') : '';
             if (plan.nextAttackAt && plan.nextAttackAt > Date.now()) {
                 const remainMin = Math.ceil((plan.nextAttackAt - Date.now()) / 60000);
-                restLabel += this.t('aat_next_label', { min: remainMin });
+                restLabel += ' (proximo em ~' + remainMin + 'min)';
             }
 
             html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 2px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:10px;line-height:1.3;">';
             html += '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px;" title="' + townName + ' [' + unitsLabel + '] -> ' + targetsLabel + restLabel + '">';
             html += '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + restLabel;
             html += '</div>';
-            html += '<span onclick="window.multBot.autoAttack.editPlan(\'' + plan.id + '\')" style="cursor:pointer;color:#4a90d9;font-weight:bold;flex-shrink:0;padding:0 4px;" title="' + this.t('aat_edit_tooltip') + '">✏️</span>';
+            html += '<span onclick="window.multBot.autoAttack.editPlan(\'' + plan.id + '\')" style="cursor:pointer;color:#4a90d9;font-weight:bold;flex-shrink:0;padding:0 4px;" title="Editar plano">✏️</span>';
             html += '<span onclick="window.multBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;flex-shrink:0;padding:0 4px;">X</span>';
             html += '</div>';
         }
@@ -739,7 +738,7 @@ var AutoAttack = class extends MultUtil {
     async _checkAndFire(plan) {
         try {
             if (!Array.isArray(plan.units) || plan.units.length === 0) {
-                this.console.log('[AutoAttack] ' + this.t('aat_plan_invalid_composition_log', { id: plan.originId }));
+                this.console.log('[AutoAttack] Aviso: plano da cidade #' + plan.originId + ' sem composicao valida, ignorado.');
                 return;
             }
             if (!Array.isArray(plan.targets) || plan.targets.length === 0) {
@@ -753,7 +752,7 @@ var AutoAttack = class extends MultUtil {
 
             const town = uw.ITowns.towns[plan.originId];
             if (!town) {
-                this.console.log('[AutoAttack] ' + this.t('aat_town_not_found_log', { id: plan.originId }));
+                this.console.log('[AutoAttack] Aviso: cidade #' + plan.originId + ' nao encontrada (nao e sua ou saiu do cache).');
                 return;
             }
 
@@ -794,13 +793,13 @@ var AutoAttack = class extends MultUtil {
 
             const heroForThisSend = plan.hero || null;
             if (heroForThisSend) {
-                sendSummary += this.t('aat_hero_display', { name: this._getHeroLabel(heroForThisSend) });
+                sendSummary += ' + heroi ' + this._getHeroLabel(heroForThisSend);
             }
 
             try {
                 await this._sendAttack(plan.originId, targetId, sendUnits, heroForThisSend);
-                this.console.log('[AutoAttack] ' + this.t('aat_attack_ok_log', { from: townName, to: targetName, comp: sendSummary }));
-                uw.$('#attack_log').text(this.t('aat_attack_ok_status', { from: townName, to: targetName, comp: sendSummary })).css('color', '#1a6b2a');
+                this.console.log('[AutoAttack] OK: ' + townName + ' -> ' + targetName + ': ataque com [' + sendSummary + '] enviado!');
+                uw.$('#attack_log').text('OK: ' + townName + ' atacou ' + targetName + ' [' + sendSummary + ']').css('color', '#1a6b2a');
                 if (uw.HumanMessage) {
                     uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + targetName + ' (ataque)');
                 }
@@ -813,7 +812,7 @@ var AutoAttack = class extends MultUtil {
                 if (plan.restMinutes && plan.restMinutes > 0) {
                     plan.nextAttackAt = this._computeNextAllowedAt(plan.restMinutes);
                     const remainMin = Math.round((plan.nextAttackAt - Date.now()) / 60000);
-                    this.console.log('[AutoAttack] ' + this.t('aat_next_attack_log', { town: townName, min: remainMin }));
+                    this.console.log('[AutoAttack] ' + townName + ': proximo ataque desse plano em aproximadamente ' + remainMin + 'min.');
                 } else {
                     plan.nextAttackAt = 0;
                 }
@@ -821,12 +820,12 @@ var AutoAttack = class extends MultUtil {
                 this.storage.save('attack_plans', this._plans);
             } catch (e) {
                 const msg = e && e.message ? e.message : e;
-                this.console.log('[AutoAttack] ' + this.t('aat_attack_fail_log', { to: targetName, from: townName, msg }));
-                uw.$('#attack_log').text(this.t('aat_attack_fail_status', { to: targetName, msg })).css('color', '#f87171');
+                this.console.log('[AutoAttack] FALHA ao atacar ' + targetName + ' de ' + townName + ': ' + msg);
+                uw.$('#attack_log').text('FALHA ao atacar ' + targetName + ': ' + msg).css('color', '#f87171');
             }
         } catch (e) {
             const msg = e && e.message ? e.message : e;
-            this.console.log('[AutoAttack] ' + this.t('aat_unexpected_error_log', { id: plan.originId, msg }));
+            this.console.log('[AutoAttack] Erro inesperado no plano #' + plan.originId + ': ' + msg);
         }
     }
 
