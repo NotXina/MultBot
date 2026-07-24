@@ -32,19 +32,10 @@
 //  envio, mas nao compensa esse throttling do navegador.
 // ══════════════════════════════════════════════════════
 var Sniper = class extends MultUtil {
-    // PDCA (pedido explicito - configuravel pela UI em vez de fixo no
-    // codigo): valores default preservam o comportamento anterior.
-    // - toleranceAttackSec/toleranceSupportSec: quantos segundos de
-    //   folga sao aceitos SEM precisar re-tentar (a direcao continua
-    //   fixa por seguranca - ataque nunca atrasa, apoio nunca
-    //   adianta - so o TAMANHO da janela fica ajustavel).
-    // - earlyMarginMs: quanto antes do horario calculado o envio
-    //   dispara, pra cobrir atraso de rede entre o clique local e o
-    //   servidor realmente registrar.
-
-    DEFAULT_TOLERANCE_ATTACK_SEC = 1;
-    DEFAULT_TOLERANCE_SUPPORT_SEC = 2;
-    DEFAULT_EARLY_MARGIN_MS = 3000;
+    // Margem fixa de seguranca: dispara sempre esse tanto mais cedo
+    // que o horario calculado (chegada - duracao), desde a primeira
+    // tentativa.
+    EARLY_MARGIN_MS = 3000;
 
     constructor(c, s) {
         super(c, s);
@@ -53,20 +44,13 @@ var Sniper = class extends MultUtil {
         this._checkerInterval = null;
         this._armedTimeouts = {};
 
-        this.toleranceAttackSec = this.storage.load('sniper_cfg_tol_attack', this.DEFAULT_TOLERANCE_ATTACK_SEC);
-        this.toleranceSupportSec = this.storage.load('sniper_cfg_tol_support', this.DEFAULT_TOLERANCE_SUPPORT_SEC);
-        this.earlyMarginMs = this.storage.load('sniper_cfg_early_margin', this.DEFAULT_EARLY_MARGIN_MS);
-
         this._startWatching();
         this._startChecker();
         this._armAllPending();
     }
 
     settings = () => {
-        requestAnimationFrame(() => {
-            this._renderList();
-            this._bindConfigInputs();
-        });
+        requestAnimationFrame(() => this._renderList());
 
         return `
         <div class="game_border" style="margin-bottom:20px;">
@@ -81,45 +65,11 @@ var Sniper = class extends MultUtil {
             <div style="padding:0 10px 6px;font-size:11px;color:#8a5a2a;">
                 ⚠ ${this.t('sniper_background_warning')}
             </div>
-            <div style="padding:6px 10px;border-top:1px solid rgba(0,0,0,0.1);border-bottom:1px solid rgba(0,0,0,0.1);display:flex;flex-wrap:wrap;gap:12px;font-size:11px;">
-                <label style="display:flex;align-items:center;gap:4px;" title="${this.t('sniper_cfg_tol_attack_tip')}">
-                    ${this.t('sniper_cfg_tol_attack_label')}
-                    <input type="number" id="sniper_cfg_tol_attack" min="0" max="10" step="1" value="${this.toleranceAttackSec}" style="width:42px;padding:2px;" />s
-                </label>
-                <label style="display:flex;align-items:center;gap:4px;" title="${this.t('sniper_cfg_tol_support_tip')}">
-                    ${this.t('sniper_cfg_tol_support_label')}
-                    <input type="number" id="sniper_cfg_tol_support" min="0" max="10" step="1" value="${this.toleranceSupportSec}" style="width:42px;padding:2px;" />s
-                </label>
-                <label style="display:flex;align-items:center;gap:4px;" title="${this.t('sniper_cfg_early_margin_tip')}">
-                    ${this.t('sniper_cfg_early_margin_label')}
-                    <input type="number" id="sniper_cfg_early_margin" min="0" max="15000" step="100" value="${this.earlyMarginMs}" style="width:58px;padding:2px;" />ms
-                </label>
+            <div style="padding:0 10px 6px;display:flex;justify-content:flex-end;">
+                ${this.getButtonHtml('sniper_clear_done_btn', this.t('sniper_clear_done'), this.clearDone)}
             </div>
             <div id="sniper_list" style="padding:0 10px 10px;"></div>
         </div>`;
-    };
-
-    /* Liga os campos de configuracao (tolerancia/margem/minimo de
-       tentativas) - salva no storage a cada mudanca e valida os
-       limites (nunca deixa negativo/NaN quebrar a logica de disparo). */
-    _bindConfigInputs = () => {
-        const bindNumber = (id, min, max, getter, setter, storageKey) => {
-            const el = document.getElementById(id);
-            if (!el || el.dataset.multBound) return;
-            el.dataset.multBound = '1';
-            el.addEventListener('change', () => {
-                let val = parseInt(el.value, 10);
-                if (isNaN(val)) val = getter();
-                val = Math.min(max, Math.max(min, val));
-                el.value = val;
-                setter(val);
-                this.storage.save(storageKey, val);
-            });
-        };
-
-        bindNumber('sniper_cfg_tol_attack', 0, 10, () => this.toleranceAttackSec, v => this.toleranceAttackSec = v, 'sniper_cfg_tol_attack');
-        bindNumber('sniper_cfg_tol_support', 0, 10, () => this.toleranceSupportSec, v => this.toleranceSupportSec = v, 'sniper_cfg_tol_support');
-        bindNumber('sniper_cfg_early_margin', 0, 15000, () => this.earlyMarginMs, v => this.earlyMarginMs = v, 'sniper_cfg_early_margin');
     };
 
     /* Observa a pagina inteira por qualquer elemento que apareca
@@ -257,7 +207,7 @@ var Sniper = class extends MultUtil {
             // calculado (chegada - duracao), ja desde a primeira tentativa -
             // pedido explicito, pra ter folga em vez de mirar exatamente
             // no limite.
-            const sendAt = arrivalDate.getTime() - (durationSeconds * 1000) - this.earlyMarginMs;
+            const sendAt = arrivalDate.getTime() - (durationSeconds * 1000) - this.EARLY_MARGIN_MS;
             if (sendAt <= Date.now()) {
                 statusEl.textContent = this.t('sniper_too_late', { duration: this._formatDuration(durationSeconds) });
                 statusEl.style.color = '#c0392b';
@@ -345,14 +295,7 @@ var Sniper = class extends MultUtil {
 
     _getTargetNameFromWindow(windowEl) {
         try {
-            // FIX: CONFIRMADO via captura real do DOM (dump de todos os
-            // elementos-folha da janela) - o seletor antigo (".window_header,
-            // .title") pegava por engano os rotulos das ABAS INTERNAS da
-            // janela ("Tipos", "Feiticos" - DIV.title), nunca o nome do
-            // alvo de verdade. O nome real da cidade/jogador-alvo fica no
-            // span padrao de titulo do jQuery UI Dialog (".ui-dialog-title",
-            // ex: "OC54-02"), na barra de titulo da janela nativa.
-            const titleEl = windowEl.closest('.js-window-main-container')?.querySelector('.ui-dialog-title');
+            const titleEl = windowEl.closest('.js-window-main-container')?.querySelector('.window_header, .title');
             return titleEl ? titleEl.textContent.trim() : null;
         } catch (e) {
             return null;
@@ -494,12 +437,7 @@ var Sniper = class extends MultUtil {
        fechar), fazendo o retry desistir na primeira tentativa mesmo
        quando ainda daria tempo de corrigir. */
     async _findNewCommand(originId, targetId, existingIds) {
-        // FIX (pedido explicito): reagir mais rapido a cada tentativa -
-        // reduzido de 8x200ms (1.6s max) pra 16x100ms (1.6s max, mesmo
-        // teto, mas detecta o comando novo em media 2x mais rapido) -
-        // sobra mais tempo de verdade pro reenvio corrigido quando da
-        // pra tentar de novo.
-        for (let attempt = 0; attempt < 16; attempt++) {
+        for (let attempt = 0; attempt < 8; attempt++) {
             try {
                 const models = uw.MM.getModels().MovementsUnits;
                 for (const key in models) {
@@ -512,7 +450,7 @@ var Sniper = class extends MultUtil {
                     return mv;
                 }
             } catch (e) {}
-            await this.sleep(100);
+            await this.sleep(200);
         }
         return null;
     }
@@ -553,12 +491,8 @@ var Sniper = class extends MultUtil {
        - Apoio: nunca adiantado (nao ajuda em nada chegar cedo) -
          aceita do horario exato ate 2s atrasado (min:0, max:2). */
     _getToleranceRange(type) {
-        // PDCA: tamanho da janela agora vem da configuracao (UI),
-        // direcao continua fixa por seguranca - ataque nunca atrasa
-        // (min sempre negativo/zero), apoio nunca adianta (max
-        // sempre positivo/zero).
-        if (type === 'support') return { min: 0, max: Math.max(0, this.toleranceSupportSec) };
-        return { min: -Math.max(0, this.toleranceAttackSec), max: 0 }; // attack (padrao)
+        if (type === 'support') return { min: 0, max: 2 };
+        return { min: -1, max: 0 }; // attack (padrao)
     }
 
     /* Espera a MESMA composicao ficar disponivel de novo na cidade de
@@ -566,9 +500,6 @@ var Sniper = class extends MultUtil {
        poucos, nao na hora) - poll a cada 500ms, ate maxWaitMs ou ate
        ficar pronto, o que vier primeiro. */
     async _waitForTroopsAvailable(snipe, maxWaitMs) {
-        // FIX (pedido explicito): poll de 500ms -> 200ms, pra detectar o
-        // retorno das tropas mais rapido e sobrar mais tempo real pro
-        // reenvio corrigido.
         const start = Date.now();
         while (Date.now() - start < maxWaitMs) {
             try {
@@ -579,18 +510,13 @@ var Sniper = class extends MultUtil {
                 );
                 if (ready) return true;
             } catch (e) {}
-            await this.sleep(200);
+            await this.sleep(500);
         }
         return false;
     }
 
     async _fire(snipe) {
         const MAX_ATTEMPTS = 30;
-        // PDCA (pedido explicito - "se acertar nao e pra cancelar"):
-        // assim que uma tentativa cai dentro da tolerancia, o Sniper
-        // finaliza NA HORA, seja na 1a tentativa ou na 10a - nunca
-        // cancela um envio que ja esta certo so pra "completar" um
-        // numero de tentativas.
         const { min: toleranceMin, max: toleranceMax } = this._getToleranceRange(snipe.type);
 
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -617,14 +543,12 @@ var Sniper = class extends MultUtil {
                 const actualArrivalSec = result.command.arrival_at;
                 const desiredArrivalSec = Math.floor(snipe.arrivalAt / 1000);
                 const diffSeconds = actualArrivalSec - desiredArrivalSec;
-                const withinTolerance = diffSeconds >= toleranceMin && diffSeconds <= toleranceMax;
 
                 this.console.log('[Sniper] ' + this.t('sniper_attempt_log', {
                     attempt, max: MAX_ATTEMPTS, target: snipe.targetName, diff: diffSeconds,
                 }));
 
-                if (withinTolerance) {
-                    // Acertou - encerra na hora, sem cancelar de novo.
+                if (diffSeconds >= toleranceMin && diffSeconds <= toleranceMax) {
                     snipe.status = 'sent';
                     const msg = this.t('sniper_fired_ok_precise', { target: snipe.targetName, diff: diffSeconds });
                     this.console.log('[Sniper] ' + msg);
@@ -632,34 +556,17 @@ var Sniper = class extends MultUtil {
                     return;
                 }
 
-                // FIX (pedido explicito): se chegou DEPOIS do horario
-                // desejado (diffSeconds > toleranceMax), desiste na hora -
-                // nao tenta de novo.
-                // Motivo estrutural: so descobrimos que chegou atrasado
-                // DEPOIS que a chegada real ja aconteceu, ou seja, o
-                // horario desejado (snipe.arrivalAt) ja ficou no passado
-                // no momento em que estamos avaliando esse resultado.
-                // Reenviar nao pode "voltar no tempo" - qualquer novo
-                // envio vai necessariamente chegar ainda mais tarde
-                // (cancelar + esperar tropas + reenviar consome mais tempo
-                // real).
-                if (diffSeconds > toleranceMax) {
-                    snipe.status = 'sent';
-                    const msg = this.t('sniper_fired_ok_imprecise', { target: snipe.targetName, diff: diffSeconds, attempts: attempt, reason: this.t('sniper_reason_late_no_retry') });
-                    this.console.log('[Sniper] ' + msg);
-                    if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
-                    return;
-                }
-
-                // Chegou ADIANTADO, fora da tolerancia (se estivesse
-                // dentro, ja teria retornado acima). Checa se ainda vale a
-                // pena cancelar e tentar de novo: precisa ainda ser
-                // cancelavel, e precisa sobrar tempo suficiente pra (1) as
-                // tropas voltarem e (2) viajar de novo ate o alvo antes do
-                // horario desejado. observedTravelMs: duracao de viagem
-                // OBSERVADA nesse proprio envio (arrival_at real menos
-                // agora) - mais confiavel que a estimativa original do
-                // way_duration.
+                // Nao bateu - checa se ainda vale a pena cancelar e tentar
+                // de novo: precisa ainda ser cancelavel, e precisa sobrar
+                // tempo suficiente pra (1) as tropas voltarem e (2) viajar
+                // de novo ate o alvo antes do horario desejado.
+                // FIX: usa a duracao de viagem OBSERVADA nesse proprio
+                // envio (arrival_at real menos agora), nao mais a
+                // estimativa original do way_duration - se a viagem real
+                // for mais rapida que a estimada (diff negativo, chegou
+                // adiantado), usar a estimativa antiga (mais lenta) fazia
+                // a conta dar negativa e desistir na hora, mesmo sobrando
+                // tempo de verdade.
                 const cancelableUntil = result.command.cancelable_until;
                 const canCancel = cancelableUntil && (Date.now() / 1000) < cancelableUntil;
                 const observedTravelMs = Math.max(0, (actualArrivalSec * 1000) - Date.now());
@@ -667,22 +574,8 @@ var Sniper = class extends MultUtil {
                 const maxWaitForTroopsMs = timeLeftMs - observedTravelMs - 1000; // 1s de folga pro reenvio em si
 
                 if (attempt === MAX_ATTEMPTS || !canCancel || maxWaitForTroopsMs < 500) {
-                    // Sem tempo/possibilidade real de mais um ciclo - desiste
-                    // e registra como "sent" impreciso (chegou aqui porque
-                    // NAO estava dentro da tolerancia - se estivesse, ja
-                    // teria retornado no gate withinTolerance acima).
-                    // DIAGNOSTICO: antes essa mensagem sempre dizia o mesmo
-                    // texto generico ("ran out of time/attempts/cancel
-                    // window"), sem dizer QUAL dos motivos foi. Agora
-                    // aponta o motivo exato, pra nao precisar adivinhar na
-                    // proxima vez que isso acontecer.
-                    let reasonKey;
-                    if (attempt === MAX_ATTEMPTS) reasonKey = 'sniper_reason_max_attempts';
-                    else if (!canCancel) reasonKey = 'sniper_reason_not_cancelable';
-                    else reasonKey = 'sniper_reason_no_time_for_retry';
-
                     snipe.status = 'sent';
-                    const msg = this.t('sniper_fired_ok_imprecise', { target: snipe.targetName, diff: diffSeconds, attempts: attempt, reason: this.t(reasonKey) });
+                    const msg = this.t('sniper_fired_ok_imprecise', { target: snipe.targetName, diff: diffSeconds, attempts: attempt });
                     this.console.log('[Sniper] ' + msg);
                     if (uw.HumanMessage) uw.HumanMessage.success('MultBot Sniper: ' + msg);
                     return;
@@ -703,18 +596,6 @@ var Sniper = class extends MultUtil {
                     this.console.log('[Sniper] ' + this.t('sniper_fired_fail', { target: snipe.targetName, reason: snipe.error }));
                     return;
                 }
-
-                // FIX PRINCIPAL: assim que as tropas voltam, o proximo
-                // envio calcula o momento exato de disparo com a duracao
-                // de viagem REAL observada (nao mais a estimativa
-                // original) e ESPERA ate la antes de reenviar - mesma
-                // logica usada no agendamento original (_onScheduleClick),
-                // so que com o dado real em vez do estimado.
-                const correctedSendAt = snipe.arrivalAt - observedTravelMs - this.earlyMarginMs;
-                const waitForCorrectSendMs = correctedSendAt - Date.now();
-                if (waitForCorrectSendMs > 0) {
-                    await this.sleep(waitForCorrectSendMs);
-                }
             } catch (e) {
                 snipe.status = 'failed';
                 snipe.error = e?.message ?? String(e);
@@ -733,6 +614,17 @@ var Sniper = class extends MultUtil {
         this.storage.save('sniper_scheduled', this._scheduled);
         this._renderList();
         this.console.log('[Sniper] ' + this.t('sniper_cancelled_log'));
+    };
+
+    /* Remove todos os agendamentos com status 'sent' ou 'failed' —
+       mantém apenas os pendentes e em disparo. */
+    clearDone = () => {
+        const before = this._scheduled.length;
+        this._scheduled = this._scheduled.filter(s => s.status === 'pending' || s.status === 'firing');
+        const removed = before - this._scheduled.length;
+        this.storage.save('sniper_scheduled', this._scheduled);
+        this._renderList();
+        this.console.log('[Sniper] ' + this.t('sniper_clear_done_log', { count: removed }));
     };
 
     _renderList() {
