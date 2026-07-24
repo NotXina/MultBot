@@ -424,6 +424,130 @@ __MultBotI18N.dict = {
 		atc_sent_ok: '✓ Sent! {type} from {origin} to {target}.',
 		atc_sent_fail: '✗ Failed to send {type} from {origin} to {target}: {reason}',
 		atc_removed: 'Plan removed.',
+		at_min_batch_label: 'Min. batch size:',
+		at_min_batch_tip: 'Minimum percentage of capacity before recruiting a batch',
+		at_min_batch_fast: 'Fast',
+		at_min_batch_normal: 'Normal',
+		at_min_batch_big: 'Big',
+		am_title: 'Auto Militia',
+		am_desc: 'Activates militia ~8s before impact in cities under attack.',
+		am_started_log: 'Started. Monitoring attacks...',
+		am_stopped_log: 'Stopped.',
+		am_scheduled_log: 'Militia scheduled for {town} in {sec}s.',
+		am_tick_error: 'Error in tick: {msg}',
+		am_activating_log: 'Activating militia in {town}...',
+		am_activated_log: '✓ Militia activated in {town}.',
+		am_activate_fail_log: '✗ Failed to activate militia in {town}: {reason}',
+		am_activate_exception_log: '✗ Exception activating militia in town #{id}: {msg}',
+		ad_title: 'Auto Dodge',
+		ad_desc: 'Evacuates troops {sec}s before impact. Sends land troops to a safe city on the same island, and naval troops back to port.',
+		ad_tooltip: 'Evacuates troops before impact',
+		ad_started_log: 'Started.',
+		ad_stopped_log: 'Stopped.',
+		ad_island_scraper_active_log: 'Island scraper active.',
+		ad_learned_towns_log: 'Learned {n} new safe town(s) from the map.',
+		ad_safety_evac_log: '{town}: attack in {sec}s — triggering emergency evacuation.',
+		ad_evac_scheduled_log: '{town}: evacuation scheduled in {sec}s (lead: {lead}s) → {to}.',
+		ad_evac_scheduled_no_island_log: '{town}: attack in {sec}s — no safe island town found, skipping.',
+		ad_tick_error: 'Tick error: {msg}',
+		ad_evac_no_island_log: '{town}: no safe town on the same island to evacuate to.',
+		ad_evac_no_island_status: '{town}: no safe island town found.',
+		ad_no_troops_log: '{town}: no troops to evacuate.',
+		ad_evacuating_log: '{town}: evacuating to {safe}...',
+		ad_no_land_troops_log: '{town}: no land troops to send.',
+		ad_no_naval_troops_log: '{town}: no naval troops to send.',
+		ad_evacuated_log: '✓ {town}: troops evacuated to {safe}.',
+		ad_evacuate_error: '✗ Error evacuating town #{id}: {msg}',
+		ad_find_island_error: 'Error finding island towns: {msg}',
+		ad_recall_scheduled_log: 'Recall scheduled for {town} in {sec}s.',
+		ad_recall_calling_log: 'Recalling troops to {town}...',
+		ad_recall_success_log: '✓ Recall sent to {town}.',
+		ad_recall_fail_log: '✗ Recall failed for {town}: {reason}',
+		ad_recall_fail_status: '✗ Recall failed: {reason}',
+		ad_recall_network_error: '✗ Network error recalling {town}: {msg}',
+		ad_recall_response_log: 'Recall response: {res}',
+		ad_command_found_log: 'Command found: {id}',
+		ad_command_not_found_log: 'No command found to recall for {town}.',
+		ad_command_not_found_status: 'No command found.',
+		ad_group_response_log: 'Group response: {res}',
+		ad_send_group_fail_log: '✗ Failed to send group: {msg}',
+		ad_reconcile_start_log: 'Reconciling pending recalls...',
+		ad_reconcile_fire_now_log: 'Firing recall now for {town} (was scheduled in the past).',
+		ad_reconcile_reschedule_log: 'Rescheduling recall for {town} in {sec}s.',
+		ad_reconcile_error: 'Error reconciling recalls: {msg}',
+		aat_title: 'Auto Attack',
+		aat_desc: 'Schedules automatic attacks from selected cities against configured targets.',
+		aat_origin_label: 'Origin city',
+		aat_rest_label: 'Rest (min)',
+		aat_rest_tooltip: 'Minimum rest time between attacks from the same city',
+		aat_rest_suffix: 'min rest',
+		aat_rest_display: '{min}min rest',
+		aat_hero_label: 'Hero',
+		aat_hero_tooltip: 'Optional hero to include in the attack',
+		aat_hero_none: '(no hero)',
+		aat_hero_display: 'Hero: {name}',
+		aat_hero_suffix: ' + {name}',
+		aat_unit_label: 'Unit',
+		aat_qty_label: 'Qty',
+		aat_max_label: 'Max available',
+		aat_max_tooltip: 'Use all available units of this type',
+		aat_max_entry: '{label} (max)',
+		aat_qty_entry: '{qty}x {label}',
+		aat_add_unit_btn: '+ Add Unit',
+		aat_no_staging_units: 'No units added yet.',
+		aat_targets_label: 'Targets (IDs or [town]...[/town], one per line)',
+		aat_targets_placeholder: 'Target city IDs...',
+		aat_add_plan_btn: '+ Add Plan',
+		aat_active_plans_label: 'Active plans:',
+		aat_no_plans_configured: 'No plans configured.',
+		aat_select_placeholder: '— select —',
+		aat_towns_load_error: 'Error loading cities',
+		aat_units_load_error: 'Error loading units',
+		aat_land_tag: 'land',
+		aat_naval_tag: 'naval',
+		aat_select_unit_first_log: 'Select a unit before adding.',
+		aat_select_unit_first_status: 'Select a unit first.',
+		aat_invalid_qty_log: 'Invalid quantity.',
+		aat_invalid_qty_status: 'Invalid quantity.',
+		aat_no_origin_log: 'No origin city selected.',
+		aat_no_origin_status: 'Select an origin city.',
+		aat_no_targets_log: 'No targets configured.',
+		aat_no_targets_status: 'Add at least one target.',
+		aat_no_units_in_plan_log: 'No units in plan.',
+		aat_no_units_in_plan_status: 'Add at least one unit.',
+		aat_plan_added_log: 'Plan added.',
+		aat_plan_added_status: '✓ Plan added.',
+		aat_plan_removed_log: 'Plan removed.',
+		aat_plan_not_found_log: 'Plan not found.',
+		aat_plan_invalid_composition_log: 'Plan has invalid composition.',
+		aat_plan_updated_log: 'Plan updated.',
+		aat_plan_updated_status: '✓ Plan updated.',
+		aat_edit_tooltip: 'Edit this plan',
+		aat_editing_plan_log: 'Editing plan {id}.',
+		aat_editing_plan_status: 'Editing plan — save or cancel below.',
+		aat_save_changes_btn: 'Save Changes',
+		aat_cancel_edit_link: 'Cancel',
+		aat_edit_cancelled_status: 'Edit cancelled.',
+		aat_started_log: 'Started.',
+		aat_stopped_log: 'Stopped.',
+		aat_next_label: 'Next:',
+		aat_next_attack_log: 'Next attack from {origin} → {target} at {time}.',
+		aat_attack_ok_log: '✓ Attack sent: {origin} → {target}.',
+		aat_attack_ok_status: '✓ Sent: {origin} → {target}.',
+		aat_attack_fail_log: '✗ Attack failed: {origin} → {target}: {reason}',
+		aat_attack_fail_status: '✗ Failed: {reason}',
+		aat_town_not_found_log: 'Town #{id} not found.',
+		aat_unexpected_error_log: 'Unexpected error: {msg}',
+		aat_unit_added_log: 'Unit added: {qty}x {unit}.',
+		aat_old_plan_migrated_log: 'Migrated old plan (origin #{id}, {unit} x{qty}).',
+		aat_invalid_plan_removed_log: 'Removed invalid plan (missing required fields).',
+		aat_rest_migrated_log: 'Migrated rest time for plan #{id}.',
+		sniper_cfg_tol_attack_label: 'Attack tolerance:',
+		sniper_cfg_tol_attack_tip: 'Max seconds off-target for an attack to be on time',
+		sniper_cfg_tol_support_label: 'Support tolerance:',
+		sniper_cfg_tol_support_tip: 'Max seconds off-target for a support to be on time',
+		sniper_cfg_early_margin_label: 'Early margin:',
+		sniper_cfg_early_margin_tip: 'How many ms before the calculated send time to fire',
 	},
 	pt: {
 		active: 'Ativo',
@@ -753,6 +877,130 @@ __MultBotI18N.dict = {
 		atc_sent_ok: '✓ Enviado! {type} de {origin} pra {target}.',
 		atc_sent_fail: '✗ Falha ao enviar {type} de {origin} pra {target}: {reason}',
 		atc_removed: 'Plano removido.',
+		at_min_batch_label: 'Tamanho mín. do lote:',
+		at_min_batch_tip: 'Percentual mínimo da capacidade antes de recrutar um lote',
+		at_min_batch_fast: 'Rápido',
+		at_min_batch_normal: 'Normal',
+		at_min_batch_big: 'Grande',
+		am_title: 'Auto Milícia',
+		am_desc: 'Ativa a milícia ~8s antes do impacto em cidades sob ataque.',
+		am_started_log: 'Iniciado. Monitorando ataques...',
+		am_stopped_log: 'Parado.',
+		am_scheduled_log: 'Milícia agendada para {town} em {sec}s.',
+		am_tick_error: 'Erro no tick: {msg}',
+		am_activating_log: 'Ativando milícia em {town}...',
+		am_activated_log: '✓ Milícia ativada em {town}.',
+		am_activate_fail_log: '✗ Falha ao ativar milícia em {town}: {reason}',
+		am_activate_exception_log: '✗ Exceção ao ativar milícia na cidade #{id}: {msg}',
+		ad_title: 'Auto Fuga (Dodge)',
+		ad_desc: 'Evacua tropas {sec}s antes do impacto. Envia tropas terrestres pra uma cidade segura na mesma ilha, e navais de volta ao porto.',
+		ad_tooltip: 'Evacua tropas antes do impacto',
+		ad_started_log: 'Iniciado.',
+		ad_stopped_log: 'Parado.',
+		ad_island_scraper_active_log: 'Scraper de ilhas ativo.',
+		ad_learned_towns_log: 'Aprendeu {n} nova(s) cidade(s) segura(s) do mapa.',
+		ad_safety_evac_log: '{town}: ataque em {sec}s — disparando evacuação de emergência.',
+		ad_evac_scheduled_log: '{town}: evacuação agendada em {sec}s (lead: {lead}s) → {to}.',
+		ad_evac_scheduled_no_island_log: '{town}: ataque em {sec}s — nenhuma cidade segura na ilha, pulando.',
+		ad_tick_error: 'Erro no tick: {msg}',
+		ad_evac_no_island_log: '{town}: nenhuma cidade segura na mesma ilha pra evacuar.',
+		ad_evac_no_island_status: '{town}: nenhuma cidade segura encontrada na ilha.',
+		ad_no_troops_log: '{town}: nenhuma tropa pra evacuar.',
+		ad_evacuating_log: '{town}: evacuando pra {safe}...',
+		ad_no_land_troops_log: '{town}: nenhuma tropa terrestre pra enviar.',
+		ad_no_naval_troops_log: '{town}: nenhuma tropa naval pra enviar.',
+		ad_evacuated_log: '✓ {town}: tropas evacuadas pra {safe}.',
+		ad_evacuate_error: '✗ Erro ao evacuar cidade #{id}: {msg}',
+		ad_find_island_error: 'Erro ao encontrar cidades da ilha: {msg}',
+		ad_recall_scheduled_log: 'Retorno agendado pra {town} em {sec}s.',
+		ad_recall_calling_log: 'Chamando tropas de volta pra {town}...',
+		ad_recall_success_log: '✓ Retorno enviado pra {town}.',
+		ad_recall_fail_log: '✗ Falha no retorno de {town}: {reason}',
+		ad_recall_fail_status: '✗ Falha no retorno: {reason}',
+		ad_recall_network_error: '✗ Erro de rede ao chamar retorno de {town}: {msg}',
+		ad_recall_response_log: 'Resposta do retorno: {res}',
+		ad_command_found_log: 'Comando encontrado: {id}',
+		ad_command_not_found_log: 'Nenhum comando encontrado pra retorno de {town}.',
+		ad_command_not_found_status: 'Nenhum comando encontrado.',
+		ad_group_response_log: 'Resposta do grupo: {res}',
+		ad_send_group_fail_log: '✗ Falha ao enviar grupo: {msg}',
+		ad_reconcile_start_log: 'Reconciliando retornos pendentes...',
+		ad_reconcile_fire_now_log: 'Disparando retorno agora pra {town} (estava agendado no passado).',
+		ad_reconcile_reschedule_log: 'Reagendando retorno pra {town} em {sec}s.',
+		ad_reconcile_error: 'Erro ao reconciliar retornos: {msg}',
+		aat_title: 'Auto Ataque',
+		aat_desc: 'Agenda ataques automáticos de cidades selecionadas contra alvos configurados.',
+		aat_origin_label: 'Cidade de origem',
+		aat_rest_label: 'Descanso (min)',
+		aat_rest_tooltip: 'Tempo mínimo de descanso entre ataques da mesma cidade',
+		aat_rest_suffix: 'min descanso',
+		aat_rest_display: '{min}min descanso',
+		aat_hero_label: 'Herói',
+		aat_hero_tooltip: 'Herói opcional pra incluir no ataque',
+		aat_hero_none: '(sem herói)',
+		aat_hero_display: 'Herói: {name}',
+		aat_hero_suffix: ' + {name}',
+		aat_unit_label: 'Unidade',
+		aat_qty_label: 'Qtd',
+		aat_max_label: 'Máximo disponível',
+		aat_max_tooltip: 'Usar todas as unidades disponíveis desse tipo',
+		aat_max_entry: '{label} (máx)',
+		aat_qty_entry: '{qty}x {label}',
+		aat_add_unit_btn: '+ Adicionar Unidade',
+		aat_no_staging_units: 'Nenhuma unidade adicionada ainda.',
+		aat_targets_label: 'Alvos (IDs ou [town]...[/town], um por linha)',
+		aat_targets_placeholder: 'IDs das cidades alvo...',
+		aat_add_plan_btn: '+ Adicionar Plano',
+		aat_active_plans_label: 'Planos ativos:',
+		aat_no_plans_configured: 'Nenhum plano configurado.',
+		aat_select_placeholder: '— selecionar —',
+		aat_towns_load_error: 'Erro ao carregar cidades',
+		aat_units_load_error: 'Erro ao carregar unidades',
+		aat_land_tag: 'terrestre',
+		aat_naval_tag: 'naval',
+		aat_select_unit_first_log: 'Selecione uma unidade antes de adicionar.',
+		aat_select_unit_first_status: 'Selecione uma unidade primeiro.',
+		aat_invalid_qty_log: 'Quantidade inválida.',
+		aat_invalid_qty_status: 'Quantidade inválida.',
+		aat_no_origin_log: 'Nenhuma cidade de origem selecionada.',
+		aat_no_origin_status: 'Selecione uma cidade de origem.',
+		aat_no_targets_log: 'Nenhum alvo configurado.',
+		aat_no_targets_status: 'Adicione pelo menos um alvo.',
+		aat_no_units_in_plan_log: 'Nenhuma unidade no plano.',
+		aat_no_units_in_plan_status: 'Adicione pelo menos uma unidade.',
+		aat_plan_added_log: 'Plano adicionado.',
+		aat_plan_added_status: '✓ Plano adicionado.',
+		aat_plan_removed_log: 'Plano removido.',
+		aat_plan_not_found_log: 'Plano não encontrado.',
+		aat_plan_invalid_composition_log: 'Plano com composição inválida.',
+		aat_plan_updated_log: 'Plano atualizado.',
+		aat_plan_updated_status: '✓ Plano atualizado.',
+		aat_edit_tooltip: 'Editar este plano',
+		aat_editing_plan_log: 'Editando plano {id}.',
+		aat_editing_plan_status: 'Editando plano — salve ou cancele abaixo.',
+		aat_save_changes_btn: 'Salvar Alterações',
+		aat_cancel_edit_link: 'Cancelar',
+		aat_edit_cancelled_status: 'Edição cancelada.',
+		aat_started_log: 'Iniciado.',
+		aat_stopped_log: 'Parado.',
+		aat_next_label: 'Próximo:',
+		aat_next_attack_log: 'Próximo ataque de {origin} → {target} às {time}.',
+		aat_attack_ok_log: '✓ Ataque enviado: {origin} → {target}.',
+		aat_attack_ok_status: '✓ Enviado: {origin} → {target}.',
+		aat_attack_fail_log: '✗ Ataque falhou: {origin} → {target}: {reason}',
+		aat_attack_fail_status: '✗ Falhou: {reason}',
+		aat_town_not_found_log: 'Cidade #{id} não encontrada.',
+		aat_unexpected_error_log: 'Erro inesperado: {msg}',
+		aat_unit_added_log: 'Unidade adicionada: {qty}x {unit}.',
+		aat_old_plan_migrated_log: 'Plano antigo migrado (origem #{id}, {unit} x{qty}).',
+		aat_invalid_plan_removed_log: 'Plano inválido removido (campos obrigatórios faltando).',
+		aat_rest_migrated_log: 'Tempo de descanso migrado para plano #{id}.',
+		sniper_cfg_tol_attack_label: 'Tolerância ataque:',
+		sniper_cfg_tol_attack_tip: 'Máximo de segundos fora do alvo pra considerar o ataque no tempo',
+		sniper_cfg_tol_support_label: 'Tolerância apoio:',
+		sniper_cfg_tol_support_tip: 'Máximo de segundos fora do alvo pra considerar o apoio no tempo',
+		sniper_cfg_early_margin_label: 'Margem antecipada:',
+		sniper_cfg_early_margin_tip: 'Quantos ms antes do horário calculado disparar o envio',
 	},
 };
 
@@ -1505,62 +1753,19 @@ var MultStorage = class extends Compressor {
 		});
 	}
 
-	/* ------------------------------------------------------------------ *
-	 *  IndexedDB helpers (cache-safe storage)                            *
-	 *  IndexedDB sobrevive a "Limpar dados de navegacao" no Chrome/Opera *
-	 *  porque fica em categoria separada de "Cookies e dados de sites".  *
-	 *  localStorage e usado como fallback sincronico e espelho.          *
-	 * ------------------------------------------------------------------ */
-	_idbName   = 'MultBotDB';
-	_idbStore  = 'settings';
-	_idbVersion = 1;
-
-	_idbOpen = () => {
-		return new Promise(function(resolve, reject) {
-			var req = indexedDB.open('MultBotDB', 1);
-			req.onupgradeneeded = function(e) {
-				e.target.result.createObjectStore('settings');
-			};
-			req.onsuccess = function(e) { resolve(e.target.result); };
-			req.onerror   = function(e) { reject(e.target.error);   };
-		});
-	};
-
-	_idbGet = (key) => {
-		var self = this;
-		return self._idbOpen().then(function(db) {
-			return new Promise(function(resolve, reject) {
-				var tx  = db.transaction('settings', 'readonly');
-				var req = tx.objectStore('settings').get(key);
-				req.onsuccess = function(e) { resolve(e.target.result); };
-				req.onerror   = function(e) { reject(e.target.error);   };
-			});
-		});
-	};
-
-	_idbSet = (key, value) => {
-		var self = this;
-		return self._idbOpen().then(function(db) {
-			return new Promise(function(resolve, reject) {
-				var tx  = db.transaction('settings', 'readwrite');
-				var req = tx.objectStore('settings').put(value, key);
-				req.onsuccess = function(e) { resolve(e.target.result); };
-				req.onerror   = function(e) { reject(e.target.error);   };
-			});
-		});
-	};
-
-	/* getStorage continua sincronico (igual ao original) para nao       *
-	 * quebrar nenhum modulo. Le do localStorage normalmente.             *
-	 * A copia no IndexedDB e usada apenas na recuperacao apos limpeza.  */
 	getStorage = () => {
 		const worldId = uw.Game.world_id;
-		const newKey  = worldId + '_multBot';
-		var savedValue = localStorage.getItem(newKey);
+		const newKey = `${worldId}_multBot`;
+		let savedValue = localStorage.getItem(newKey);
 
-		/* Migracao legada: _modernBot -> _multBot */
+		/* Automatic, one-time migration: if the new key still has
+		   nothing but the old key (_modernBot, from before the class
+		   rename) has data, copy it to the new key. The old key is NOT
+		   deleted - it stays there as an inert backup, just in case.
+		   Without this, everyone would lose their saved attack
+		   plans/presets/etc as soon as this update went live. */
 		if (savedValue === null || savedValue === undefined) {
-			const legacyKey   = worldId + '_modernBot';
+			const legacyKey = `${worldId}_modernBot`;
 			const legacyValue = localStorage.getItem(legacyKey);
 			if (legacyValue !== null && legacyValue !== undefined) {
 				savedValue = legacyValue;
@@ -1571,52 +1776,29 @@ var MultStorage = class extends Compressor {
 			}
 		}
 
-		/* Recuperacao apos limpeza de cache: localStorage vazio mas       *
-		 * IndexedDB ainda tem os dados - restaura de forma assincrona.   */
-		if (savedValue === null || savedValue === undefined) {
-			this._idbGet(newKey).then(function(idbValue) {
-				if (idbValue) {
-					try {
-						localStorage.setItem(newKey, idbValue);
-						console.log('[MultBot] Settings restored from IndexedDB after cache clear. Reloading...');
-						setTimeout(function() { location.reload(); }, 800);
-					} catch (e) {}
-				}
-			}).catch(function() {});
-		}
+		let storage = {};
 
-		var storage = {};
 		if (savedValue !== null && savedValue !== undefined) {
 			try {
 				storage = JSON.parse(savedValue);
 			} catch (error) {
-				console.error('[MultBot] Error parsing localStorage data: ' + error);
+				console.error(`Error parsing localStorage data: ${error}`);
 			}
 		}
+
 		return storage;
 	};
 
 	saveStorage = storage => {
-		const worldId = uw.Game.world_id;
-		const key     = worldId + '_multBot';
-		const json    = JSON.stringify(storage);
-		var ok = false;
-
-		/* Salva em localStorage (sincronico, uso imediato). */
 		try {
-			localStorage.setItem(key, json);
-			ok = true;
+			const worldId = uw.Game.world_id;
+			localStorage.setItem(`${worldId}_multBot`, JSON.stringify(storage));
+			this.lastUpdateTime = Date.now();
+			return true;
 		} catch (error) {
-			console.error('[MultBot] Error saving to localStorage: ' + error);
+			console.error(`Error saving data to localStorage: ${error}`);
+			return false;
 		}
-
-		/* Espelha no IndexedDB (assincrono, sobrevive a limpeza de cache). */
-		this._idbSet(key, json).catch(function(e) {
-			console.error('[MultBot] Error saving to IndexedDB: ' + e);
-		});
-
-		this.lastUpdateTime = Date.now();
-		return ok;
 	};
 
 	save = (key, content) => {
