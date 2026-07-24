@@ -45,12 +45,10 @@ var AutoFarm = class extends MultUtil {
         this.$guiOff = this.createButton("mult_farm_gui_off", "OFF", this.toggleGui)
         this.$content.append(this.$gui, this.$guiOn, this.$guiOff)
 
-        // PDCA: id proprio e unico (era o id compartilhado/hardcoded
-        // "toolbar_activity_recruits_list" dentro de createPopup em
-        // core.js - risco de colidir com um elemento nativo do jogo de
-        // mesmo id, fazendo o clique no ON/OFF abrir a janela nativa de
-        // recrutas por engano). Ver createPopup em core.js.
-        this.$popup = this.createPopup('multbot_autofarm_popup', 423, 250, 170, this.$content)
+        this.$popup = this.createPopup(423, 250, 170, this.$content)
+        // Remove o height fixo do popup e do middle pra o conteudo crescer livremente
+        this.$popup.css({ 'height': 'auto', 'min-height': '170px' })
+        this.$popup.find('.middle').css({ 'position': 'relative', 'top': '0', 'bottom': '0', 'left': '0', 'right': '0', 'padding': '10px' })
         this.dropdown_active = false
 
         // Open and close the dropdown with the mouse
@@ -223,9 +221,10 @@ var AutoFarm = class extends MultUtil {
         let maxValue = 0;
         for (const lootableTime in lootCounts) {
             const value = lootCounts[lootableTime];
-            if (value < maxValue) continue;
-            maxLootableTime = lootableTime;
-            maxValue = value;
+            if (value > maxValue) {
+                maxLootableTime = lootableTime;
+                maxValue = value;
+            }
         }
 
         const seconds = maxLootableTime - Math.floor(Date.now() / 1000);
@@ -262,9 +261,9 @@ var AutoFarm = class extends MultUtil {
                 await this.sleep(2000, 500);
 
                 if (this.timing <= 600_000) {
-                    await this.claimMultiple(300, 600);
+                    await this.claimMultiple(polis_list, 300, 600);
                 } else {
-                    await this.claimMultiple(1200, 2400);
+                    await this.claimMultiple(polis_list, 1200, 2400);
                 }
 
                 await this.fakeUpdate();
@@ -316,13 +315,6 @@ var AutoFarm = class extends MultUtil {
                     if (relation.attributes.relation_status !== 1) continue;
                     if (relation.attributes.lootable_at !== null && now < relation.attributes.lootable_at) continue;
 
-                    // FIX: adiciona await - claimSingle e async; sem isso a
-                    // requisicao ficava "solta" enquanto o loop ja avancava
-                    // pro proximo alvo (o sleep(500) seguinte amenizava mas
-                    // nao eliminava sobreposicao). Baixo risco (bem menor
-                    // que o caso do auto_train.js, ja que aqui o main() que
-                    // chama esse loop ja e async e aguardado corretamente),
-                    // mas mais correto assim.
                     await this.claimSingle(town_id, relation.attributes.farm_town_id, relation.id, Math.ceil(this.timing / 600_000));
                     await this.sleep(500);
                     if (!max) return;
@@ -363,7 +355,7 @@ var AutoFarm = class extends MultUtil {
             // Check that the timer is not too high
             const next_collection = this.getNextCollection();
             if (next_collection && (this.timer > next_collection + 60 * 1_000 || this.timer < next_collection)) {
-                this.timer = next_collection + Math.floor(Math.random() * 40_000) + 10_000; // PDCA: 10-30s -> 10-50s (pedido explicito - comportamento humano)
+                this.timer = next_collection + Math.floor(Math.random() * 20_000) + 10_000;
             }
 
             // Claim resources when timer has passed
@@ -379,7 +371,7 @@ var AutoFarm = class extends MultUtil {
                 this.active = this.createGuardedInterval(this.main, 5000);
 
                 // Set the new timer 
-                const rand = Math.floor(Math.random() * 40_000) + 10_000; // PDCA: 10-30s -> 10-50s (pedido explicito - comportamento humano)
+                const rand = Math.floor(Math.random() * 20_000) + 10_000;
                 this.timer = this.timing + rand;
                 if (this.timer < next_collection) this.timer = next_collection + rand;
             }
@@ -407,21 +399,14 @@ var AutoFarm = class extends MultUtil {
             town_id: town_id,
         };
         try {
-            const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
-            // FIX: resposta nao era checada - uma coleta rejeitada pelo
-            // servidor (ex: recompensa ja coletada por outra aba/corrida)
-            // passava batido sem log nenhum, parecendo sucesso silencioso.
-            if (res && res.error) {
-                this.console.log('[AutoFarm] Falha ao coletar rural: ' + res.error);
-            }
+            await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
         } catch (e) {
             this.console.log('[AutoFarm] Erro ao coletar rural: ' + (e?.message ?? e));
         }
     };
 
     /* Claim resources from multiple polis */
-    claimMultiple = async (base = 300, boost = 600) => {
-        const polis_list = this.generateList();
+    claimMultiple = async (polis_list, base = 300, boost = 600) => {
         /* Confirmado funcionar por um script de terceiros de
            confianca (base original do projeto, Sau1707) - chama
            direto, SEM simular abertura de janela antes (sem
@@ -434,10 +419,7 @@ var AutoFarm = class extends MultUtil {
             claim_factor: 'normal',
         };
         try {
-            const res = await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data, 45000);
-            if (res && res.error) {
-                this.console.log('[AutoFarm] Falha em claimMultiple: ' + res.error);
-            }
+            await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data, 45000);
         } catch (e) {
             this.console.log('[AutoFarm] Erro em claimMultiple: ' + (e?.message ?? e));
             throw e;
@@ -478,17 +460,17 @@ var AutoFarm = class extends MultUtil {
     /* Fake the window update*/
     fakeUpdate = async () => {
         const town = uw.ITowns.getCurrentTown();
-        const { attributes: booty } = town.getResearches();
-        const { attributes: trade_office } = town.getBuildings();
+        const researches = town.getResearches()?.attributes ?? {};
+        const buildings = town.getBuildings()?.attributes ?? {};
         /* Simplificado pra bater com referencia de confianca - sem
            town_id/nl_init inventados. */
         const data = {
             island_x: town.getIslandCoordinateX(),
             island_y: town.getIslandCoordinateY(),
             current_town_id: town.id,
-            booty_researched: booty ? 1 : 0,
-            diplomacy_researched: '',
-            trade_office: trade_office ? 1 : 0,
+            booty_researched: researches.booty ? 1 : 0,
+            diplomacy_researched: researches.diplomacy ? 1 : 0,
+            trade_office: buildings.trade_office ? 1 : 0,
         };
         try {
             await this.ajaxGetWithTimeout('farm_town_overviews', 'get_farm_towns_for_town', data);
@@ -499,33 +481,31 @@ var AutoFarm = class extends MultUtil {
     };
 
     /* Fake the gui update */
-    fakeGuiUpdate = () =>
-        new Promise(async (myResolve, myReject) => {
-            // Open the farm town overview
-            uw.$(".toolbar_button.premium .icon").trigger('mouseenter')
-            await this.sleep(1019.39, 127.54)
+    fakeGuiUpdate = async () => {
+        // Open the farm town overview
+        uw.$(".toolbar_button.premium .icon").trigger('mouseenter');
+        await this.sleep(1019.39, 127.54);
 
-            // Click on the farm town overview
-            uw.$(".farm_town_overview a").trigger('click')
-            await this.sleep(1156.65, 165.62)
+        // Click on the farm town overview
+        uw.$(".farm_town_overview a").trigger('click');
+        await this.sleep(1156.65, 165.62);
 
-            // Select all the polis
-            uw.$(".checkbox.select_all").trigger("click")
-            await this.sleep(1036.20, 135.69)
+        // Select all the polis
+        uw.$(".checkbox.select_all").trigger("click");
+        await this.sleep(1036.20, 135.69);
 
-            // Claim the resources
-            uw.$("#fto_claim_button").trigger("click")
-            await this.sleep(1036.20, 135.69)
+        // Claim the resources
+        uw.$("#fto_claim_button").trigger("click");
+        await this.sleep(1036.20, 135.69);
 
-            // Confirm the claim if needed
-            const el = uw.$(".confirmation .btn_confirm.button_new")
-            if (el.length) {
-                el.trigger("click")
-                await this.sleep(1036.20, 135.69)
-            }
+        // Confirm the claim if needed
+        const el = uw.$(".confirmation .btn_confirm.button_new");
+        if (el.length) {
+            el.trigger("click");
+            await this.sleep(1036.20, 135.69);
+        }
 
-            // Close the window
-            uw.$(".icon_right.icon_type_speed.ui-dialog-titlebar-close").trigger("click")
-            myResolve();
-        });
+        // Close the window
+        uw.$(".icon_right.icon_type_speed.ui-dialog-titlebar-close").trigger("click");
+    };
 };
