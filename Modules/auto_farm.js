@@ -244,6 +244,13 @@ var AutoFarm = class extends MultUtil {
     };
 
     claim = async () => {
+        // FIX CRÍTICO: polis_list era declarada no final do método mas
+        // referenciada dentro do bloco Captain (linhas acima) — ReferenceError
+        // silencioso no caminho Captain sem GUI. Gerada uma vez aqui no topo,
+        // antes de qualquer branch que a usa.
+        const polis_list = this.generateList();
+        this.polis_list = polis_list; // mantém compatibilidade com fakeSelectAll que lê this.polis_list
+
         const isCaptainActive = uw.GameDataPremium.isAdvisorActivated('captain');
 
         if (isCaptainActive && !this.gui) {
@@ -289,36 +296,67 @@ var AutoFarm = class extends MultUtil {
 
         // Se o Captain nao esta ativo (ou os caminhos acima falharam),
         // coleta as resources uma por uma, respeitando o limite por ciclo.
-        const polis_list = this.generateList();
         await this._claimOneByOne(polis_list);
     };
 
     /* Coleta cidade a cidade, respeitando o limite de 60 por ciclo.
        Usado quando o Captain não está ativo, e também como fallback
-       quando o caminho em massa (claimMultiple) falha. */
+       quando o caminho em massa (claimMultiple) falha.
+
+       PERF: o loop original era O(n³) — para cada cidade nossa, varria
+       TODOS os farm_towns e para cada farm_town varria TODAS as relations.
+       Com N cidades na ilha e M relations, isso gerava N*farms*relations
+       iteracoes a cada coleta. Agora:
+       - farm_towns indexados por "x,y" -> O(1) por ilha
+       - relations indexadas por farm_town_id -> O(1) por farm_town
+       Custo total cai para O(cidades + farm_towns + relations). */
     _claimOneByOne = async (polis_list) => {
         let max = 60;
         const { models: player_relation_models } = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation');
         const { models: farm_town_models } = uw.MM.getOnlyCollectionByName('FarmTown');
         const now = Math.floor(Date.now() / 1000);
-        for (let town_id of polis_list) {
-            let town = uw.ITowns.towns[town_id];
-            let x = town.getIslandCoordinateX();
-            let y = town.getIslandCoordinateY();
+        const option = Math.ceil(this.timing / 600_000);
 
-            for (let farm_town of farm_town_models) {
-                if (farm_town.attributes.island_x != x) continue;
-                if (farm_town.attributes.island_y != y) continue;
+        // Índice: "x,y" -> [farm_town, ...]
+        const farmsByIsland = {};
+        for (const ft of farm_town_models) {
+            const key = ft.attributes.island_x + ',' + ft.attributes.island_y;
+            if (!farmsByIsland[key]) farmsByIsland[key] = [];
+            farmsByIsland[key].push(ft);
+        }
 
-                for (let relation of player_relation_models) {
-                    if (farm_town.attributes.id != relation.attributes.farm_town_id) continue;
+        // Índice: farm_town_id -> [relation, ...]
+        const relationsByFarm = {};
+        for (const rel of player_relation_models) {
+            const fid = rel.attributes.farm_town_id;
+            if (!relationsByFarm[fid]) relationsByFarm[fid] = [];
+            relationsByFarm[fid].push(rel);
+        }
+
+        for (const town_id of polis_list) {
+            if (!max) break;
+            const town = uw.ITowns.towns[town_id];
+            if (!town) continue;
+            const x = town.getIslandCoordinateX();
+            const y = town.getIslandCoordinateY();
+            const islandKey = x + ',' + y;
+            const farmsOnIsland = farmsByIsland[islandKey];
+            if (!farmsOnIsland) continue;
+
+            for (const farm_town of farmsOnIsland) {
+                if (!max) break;
+                const ftId = farm_town.attributes.id;
+                const relations = relationsByFarm[ftId];
+                if (!relations) continue;
+
+                for (const relation of relations) {
+                    if (!max) break;
                     if (relation.attributes.relation_status !== 1) continue;
                     if (relation.attributes.lootable_at !== null && now < relation.attributes.lootable_at) continue;
 
-                    await this.claimSingle(town_id, relation.attributes.farm_town_id, relation.id, Math.ceil(this.timing / 600_000));
+                    await this.claimSingle(town_id, ftId, relation.id, option);
                     await this.sleep(500);
-                    if (!max) return;
-                    else max -= 1;
+                    max -= 1;
                 }
             }
         }

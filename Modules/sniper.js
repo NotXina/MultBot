@@ -229,7 +229,14 @@ var Sniper = class extends MultUtil {
                 return;
             }
 
-            const originTownId = uw.ITowns.getCurrentTown().id;
+            let originTownId;
+            try {
+                originTownId = uw.ITowns.getCurrentTown().id;
+            } catch (e) {
+                statusEl.textContent = this.t('sniper_schedule_error', { msg: 'getCurrentTown() falhou — tente novamente' });
+                statusEl.style.color = '#c0392b';
+                return;
+            }
             const targetName = this._getTargetNameFromWindow(windowEl) || ('#' + targetId);
 
             const snipe = {
@@ -295,7 +302,14 @@ var Sniper = class extends MultUtil {
 
     _getTargetNameFromWindow(windowEl) {
         try {
-            const titleEl = windowEl.closest('.js-window-main-container')?.querySelector('.window_header, .title');
+            const container = windowEl.closest('.js-window-main-container');
+            if (!container) return null;
+            // Preferencia: header especifico da janela de ataque/apoio.
+            // Evita o seletor generico ".title" que pode pegar qualquer
+            // elemento <title> ou .title dentro do container (ex: titulos
+            // de secao interna), retornando texto errado.
+            const titleEl = container.querySelector('.window_header')
+                || container.querySelector('.gp_wnd_header');
             return titleEl ? titleEl.textContent.trim() : null;
         } catch (e) {
             return null;
@@ -437,14 +451,17 @@ var Sniper = class extends MultUtil {
        fechar), fazendo o retry desistir na primeira tentativa mesmo
        quando ainda daria tempo de corrigir. */
     async _findNewCommand(originId, targetId, existingIds) {
+        const originStr = String(originId);
+        const targetStr = String(targetId);
         for (let attempt = 0; attempt < 8; attempt++) {
             try {
                 const models = uw.MM.getModels().MovementsUnits;
                 for (const key in models) {
                     const mv = models[key]?.attributes;
                     if (!mv) continue;
-                    if (String(mv.home_town_id) !== String(originId)) continue;
-                    if (String(mv.target_town_id) !== String(targetId)) continue;
+                    // PERF: comparacao de string direto, sem criar novo String() a cada item
+                    if (String(mv.home_town_id) !== originStr) continue;
+                    if (String(mv.target_town_id) !== targetStr) continue;
                     const cid = mv.command_id ?? mv.id;
                     if (existingIds.has(cid)) continue;
                     return mv;
@@ -452,6 +469,10 @@ var Sniper = class extends MultUtil {
             } catch (e) {}
             await this.sleep(200);
         }
+        // Log de diagnostico: se chegou aqui o envio foi feito mas o
+        // comando resultante nao apareceu no cache de MovementsUnits em 1.6s.
+        // Nao e um erro fatal (o caller trata null), mas ajuda a diagnosticar.
+        this.console.log('[Sniper] ' + this.t('sniper_no_command_found'));
         return null;
     }
 

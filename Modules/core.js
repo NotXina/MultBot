@@ -362,6 +362,57 @@ __MultBotI18N.dict = {
 		da_alert_sent_log: '✓ Alert sent: {town}',
 		da_alert_fail_log: '✗ Failed to send alert for {town} (HTTP {status})',
 		da_alert_error_log: 'Error sending alert: {msg}',
+		da_started_log: 'Started.',
+		da_stopped_log: 'Stopped.',
+		aq_started_log: 'Started.',
+		aq_stopped_log: 'Stopped.',
+		aq_tick_error: 'Error in quest tick: {msg}',
+		aa_title: '🗡️ Auto Attack',
+		aa_desc: 'Automatically attacks when the full troop composition is available. Checks every 20s.',
+		aa_origin_label: 'Attacking City',
+		aa_rest_label: 'Rest (min)',
+		aa_rest_tooltip: 'Wait before re-attacking, ±10% variation. 0 = no wait.',
+		aa_hero_label: 'Hero (optional)',
+		aa_hero_tooltip: 'Optional. Sends this hero with the attack if available in the attacking city at fire time.',
+		aa_unit_label: 'Unit',
+		aa_qty_label: 'Qty',
+		aa_max_tooltip: 'Always sends ALL available of this unit at fire time.',
+		aa_add_unit_btn: '+ Unit',
+		aa_no_units_yet: 'No units in composition yet.',
+		aa_target_label: 'Target cities (ID, comma or line separated)',
+		aa_add_plan_btn: '+ Add Plan',
+		aa_save_plan_btn: '💾 Save Changes',
+		aa_cancel_edit: 'Cancel edit',
+		aa_active_plans: 'Active plans:',
+		aa_no_plans: 'No plans configured.',
+		aa_err_select_city: 'Error: select an attacking city.',
+		aa_err_add_unit: 'Error: add at least one unit.',
+		aa_err_select_unit: 'Error: select a unit before adding.',
+		aa_err_qty: 'Error: enter a valid quantity or check Max.',
+		aa_err_no_target: 'Error: enter at least one valid target city.',
+		aa_plan_added: 'Plan added successfully!',
+		aa_plan_updated: 'Plan updated successfully!',
+		aa_plan_removed: 'Plan removed.',
+		aa_edit_cancelled: 'Edit cancelled.',
+		aa_editing_log: 'Editing plan: {town} - change and click "Save Changes".',
+		aa_err_plan_not_found: 'Error: plan not found to edit.',
+		aa_hero_prefix: '+ hero ',
+		aa_rest_prefix: '| rest ',
+		aa_next_in: ' (next in ~{min}min)',
+		aa_started_log: 'Started. Monitoring attack plans...',
+		aa_stopped_log: 'Stopped.',
+		aa_ok_log: 'OK: {origin} -> {target}: attack with [{comp}] sent!',
+		aa_ok_status: 'OK: {origin} attacked {target} [{comp}]',
+		aa_ok_human: 'MultBot: {origin} -> {target} (attack)',
+		aa_fail_log: 'FAILED to attack {target} from {origin}: {msg}',
+		aa_fail_status: 'FAILED to attack {target}: {msg}',
+		aa_err_unexpected: 'Unexpected error in plan #{id}: {msg}',
+		aa_warn_no_comp: 'Warning: plan for city #{id} has no valid composition, skipped.',
+		aa_warn_no_city: 'Warning: city #{id} not found (not yours or left cache).',
+		aa_rest_next_log: '{town}: next attack from this plan in approximately {min}min.',
+		aa_old_plan_migrated: 'Old plan migrated: city #{id} ({unit} x{qty}).',
+		aa_invalid_plan_removed: 'Warning: invalid plan removed (no units defined).',
+		aa_rest_migrated: 'Plan #{id}: rest migrated from "per target" to "whole plan interval".',
 		ager_title: 'Enchanted Rage',
 		ager_desc1: 'An Enchanted version of the normal rage',
 		ager_desc2: 'Made for those who try to troll with the autoclick',
@@ -710,6 +761,57 @@ __MultBotI18N.dict = {
 		da_alert_sent_log: '✓ Aviso enviado: {town}',
 		da_alert_fail_log: '✗ Falha ao enviar aviso de {town} (HTTP {status})',
 		da_alert_error_log: 'Erro ao enviar aviso: {msg}',
+		da_started_log: 'Iniciado.',
+		da_stopped_log: 'Parado.',
+		aq_started_log: 'Iniciado.',
+		aq_stopped_log: 'Parado.',
+		aq_tick_error: 'Erro no tick de quests: {msg}',
+		aa_title: '🗡️ Auto Ataque',
+		aa_desc: 'Ataca automaticamente quando a composição completa de tropas estiver disponível. Verifica a cada 20s.',
+		aa_origin_label: 'Cidade Atacante',
+		aa_rest_label: 'Descanso (min)',
+		aa_rest_tooltip: 'Espera antes de reatacar, ±10% de variação. 0 = sem espera.',
+		aa_hero_label: 'Herói (opcional)',
+		aa_hero_tooltip: 'Opcional. Envia esse herói junto com o ataque, se disponível na cidade atacante no disparo.',
+		aa_unit_label: 'Unidade',
+		aa_qty_label: 'Qtde',
+		aa_max_tooltip: 'Sempre envia TUDO que estiver disponível dessa unidade no momento do ataque.',
+		aa_add_unit_btn: '+ Unidade',
+		aa_no_units_yet: 'Nenhuma unidade na composição ainda.',
+		aa_target_label: 'Cidades-alvo (ID, separadas por vírgula ou linha)',
+		aa_add_plan_btn: '+ Adicionar Plano',
+		aa_save_plan_btn: '💾 Salvar Alterações',
+		aa_cancel_edit: 'Cancelar edição',
+		aa_active_plans: 'Planos ativos:',
+		aa_no_plans: 'Nenhum plano configurado.',
+		aa_err_select_city: 'Erro: selecione uma cidade atacante.',
+		aa_err_add_unit: 'Erro: adicione ao menos uma unidade à composição.',
+		aa_err_select_unit: 'Erro: selecione uma unidade antes de adicionar.',
+		aa_err_qty: 'Erro: informe uma quantidade válida ou marque Max.',
+		aa_err_no_target: 'Erro: informe pelo menos uma cidade-alvo válida.',
+		aa_plan_added: 'Plano adicionado com sucesso!',
+		aa_plan_updated: 'Plano atualizado com sucesso!',
+		aa_plan_removed: 'Plano removido.',
+		aa_edit_cancelled: 'Edição cancelada.',
+		aa_editing_log: 'Editando plano: {town} - altere e clique em "Salvar Alterações".',
+		aa_err_plan_not_found: 'Erro: plano não encontrado para editar.',
+		aa_hero_prefix: '+ herói ',
+		aa_rest_prefix: '| descanso ',
+		aa_next_in: ' (próximo em ~{min}min)',
+		aa_started_log: 'Iniciado. Monitorando planos de ataque...',
+		aa_stopped_log: 'Parado.',
+		aa_ok_log: 'OK: {origin} -> {target}: ataque com [{comp}] enviado!',
+		aa_ok_status: 'OK: {origin} atacou {target} [{comp}]',
+		aa_ok_human: 'MultBot: {origin} -> {target} (ataque)',
+		aa_fail_log: 'FALHA ao atacar {target} de {origin}: {msg}',
+		aa_fail_status: 'FALHA ao atacar {target}: {msg}',
+		aa_err_unexpected: 'Erro inesperado no plano #{id}: {msg}',
+		aa_warn_no_comp: 'Aviso: plano da cidade #{id} sem composição válida, ignorado.',
+		aa_warn_no_city: 'Aviso: cidade #{id} não encontrada (não é sua ou saiu do cache).',
+		aa_rest_next_log: '{town}: próximo ataque desse plano em aproximadamente {min}min.',
+		aa_old_plan_migrated: 'Plano antigo migrado: cidade #{id} ({unit} x{qty}).',
+		aa_invalid_plan_removed: 'Aviso: plano inválido removido (sem unidades definidas).',
+		aa_rest_migrated: 'Plano #{id}: descanso migrado de "por alvo" para "intervalo do plano inteiro".',
 		ager_title: 'Fúria Encantada',
 		ager_desc1: 'Uma versão encantada da fúria normal',
 		ager_desc2: 'Feito pra quem tenta trollar com o autoclick',
@@ -803,12 +905,24 @@ console.log(`[MultBot] i18n: detected language "${__MultBotI18N.lang}" (hostname
    vars (optional): {name: 'X'} replaces "{name}" inside the string -
    lets a single translated sentence carry a dynamic value (module
    name, count, etc) without needing one dictionary key per value. */
+/* PERF: resolve o dict ativo UMA VEZ (em vez de a cada chamada a t()),
+   eliminando o lookup duplo em __MultBotI18N.dict toda vez que qualquer
+   modulo chama this.t(). Em sessoes com dezenas de modulos fazendo
+   this.t() a cada tick (status, attack, dodge, etc), o ganho e relevante. */
+__MultBotI18N._activeDict = null;
+__MultBotI18N._getActiveDict = function() {
+    if (!__MultBotI18N._activeDict) {
+        __MultBotI18N._activeDict = __MultBotI18N.dict[__MultBotI18N.lang] || __MultBotI18N.dict.en;
+    }
+    return __MultBotI18N._activeDict;
+};
+
 __MultBotI18N.t = function(key, vars) {
-    const dict = __MultBotI18N.dict[__MultBotI18N.lang] || __MultBotI18N.dict.en;
+    const dict = __MultBotI18N._getActiveDict();
     let text = dict[key] ?? __MultBotI18N.dict.en[key] ?? key;
     if (vars) {
         for (const k in vars) {
-            text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), vars[k]);
+            text = text.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
         }
     }
     return text;
@@ -897,32 +1011,48 @@ var MultUtil = class {
        legacy fallback.
        Source 2 was folded in here after it was born duplicated inside
        colonize_ship_sender.js — it resolved names that sources 1 and 3
-       couldn't (target towns that aren't the player's own). */
+       couldn't (target towns that aren't the player's own).
+
+       PERF: source 2 (MM Town collection) e varrida linearmente a cada
+       chamada — custo O(n) onde n = cidades vistas na sessao. Um Map
+       em cache evita essa varredura em chamadas repetidas (ex: AutoAttack
+       renderizando a lista de planos 20x/ciclo com os mesmos alvos). */
+    _townNameCache = new Map();
+
     getTownName = (townId) => {
         if (!townId) return String(townId);
 
         const id = parseInt(townId);
         const ids = String(townId);
 
+        // Cache hit: retorna imediatamente sem nenhuma busca
+        if (this._townNameCache.has(id)) return this._townNameCache.get(id);
+
         try {
             const towns = (uw.ITowns && uw.ITowns.towns) ? uw.ITowns.towns : {};
             const t1 = towns[id] ? towns[id] : towns[ids];
             if (t1 && typeof t1.getName === 'function') {
-                return t1.getName() + ' (#' + ids + ')';
+                const name = t1.getName() + ' (#' + ids + ')';
+                this._townNameCache.set(id, name);
+                return name;
             }
 
             const allTowns = uw.MM?.getOnlyCollectionByName('Town')?.models ?? [];
             for (const t of allTowns) {
                 const tid = t.attributes?.id ?? t.id;
                 if (parseInt(tid) === id) {
-                    return (t.attributes?.name ?? '?') + ' (#' + ids + ')';
+                    const name = (t.attributes?.name ?? '?') + ' (#' + ids + ')';
+                    this._townNameCache.set(id, name);
+                    return name;
                 }
             }
 
             const wmapTowns = (uw.WMap && uw.WMap.towns) ? uw.WMap.towns : {};
             const wt = wmapTowns[id] ? wmapTowns[id] : wmapTowns[ids];
             if (wt && wt.name) {
-                return wt.name + ' (#' + ids + ')';
+                const name = wt.name + ' (#' + ids + ')';
+                this._townNameCache.set(id, name);
+                return name;
             }
         } catch (e) {}
 
@@ -1056,7 +1186,10 @@ var MultUtil = class {
         while (v === 0) v = Math.random();
         let num = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
 
-        num = num * stdDev + mean;
+        // Clamp: distribuicao gaussiana pode gerar valores negativos quando
+        // stdDev e grande em relacao a mean - setTimeout com valor negativo
+        // e tratado como 0 pelo browser, mas deixar explicito e mais seguro.
+        num = Math.max(0, num * stdDev + mean);
         return new Promise(resolve => setTimeout(resolve, num));
     };
 

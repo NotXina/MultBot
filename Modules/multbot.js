@@ -161,21 +161,17 @@ var MultBot = class {
         return html;
     };
 
-    /* Colonize Ships now renders here, inside the Mult tab,
-       alongside the presets, Auto Research and Auto Sacrifice.
-       The separate Ships tab was removed - it was the one that
-       was broken because of this._getTownName. */
+    /* Colonize Ships, Auto Trade e Auto Research ficam aqui, na aba
+       Mult, junto com os presets e o Auto Sacrifice.
+       FIX: settingsTrade existia mas nao tinha aba correspondente no
+       array de tabs - autoTrade estava inacessivel pela UI. Corrigido
+       movendo para settingsMult. */
     settingsMult = () => {
         let html = '';
         html += this.multTools ? this.multTools.settings() : this._missingModuleHtml('Mult Tools');
         html += this.colonizeShipSender ? this.colonizeShipSender.settings() : this._missingModuleHtml('Colonize Ship Sender');
         html += this.autoResearch ? this.autoResearch.settings() : this._missingModuleHtml('Auto Research');
         html += this.autoAresSacrifice ? this.autoAresSacrifice.settings() : this._missingModuleHtml('Auto Ares Sacrifice');
-        return html;
-    };
-
-    settingsTrade = () => {
-        let html = ``;
         html += this.autoTrade ? this.autoTrade.settings() : this._missingModuleHtml('Auto Trade');
         return html;
     };

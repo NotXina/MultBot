@@ -69,7 +69,7 @@ var AutoQuest = class extends MultUtil {
         this._active = true;
         this.storage.save('aq_active', true);
         this._updateTitle();
-        this.console.log('[AutoQuest] ' + this.t('ar_started'));
+        this.console.log('[AutoQuest] ' + this.t('aq_started_log'));
         this._tick();
         this._interval = this.createGuardedInterval(() => this._tick(), 20000);
     }
@@ -79,7 +79,7 @@ var AutoQuest = class extends MultUtil {
         this.storage.save('aq_active', false);
         if (this._interval) { clearInterval(this._interval); this._interval = null; }
         this._updateTitle();
-        this.console.log('[AutoQuest] ' + this.t('ar_stopped_log'));
+        this.console.log('[AutoQuest] ' + this.t('aq_stopped_log'));
     }
 
     _updateTitle() {
@@ -370,7 +370,7 @@ var AutoQuest = class extends MultUtil {
 
             this._renderStatus();
         } catch (e) {
-            this.console.log('[AutoQuest] ' + this.t('aas_tick_error', { msg: e?.message ?? e }));
+            this.console.log('[AutoQuest] ' + this.t('aq_tick_error', { msg: e?.message ?? e }));
         }
     }
 

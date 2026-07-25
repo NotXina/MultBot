@@ -103,7 +103,7 @@ var DiscordAlert = class extends MultUtil {
         this._active = true;
         this.storage.save('discord_alert_active', true);
         this._updateTitle();
-        this.console.log('[DiscordAlert] ' + this.t('ar_started'));
+        this.console.log('[DiscordAlert] ' + this.t('da_started_log'));
         this._tick();
         this._intervalId = this.createGuardedInterval(() => this._tick(), 15000);
     }
@@ -113,7 +113,7 @@ var DiscordAlert = class extends MultUtil {
         this.storage.save('discord_alert_active', false);
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
         this._updateTitle();
-        this.console.log('[DiscordAlert] ' + this.t('ar_stopped_log'));
+        this.console.log('[DiscordAlert] ' + this.t('da_stopped_log'));
     }
 
     _updateTitle() {
@@ -234,7 +234,7 @@ var DiscordAlert = class extends MultUtil {
             const attackerName = await this._resolveAttackerName(atk.home_town_id);
             const defenderName = this._getOwnPlayerName();
             const arrival = atk.arrival_at || atk.time_of_arrival || 0;
-            if (!arrival) return;
+            if (!arrival) return false;
 
             const arrivalDate = new Date(arrival * 1000);
             const isSpy = atk.type === 'attack_with_spy';
