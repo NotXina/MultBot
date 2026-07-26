@@ -308,7 +308,7 @@ var AutoFarm = class extends MultUtil {
             nl_init: true,
         };
         try {
-            await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data, 45000);
+            await this.ajaxPostWithTimeout('farm_town_overviews', 'claim_loads_multiple', data, 90000);
         } catch (e) {
             this.console.log('[AutoFarm] Erro em claimMultiple: ' + (e && e.message ? e.message : e));
             throw e;
@@ -398,20 +398,31 @@ var AutoFarm = class extends MultUtil {
         uw.$(".icon_right.icon_type_speed.ui-dialog-titlebar-close").trigger("click");
     };
 
+    /* Divide polis_list em lotes de 20 e chama claimMultiple por lote.
+       Evita timeout quando o jogador tem muitas cidades (57 no caso atual).
+       Cada lote tem pausa de 2s entre si para nao sobrecarregar o servidor. */
+    claimMultipleBatched = async (polis_list, base, boost) => {
+        var BATCH_SIZE = 20;
+        for (var i = 0; i < polis_list.length; i += BATCH_SIZE) {
+            var batch = polis_list.slice(i, i + BATCH_SIZE);
+            await this.claimMultiple(batch, base, boost);
+            if (i + BATCH_SIZE < polis_list.length) {
+                await this.sleep(2000, 500);
+            }
+        }
+    };
+
     /* Orchestrator: decide qual caminho usar */
     claim = async () => {
         const isCaptainActive = uw.GameDataPremium.isAdvisorActivated('captain');
 
-        /* FIX: polis_list estava sendo usada antes de ser declarada no
-           caminho do Captain. Agora reutilizamos this.polis_list que ja
-           foi setada no main() antes de chamar claim(). */
+        /* Reutilizamos this.polis_list que ja foi setada no main() */
         const polis_list = this.polis_list;
 
         if (isCaptainActive && !this.gui) {
             /* Caminho rapido AJAX (Captain ativo, GUI desligado):
-               fakeOpening -> fakeSelectAll -> claimMultiple -> fakeUpdate
-               Todos os payloads agora incluem town_id + nl_init:true
-               conforme confirmado pelas screenshots do F12. */
+               Dividido em lotes de 20 via claimMultipleBatched para
+               evitar timeout com 57 cidades (limite original: 45s). */
             try {
                 await this.fakeOpening();
                 await this.sleep(2000, 500);
@@ -424,9 +435,9 @@ var AutoFarm = class extends MultUtil {
                    20 min (1200000ms) -> base=2400,  booty=10800
                    Valores validos: 600, 2400, 10800, 28800 (segundos) */
                 if (this.timing <= 600000) {
-                    await this.claimMultiple(polis_list, 600, 2400);
+                    await this.claimMultipleBatched(polis_list, 600, 2400);
                 } else {
-                    await this.claimMultiple(polis_list, 2400, 10800);
+                    await this.claimMultipleBatched(polis_list, 2400, 10800);
                 }
 
                 await this.fakeUpdate();
