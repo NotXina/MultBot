@@ -131,6 +131,18 @@ var Sniper = class extends MultUtil {
                     </div>
                 </div>
                 <div class="mult_sniper_status" style="font-size:10.5px;margin-top:5px;color:#5a3a0a;"></div>
+
+                <div style="margin-top:10px;border-top:1px solid rgba(163,128,63,0.4);padding-top:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <span style="font-weight:bold;font-size:11px;color:#5a3a0a;">📍 ${this.t('sniper_closest_title')}</span>
+                        <div class="button_new" style="cursor:pointer;margin:0;" id="sniper_refresh_btn_${targetId}">
+                            <div class="left"></div><div class="right"></div>
+                            <div class="caption js-caption">${this.t('sniper_refresh_btn')}<div class="effect js-effect"></div></div>
+                        </div>
+                    </div>
+                    <div id="sniper_closest_panel_${targetId}" style="min-height:18px;font-size:11px;color:#5a3a0a;"></div>
+                    <div style="font-size:10px;color:#9a7a4a;margin-top:3px;font-style:italic;">${this.t('sniper_closest_hint')}</div>
+                </div>
             `;
 
             // Insere no FINAL da janela inteira (largura total), nao numa
@@ -138,11 +150,112 @@ var Sniper = class extends MultUtil {
             // largura toda da janela nativa.
             windowEl.appendChild(panel);
 
-            panel.querySelector('.button_new').addEventListener('click', (ev) => {
+            panel.querySelector('.button_new[data-target-id]').addEventListener('click', (ev) => {
                 this._onScheduleClick(windowEl, targetId, panel);
             });
+
+            // Botao Refresh: re-renderiza o painel de proximidade
+            panel.querySelector('#sniper_refresh_btn_' + targetId).addEventListener('click', () => {
+                this._renderClosestPanel(windowEl, targetId);
+            });
+
+            // Tenta popular automaticamente ja na abertura (funciona se
+            // a aba Informacao ja foi visitada antes ou se o cache do
+            // jogo ja tem a ilha - caso contrario o jogador clica Refresh
+            // apos abrir a aba Informacao uma vez)
+            this._renderClosestPanel(windowEl, targetId);
+
         } catch (e) {
             this.console.log('[Sniper] ' + this.t('sniper_inject_error', { msg: e?.message ?? e }));
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  5 CIDADES MAIS PROXIMAS DO ALVO
+    // ─────────────────────────────────────────────────────────────
+
+    /* Extrai coordenadas da ilha do alvo via link gp_island_link.
+       Confirmado via captura real de DOM (aba Informacao):
+       o href contem JSON em Base64 com ix (island_x) e iy (island_y).
+       Ex: {"tp":"island","id":62739,"ix":591,"iy":539,...}
+       Esse link so aparece DEPOIS que a aba Informacao e aberta
+       ao menos uma vez - por isso existe o botao Refresh. */
+    _getTargetCoords(windowEl) {
+        try {
+            const container = windowEl.closest('.js-window-main-container') || windowEl;
+            const link = container.querySelector('a.gp_island_link');
+            if (!link) return null;
+
+            const hash = link.href.split('#')[1];
+            if (!hash) return null;
+
+            const json = JSON.parse(atob(hash));
+            if (typeof json.ix === 'number' && typeof json.iy === 'number') {
+                return { x: json.ix, y: json.iy };
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /* Retorna as N cidades do jogador mais proximas do alvo,
+       ordenadas por distancia crescente.
+       Formula confirmada (mesma do Commander):
+       dist = sqrt(dx^2 + dy^2) * 1.415 */
+    _getClosestTowns(targetX, targetY, limit) {
+        limit = limit || 5;
+        try {
+            const towns = Object.values(uw.ITowns.towns);
+            const withDist = towns.map(function(t) {
+                const tx = t.getIslandCoordinateX();
+                const ty = t.getIslandCoordinateY();
+                const dx = tx - targetX;
+                const dy = ty - targetY;
+                const dist = Math.sqrt(dx * dx + dy * dy) * 1.415;
+                return { town: t, dist: Math.round(dist) };
+            });
+            withDist.sort(function(a, b) { return a.dist - b.dist; });
+            return withDist.slice(0, limit);
+        } catch (e) {
+            return [];
+        }
+    }
+
+    /* Renderiza o painel "5 cidades mais proximas" dentro do panel
+       ja injetado na janela de ataque/apoio.
+       targetId e passado explicitamente pra montar o id do elemento
+       sem precisar buscar no DOM. */
+    _renderClosestPanel(windowEl, targetId) {
+        try {
+            const panelEl = windowEl.querySelector('#sniper_closest_panel_' + targetId);
+            if (!panelEl) return;
+
+            const coords = this._getTargetCoords(windowEl);
+            if (!coords) {
+                panelEl.innerHTML = '<span style="color:#9a7a4a;">' + this.t('sniper_no_closest_found') + '</span>';
+                return;
+            }
+
+            const closest = this._getClosestTowns(coords.x, coords.y, 5);
+            if (!closest.length) {
+                panelEl.innerHTML = '<span style="color:#9a7a4a;">' + this.t('sniper_no_closest_found') + '</span>';
+                return;
+            }
+
+            let html = '<ol style="margin:2px 0 0 0;padding-left:18px;">';
+            for (var i = 0; i < closest.length; i++) {
+                var entry = closest[i];
+                html += '<li style="margin-bottom:2px;">';
+                html += '<b>' + entry.town.getName() + '</b>';
+                html += ' <span style="color:#7a5a2a;">— ' + this.t('sniper_distance_units', { dist: entry.dist }) + '</span>';
+                html += '</li>';
+            }
+            html += '</ol>';
+
+            panelEl.innerHTML = html;
+        } catch (e) {
+            this.console.log('[Sniper] closest panel error: ' + (e?.message ?? e));
         }
     }
 
@@ -272,19 +385,10 @@ var Sniper = class extends MultUtil {
         }
     }
 
-    /* PENDENTE DE CONFIRMACAO: a leitura dos campos de quantidade
-       de tropa ainda depende de confirmar o id/name exato desses
-       inputs no DOM real do jogo. Estrutura abaixo e uma tentativa
-       razoavel (baseada no padrao id="unit_id_wrap_<unidade>" tipico
-       do Grepolis) mas NAO deve ser usada em producao sem validar
-       contra uma captura real - o preview no console (compSummary
-       acima) existe justamente pra conferir visualmente antes de
-       confiar no agendamento. */
     /* CONFIRMADO via codigo fonte real do jogo
        (WndHandlerAttack.prototype.getSelectedUnits): o seletor certo
        e "input.unit_input" - cada input tem .name (id da unidade) e
-       .value (quantidade). Antes isso era uma tentativa adivinhada
-       (3 seletores diferentes, nenhum confirmado). */
+       .value (quantidade). */
     _readComposition(windowEl) {
         const composition = {};
         try {
@@ -459,7 +563,6 @@ var Sniper = class extends MultUtil {
                 for (const key in models) {
                     const mv = models[key]?.attributes;
                     if (!mv) continue;
-                    // PERF: comparacao de string direto, sem criar novo String() a cada item
                     if (String(mv.home_town_id) !== originStr) continue;
                     if (String(mv.target_town_id) !== targetStr) continue;
                     const cid = mv.command_id ?? mv.id;
@@ -469,9 +572,6 @@ var Sniper = class extends MultUtil {
             } catch (e) {}
             await this.sleep(200);
         }
-        // Log de diagnostico: se chegou aqui o envio foi feito mas o
-        // comando resultante nao apareceu no cache de MovementsUnits em 1.6s.
-        // Nao e um erro fatal (o caller trata null), mas ajuda a diagnosticar.
         this.console.log('[Sniper] ' + this.t('sniper_no_command_found'));
         return null;
     }
@@ -499,27 +599,17 @@ var Sniper = class extends MultUtil {
     }
 
     /* Tenta ate MAX_ATTEMPTS vezes: envia, confere o horario REAL de
-       chegada (que o proprio jogo calculou pro comando resultante)
-       contra o desejado, e se nao bater dentro da janela aceitavel -
-       cancela e ESPERA de verdade as tropas voltarem (elas nao ficam
-       disponiveis na hora so por cancelar) antes de reenviar. So
-       desiste se realmente nao sobrar tempo antes da chegada
-       desejada. Pedido explicitamente: ser mais insistente, mesmo
-       que precise esperar o retorno das tropas entre tentativas. */
-    /* Faixa aceitavel por tipo de comando (assimetrica, nao +/- igual):
-       - Ataque: nunca atrasado (perderia a janela certa) - aceita de
-         1s adiantado ate exatamente no horario (min:-1, max:0).
-       - Apoio: nunca adiantado (nao ajuda em nada chegar cedo) -
-         aceita do horario exato ate 2s atrasado (min:0, max:2). */
+       chegada contra o desejado, e se nao bater dentro da janela
+       aceitavel - cancela e ESPERA as tropas voltarem antes de
+       reenviar. So desiste se realmente nao sobrar tempo.
+       Faixa aceitavel por tipo:
+       - Ataque: min:-1, max:0 (nunca atrasado)
+       - Apoio:  min:0,  max:2 (nunca adiantado) */
     _getToleranceRange(type) {
         if (type === 'support') return { min: 0, max: 2 };
-        return { min: -1, max: 0 }; // attack (padrao)
+        return { min: -1, max: 0 };
     }
 
-    /* Espera a MESMA composicao ficar disponivel de novo na cidade de
-       origem (depois de cancelar um envio, as tropas voltam aos
-       poucos, nao na hora) - poll a cada 500ms, ate maxWaitMs ou ate
-       ficar pronto, o que vier primeiro. */
     async _waitForTroopsAvailable(snipe, maxWaitMs) {
         const start = Date.now();
         while (Date.now() - start < maxWaitMs) {
@@ -552,8 +642,6 @@ var Sniper = class extends MultUtil {
                 }
 
                 if (!result.command) {
-                    // Enviou mas nao achou o comando resultante pra conferir -
-                    // aceita como enviado, nao arrisca cancelar as cegas.
                     snipe.status = 'sent';
                     const msg = this.t('sniper_fired_ok', { target: snipe.targetName });
                     this.console.log('[Sniper] ' + msg + ' ' + this.t('sniper_no_command_found'));
@@ -577,22 +665,11 @@ var Sniper = class extends MultUtil {
                     return;
                 }
 
-                // Nao bateu - checa se ainda vale a pena cancelar e tentar
-                // de novo: precisa ainda ser cancelavel, e precisa sobrar
-                // tempo suficiente pra (1) as tropas voltarem e (2) viajar
-                // de novo ate o alvo antes do horario desejado.
-                // FIX: usa a duracao de viagem OBSERVADA nesse proprio
-                // envio (arrival_at real menos agora), nao mais a
-                // estimativa original do way_duration - se a viagem real
-                // for mais rapida que a estimada (diff negativo, chegou
-                // adiantado), usar a estimativa antiga (mais lenta) fazia
-                // a conta dar negativa e desistir na hora, mesmo sobrando
-                // tempo de verdade.
                 const cancelableUntil = result.command.cancelable_until;
                 const canCancel = cancelableUntil && (Date.now() / 1000) < cancelableUntil;
                 const observedTravelMs = Math.max(0, (actualArrivalSec * 1000) - Date.now());
                 const timeLeftMs = snipe.arrivalAt - Date.now();
-                const maxWaitForTroopsMs = timeLeftMs - observedTravelMs - 1000; // 1s de folga pro reenvio em si
+                const maxWaitForTroopsMs = timeLeftMs - observedTravelMs - 1000;
 
                 if (attempt === MAX_ATTEMPTS || !canCancel || maxWaitForTroopsMs < 500) {
                     snipe.status = 'sent';
@@ -607,11 +684,6 @@ var Sniper = class extends MultUtil {
 
                 const troopsReady = await this._waitForTroopsAvailable(snipe, maxWaitForTroopsMs);
                 if (!troopsReady) {
-                    // As tropas nao voltaram a tempo - nao da mais pra
-                    // reenviar e chegar no horario. O comando anterior ja
-                    // foi cancelado, entao registra como falha (melhor ser
-                    // honesto que fingir sucesso de um envio que nao existe
-                    // mais).
                     snipe.status = 'failed';
                     snipe.error = this.t('sniper_troops_not_back_error');
                     this.console.log('[Sniper] ' + this.t('sniper_fired_fail', { target: snipe.targetName, reason: snipe.error }));
