@@ -150,38 +150,36 @@ var Sniper = class extends MultUtil {
                 </div>
             `;
 
-            // Insere no FINAL da janela inteira (largura total), nao numa
-            // barra lateral estreita - windowEl e um bloco que ocupa a
-            // largura toda da janela nativa.
-            windowEl.appendChild(panel);
+            // Confirmado via captura real: ao trocar de aba, o jogo
+            // SUBSTITUI todo o gpwindow_content — qualquer elemento
+            // injetado la dentro some junto com ele.
+            // Solucao: injeta o painel no gpwindow_frame, que e o
+            // container externo e PERSISTE entre trocas de aba.
+            const gpFrame = windowEl.closest('.gpwindow_frame')
+                || windowEl.closest('.js-window-main-container')
+                || windowEl;
+            gpFrame.appendChild(panel);
 
             panel.querySelector('.button_new[data-target-id]').addEventListener('click', (ev) => {
                 this._onScheduleClick(windowEl, targetId, panel);
             });
 
-            // MutationObserver interno: detecta quando o conteudo da aba
-            // Informacao e inserido no DOM (o jogo substitui o conteudo
-            // do gpwindow_content inteiro ao trocar de aba) e popula o
-            // painel automaticamente.
-            // Confirmado via captura real: o link gp_island_link com o
-            // JSON Base64 {ix, iy} so aparece apos clicar na aba Info.
-            // Observa o gpwindow_content (pai direto da attack_support_window)
-            // porque e ele que recebe o novo conteudo ao trocar de aba —
-            // o js-window-main-container e so o frame externo (ui-dialog).
-            const gpContent = windowEl.closest('.gpwindow_content') || windowEl.parentElement;
+            // MutationObserver: observa o gpwindow_frame inteiro.
+            // Quando o jogo troca de aba, substitui o gpwindow_content
+            // — o observer detecta e tenta ler o gp_island_link que
+            // aparece na aba Info. Desconecta ao achar as coords.
             const tabObserver = new MutationObserver(() => {
-                const coords = this._getTargetCoords(gpContent);
+                const coords = this._getTargetCoords(gpFrame);
                 if (coords) {
-                    this._renderClosestPanel(windowEl, targetId);
-                    // Para de observar apos encontrar as coords
+                    this._renderClosestPanel(gpFrame, targetId);
                     tabObserver.disconnect();
                 }
             });
-            tabObserver.observe(gpContent, { childList: true, subtree: true });
+            tabObserver.observe(gpFrame, { childList: true, subtree: true });
 
-            // Tenta popular ja na abertura — funciona se a aba Info
-            // ja foi visitada antes nessa mesma sessao de janela
-            this._renderClosestPanel(windowEl, targetId);
+            // Tenta popular ja na abertura — funciona se o cache
+            // do jogo ja tiver as coords dessa cidade
+            this._renderClosestPanel(gpFrame, targetId);
 
         } catch (e) {
             this.console.log('[Sniper] ' + this.t('sniper_inject_error', { msg: e?.message ?? e }));
