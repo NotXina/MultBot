@@ -310,10 +310,11 @@ var Sniper = class extends MultUtil {
                 var bg = i % 2 === 0 ? 'rgba(0,0,0,0.03)' : 'transparent';
                 html += '<tr style="background:' + bg + ';">';
                 html += '<td style="padding:2px 4px;color:#9a7a4a;">' + (i + 1) + '</td>';
-                // Nome clicavel: abre a cidade no jogo via ITowns.setCurrentTown
-                // (Layout.wnd.Create falhou em teste real - confirmado nao disponivel)
+                // Nome clicavel: usa window.multBot.sniper._goToTown() como
+                // ponto de entrada publico — uw nao e acessivel em onclick inline
+                // (mesmo padrao do cancelSnipe que usa window.multBot.sniper.cancelSnipe)
                 html += '<td style="padding:2px 4px;">';
-                html += '<a href="#" onclick="uw.ITowns.setCurrentTown(' + townId + ');return false;" ';
+                html += '<a href="#" onclick="window.multBot.sniper._goToTown(' + townId + ');return false;" ';
                 html += 'style="color:#5a3a0a;font-weight:bold;text-decoration:underline;cursor:pointer;">';
                 html += entry.town.getName();
                 html += '</a></td>';
@@ -326,6 +327,17 @@ var Sniper = class extends MultUtil {
             panelEl.innerHTML = html;
         } catch (e) {
             this.console.log('[Sniper] closest panel error: ' + (e?.message ?? e));
+        }
+    }
+
+    /* Navega para uma cidade do jogador — chamado via onclick inline
+       do painel de cidades proximas. Usa unsafeWindow (uw) internamente,
+       que esta disponivel no escopo da classe mas nao no onclick HTML. */
+    _goToTown(townId) {
+        try {
+            uw.ITowns.setCurrentTown(parseInt(townId, 10));
+        } catch (e) {
+            this.console.log('[Sniper] _goToTown erro: ' + (e?.message ?? e));
         }
     }
 
