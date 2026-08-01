@@ -85,23 +85,15 @@ var Sniper = class extends MultUtil {
                     if (node.nodeType !== 1) continue;
                     let el = null;
                     if (node.classList && node.classList.contains('attack_support_window')) {
-                        // Caso direto: o proprio no e a janela
                         el = node;
                     } else if (node.querySelector) {
-                        // Caso real confirmado via captura: a attack_support_window
-                        // e inserida DENTRO do gpwindow_content (nao como filho
-                        // direto do body) - precisa buscar dentro do no adicionado
                         el = node.querySelector('.attack_support_window');
                     }
-                    if (el && !el.querySelector('.mult_sniper_panel')) {
-                        this._onWindowFound(el);
-                    }
+                    if (el) this._onWindowFound(el);
                 }
             }
         });
 
-        // subtree:true garante que detecta nos inseridos em qualquer
-        // nivel de profundidade, incluindo dentro do gpwindow_content
         this._observer.observe(document.body, { childList: true, subtree: true });
     }
 
@@ -150,36 +142,48 @@ var Sniper = class extends MultUtil {
                 </div>
             `;
 
-            // Confirmado via captura real: ao trocar de aba, o jogo
-            // SUBSTITUI todo o gpwindow_content — qualquer elemento
-            // injetado la dentro some junto com ele.
-            // Solucao: injeta o painel no gpwindow_frame, que e o
-            // container externo e PERSISTE entre trocas de aba.
-            const gpFrame = windowEl.closest('.gpwindow_frame')
-                || windowEl.closest('.js-window-main-container')
-                || windowEl;
-            gpFrame.appendChild(panel);
+            // Injecao: o painel vai dentro da attack_support_window
+            // (dentro do gpwindow_content). Quando o jogador troca pra
+            // aba Info, o jogo substitui o gpwindow_content inteiro e
+            // o painel some — mas o MutationObserver global (_startWatching)
+            // ja re-detecta a attack_support_window quando o jogador
+            // volta pra aba Atacar e reinjecta tudo automaticamente.
+            // Coordenadas: guardadas em this._coordsCache[targetId] assim
+            // que sao lidas pela primeira vez (aba Info), pra nao perder
+            // ao trocar de aba.
+            windowEl.appendChild(panel);
 
             panel.querySelector('.button_new[data-target-id]').addEventListener('click', (ev) => {
                 this._onScheduleClick(windowEl, targetId, panel);
             });
 
-            // MutationObserver: observa o gpwindow_frame inteiro.
-            // Quando o jogo troca de aba, substitui o gpwindow_content
-            // — o observer detecta e tenta ler o gp_island_link que
-            // aparece na aba Info. Desconecta ao achar as coords.
+            // MutationObserver interno: vigia o gpwindow_content esperando
+            // o gp_island_link aparecer (so existe na aba Info).
+            // Salva as coords em cache pra poder re-renderizar mesmo
+            // depois de trocar de aba e perder o link do DOM.
+            const gpContent = windowEl.closest('.gpwindow_content') || windowEl.parentElement;
             const tabObserver = new MutationObserver(() => {
-                const coords = this._getTargetCoords(gpFrame);
+                if (this._coordsCache && this._coordsCache[targetId]) {
+                    // Ja tem coords em cache — popula e desconecta
+                    this._renderClosestPanel(windowEl, targetId);
+                    tabObserver.disconnect();
+                    return;
+                }
+                const coords = this._getTargetCoords(gpContent);
                 if (coords) {
-                    this._renderClosestPanel(gpFrame, targetId);
+                    if (!this._coordsCache) this._coordsCache = {};
+                    this._coordsCache[targetId] = coords;
+                    this._renderClosestPanel(windowEl, targetId);
                     tabObserver.disconnect();
                 }
             });
-            tabObserver.observe(gpFrame, { childList: true, subtree: true });
+            tabObserver.observe(gpContent, { childList: true, subtree: true });
 
-            // Tenta popular ja na abertura — funciona se o cache
-            // do jogo ja tiver as coords dessa cidade
-            this._renderClosestPanel(gpFrame, targetId);
+            // Se ja temos coords em cache desta cidade (aba Info ja foi
+            // visitada numa abertura anterior da janela), popula na hora
+            if (this._coordsCache && this._coordsCache[targetId]) {
+                this._renderClosestPanel(windowEl, targetId);
+            }
 
         } catch (e) {
             this.console.log('[Sniper] ' + this.t('sniper_inject_error', { msg: e?.message ?? e }));
@@ -253,12 +257,11 @@ var Sniper = class extends MultUtil {
             const panelEl = windowEl.querySelector('#sniper_closest_panel_' + targetId);
             if (!panelEl) return;
 
-            const coords = this._getTargetCoords(windowEl);
-            if (!coords) {
-                // Nao sobrescreve o hint inicial — deixa o texto
-                // "clique na aba Informacao" visivel ate as coords chegarem
-                return;
-            }
+            // Usa coords do cache (salvo quando aba Info foi visitada)
+            // ou tenta ler do DOM se ainda estiver disponivel
+            const coords = (this._coordsCache && this._coordsCache[targetId])
+                || this._getTargetCoords(windowEl);
+            if (!coords) return;
 
             const closest = this._getClosestTowns(coords.x, coords.y, 5);
             if (!closest.length) {
