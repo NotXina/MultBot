@@ -3,10 +3,12 @@
 //  Avisa via webhook do Discord assim que um ataque a caminho e
 //  detectado - sem repetir aviso pro mesmo ataque.
 //
-//  Deteccao de ataque reaproveitada do auto_dodge.js (ja
-//  confirmada em producao): uw.MM.getModels().MovementsUnits,
-//  filtrando type === 'attack'/'attack_with_spy' com
-//  target_town_id sendo uma cidade sua.
+//  Deteccao de ataque via EVENTO BACKBONE (add no
+//  MovementsUnits) - reage instantaneamente quando o jogo
+//  adiciona um novo movimento ao cache, sem esperar o proximo
+//  poll periodico. O poll de 15s continua rodando so como
+//  rede de seguranca (ex: ataques que ja existiam ao ativar
+//  o modulo, ou em caso de perda de evento).
 //
 //  Webhook do Discord: POST direto pra URL configurada (fora do
 //  jogo, chamada via fetch() do navegador, nao via uw.gpAjax -
@@ -21,6 +23,7 @@ var DiscordAlert = class extends MultUtil {
         this._webhookUrl = this.storage.load('discord_alert_webhook', '');
         this._notifiedIds = new Set();
         this._intervalId = null;
+        this._boundOnAdd = null; // referencia da funcao vinculada ao evento backbone
 
         if (this._active) {
             setTimeout(() => this.start(), 2500);
@@ -69,7 +72,7 @@ var DiscordAlert = class extends MultUtil {
         const embed = {
             title: '🔔 ' + this.t('da_test_title'),
             description: this.t('da_test_desc'),
-            color: 3901635, // azul
+            color: 3901635,
             timestamp: new Date().toISOString(),
         };
 
@@ -104,6 +107,13 @@ var DiscordAlert = class extends MultUtil {
         this.storage.save('discord_alert_active', true);
         this._updateTitle();
         this.console.log('[DiscordAlert] ' + this.t('da_started_log'));
+
+        // Escuta eventos instantaneos do backbone: qualquer novo
+        // movimento adicionado ao cache e verificado na hora.
+        this._hookBackbone();
+
+        // Poll de seguranca: pega ataques ja existentes ao ativar,
+        // e cobre qualquer evento perdido (ex: recarregamento de pagina).
         this._tick();
         this._intervalId = this.createGuardedInterval(() => this._tick(), 15000);
     }
@@ -112,8 +122,83 @@ var DiscordAlert = class extends MultUtil {
         this._active = false;
         this.storage.save('discord_alert_active', false);
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
+        this._unhookBackbone();
         this._updateTitle();
         this.console.log('[DiscordAlert] ' + this.t('da_stopped_log'));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  EVENTO BACKBONE — deteccao instantanea
+    // ─────────────────────────────────────────────────────────────
+
+    /* Vincula ao evento "add" da colecao Backbone MovementsUnits.
+       O jogo adiciona cada novo movimento (ataque, apoio, etc) a
+       essa colecao assim que o servidor confirma — por isso e
+       instantaneo em vez de depender de um poll de N segundos.
+       A colecao pode ainda nao estar populada na hora do start()
+       (ex: pagina acabou de carregar) — tenta a cada 500ms ate
+       achar, com timeout de 10s pra nao ficar rodando pra sempre
+       caso o jogo nao tenha essa colecao disponivel. */
+    _hookBackbone() {
+        this._unhookBackbone(); // garante que nao duplica se chamado duas vezes
+
+        const MAX_WAIT_MS = 10000;
+        const RETRY_MS = 500;
+        const start = Date.now();
+
+        const tryHook = () => {
+            try {
+                const collection = uw.MM.getOnlyCollectionByName('MovementsUnits');
+                if (!collection) {
+                    if (Date.now() - start < MAX_WAIT_MS) {
+                        setTimeout(tryHook, RETRY_MS);
+                    } else {
+                        this.console.log('[DiscordAlert] MovementsUnits collection nao encontrada - so o poll periodico ativo.');
+                    }
+                    return;
+                }
+
+                // Arrow function pra manter "this" da classe; guardada
+                // em _boundOnAdd pra poder remover depois com .off()
+                this._boundOnAdd = (model) => {
+                    try {
+                        const mv = model?.attributes;
+                        if (!mv) return;
+                        const isAttack = mv.type === 'attack' || mv.type === 'attack_with_spy';
+                        const isOurTown = uw.ITowns && uw.ITowns.towns && uw.ITowns.towns[mv.target_town_id];
+                        if (isAttack && isOurTown) {
+                            const id = String(mv.id);
+                            if (!this._notifiedIds.has(id)) {
+                                this._sendAlert(mv).then(sent => {
+                                    if (sent) this._notifiedIds.add(id);
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        this.console.log('[DiscordAlert] backbone onAdd error: ' + (e?.message ?? e));
+                    }
+                };
+
+                collection.on('add', this._boundOnAdd);
+                this.console.log('[DiscordAlert] Backbone hook ativo — alertas instantaneos.');
+                this._collection = collection; // guarda referencia pra poder fazer .off() depois
+            } catch (e) {
+                this.console.log('[DiscordAlert] _hookBackbone error: ' + (e?.message ?? e));
+            }
+        };
+
+        tryHook();
+    }
+
+    /* Remove o listener do backbone ao parar o modulo. */
+    _unhookBackbone() {
+        try {
+            if (this._collection && this._boundOnAdd) {
+                this._collection.off('add', this._boundOnAdd);
+            }
+        } catch (e) {}
+        this._collection = null;
+        this._boundOnAdd = null;
     }
 
     _updateTitle() {
@@ -122,7 +207,7 @@ var DiscordAlert = class extends MultUtil {
     }
 
     /* Mesma logica de deteccao ja confirmada e em producao no
-       auto_dodge.js - reaproveitada aqui sem alteracao. */
+       auto_dodge.js - usada pelo poll periodico de seguranca. */
     _getIncomingAttacks() {
         try {
             const models = uw.MM.getModels().MovementsUnits;
@@ -152,8 +237,6 @@ var DiscordAlert = class extends MultUtil {
             const currentIds = new Set(attacks.map(a => String(a.id)));
 
             // Limpa notificacoes de ataques que ja sumiram da lista
-            // (chegaram ou foram cancelados) - mantem o Set do tamanho
-            // dos ataques realmente pendentes, nao cresce sem limite.
             for (const id of this._notifiedIds) {
                 if (!currentIds.has(id)) this._notifiedIds.delete(id);
             }
@@ -161,12 +244,6 @@ var DiscordAlert = class extends MultUtil {
             for (const atk of attacks) {
                 const id = String(atk.id);
                 if (this._notifiedIds.has(id)) continue;
-                // FIX: so marca como notificado DEPOIS de confirmar que o
-                // webhook foi entregue - antes o id entrava no Set ANTES do
-                // await, entao uma falha de rede/webhook (Discord fora do
-                // ar, URL invalida) fazia esse ataque nunca mais ser
-                // re-tentado nos ciclos seguintes, mesmo sem alerta nenhum
-                // ter realmente chegado.
                 const sent = await this._sendAlert(atk);
                 if (sent) this._notifiedIds.add(id);
             }
@@ -188,9 +265,7 @@ var DiscordAlert = class extends MultUtil {
        data-player_name="NomeDoJogador" - extrai isso via regex.
        FIX: o objeto que ajaxGetWithTimeout resolve ja vem
        desembrulhado pelo proprio jogo como {menu, html} - o html
-       fica DIRETO em res.html, nao em res.plain.html (esse ultimo
-       era so o formato do corpo bruto da resposta HTTP, confirmado
-       via teste direto no console). */
+       fica DIRETO em res.html, nao em res.plain.html. */
     async _resolveAttackerName(homeTownId) {
         try {
             const activeTownId = uw.ITowns.getCurrentTown().id;
@@ -205,8 +280,6 @@ var DiscordAlert = class extends MultUtil {
                 const name = match[1].trim();
                 if (name) return name;
             }
-            // Log de diagnostico - se chegou aqui, a chamada respondeu mas
-            // o regex nao encontrou o nome. Ajuda a investigar se persistir.
             this.console.log('[DiscordAlert] ' + this.t('da_resolve_name_no_match', {
                 keys: Object.keys(res || {}).join(', '),
             }));
@@ -216,9 +289,6 @@ var DiscordAlert = class extends MultUtil {
         return null;
     }
 
-    /* Nome do proprio jogador (defensor) - Game.player_name e uma
-       variavel global padrao e ja confiavel do Grepolis, nao
-       precisa de nenhuma chamada de rede extra. */
     _getOwnPlayerName() {
         try {
             return uw.Game?.player_name || this.t('da_unknown');
@@ -242,7 +312,7 @@ var DiscordAlert = class extends MultUtil {
             const embed = {
                 author: { name: this.t('da_brand_name') },
                 title: '🚨 ' + this.t('da_alert_title'),
-                color: 15158332, // vermelho
+                color: 15158332,
                 fields: [
                     { name: '⚔️ ' + this.t('da_field_enemy'), value: '\u200b', inline: false },
                     { name: this.t('da_field_player'), value: attackerName || this.t('da_unknown'), inline: true },
