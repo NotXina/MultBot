@@ -5,23 +5,19 @@
 //  QUALQUER cidade na MESMA ILHA (cacheada em uw.ITowns.towns
 //  + aprendizado passivo de ilhas), terrestres e navais
 //  SEPARADAMENTE - e traz de volta automaticamente depois
-//  (cancelCommand).
+//  (cancel_command).
 //
-//  PDCA - correcoes desta rodada:
-//  1) CRITICO: recalls pendentes agora sao PERSISTIDOS no storage
-//     (dodge_pending_recalls). Antes, se a pagina recarregasse
-//     (ex: Auto Refresh) entre a evacuacao e o recall, o setTimeout
-//     em memoria era perdido e as tropas ficavam em apoio para
-//     sempre. Agora, no carregamento do modulo, qualquer recall
-//     pendente e reconciliado: se ja deveria ter disparado, dispara
-//     na hora; senao, reagenda o tempo restante.
-//  2) Chamadas de rede (envio de tropas, cancelCommand) usam
-//     this.ajaxPostWithTimeout (herdado de MultUtil) - evita
-//     Promise pendurada para sempre se a rede travar.
-//  3) O tick principal roda via this.createGuardedInterval - evita
-//     dois ciclos rodando ao mesmo tempo sobre o mesmo estado.
-//  4) _getTownName foi removido - usa this.getTownName (herdado de
-//     MultUtil), eliminando a duplicacao dessa logica.
+//  Melhorias:
+//  1) Deteccao instantanea via Backbone MovementsUnits.on('add')
+//     — reage imediatamente a novos ataques, sem esperar o poll
+//     periodico de 15s. Poll mantido como fallback.
+//  2) Recalls persistidos no storage (dodge_pending_recalls) —
+//     sobrevivem a reloads de pagina.
+//  3) Endpoint de recall corrigido: command_info/cancel_command
+//     (confirmado via captura real — frontend_bridge/cancelCommand
+//     era o endpoint errado).
+//  4) this.ajaxPostWithTimeout em todas as chamadas de rede.
+//  5) this.getTownName (MultUtil) em vez de _getTownName local.
 // ══════════════════════════════════════════════════════
 var AutoDodge = class extends MultUtil {
     EVACUATE_LEAD_SECONDS = 15;
@@ -37,6 +33,8 @@ var AutoDodge = class extends MultUtil {
         this._evacuated = new Set();
         this._pendingRecalls = new Map();
         this._islandScraperObserver = null;
+        this._boundOnAdd = null;   // referencia do listener backbone
+        this._collection = null;
 
         this._islandCache = this.storage.load('dodge_island_cache', {});
 
@@ -86,9 +84,13 @@ var AutoDodge = class extends MultUtil {
         this.storage.save('dodge_active', true);
         this._updateTitle();
         this.console.log('[AutoDodge] ' + this.t('ad_started_log'));
+
+        // Deteccao instantanea via Backbone
+        this._hookBackbone();
+
+        // Poll de seguranca: ataques ja existentes ao ativar + reloads.
+        // respectSleep=false: modulo de defesa critico.
         this._tick();
-        // respectSleep=false: modulo de defesa critico, precisa
-        // continuar rodando mesmo durante a janela do Sleeper.
         this._intervalId = this.createGuardedInterval(() => this._tick(), 15000, false);
         this._setupIslandScraper();
     }
@@ -119,6 +121,7 @@ var AutoDodge = class extends MultUtil {
         this._evacuated.clear();
 
         this._teardownIslandScraper();
+        this._unhookBackbone();
 
         this._updateTitle();
         this.console.log('[AutoDodge] ' + this.t('ad_stopped_log'));
@@ -127,6 +130,64 @@ var AutoDodge = class extends MultUtil {
     _updateTitle() {
         const filter = this._active ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '';
         uw.$('#dodge_title').css('filter', filter);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  BACKBONE — deteccao instantanea de novos ataques
+    // ─────────────────────────────────────────────────────────────
+
+    _hookBackbone() {
+        this._unhookBackbone();
+
+        const MAX_WAIT_MS = 10000;
+        const RETRY_MS   = 500;
+        const start      = Date.now();
+
+        const tryHook = () => {
+            try {
+                const collection = uw.MM.getOnlyCollectionByName('MovementsUnits');
+                if (!collection) {
+                    if (Date.now() - start < MAX_WAIT_MS) setTimeout(tryHook, RETRY_MS);
+                    else this.console.log('[AutoDodge] MovementsUnits nao encontrado - so poll ativo.');
+                    return;
+                }
+
+                this._boundOnAdd = (model) => {
+                    try {
+                        const mv = model?.attributes;
+                        if (!mv) return;
+                        const isAttack = mv.type === 'attack' || mv.type === 'attack_with_spy';
+                        const isOurTown = uw.ITowns?.towns?.[mv.target_town_id];
+                        if (!isAttack || !isOurTown) return;
+
+                        // Novo ataque detectado — processa imediatamente
+                        // sem esperar o proximo poll de 15s
+                        this.console.log('[AutoDodge] [INSTANT] Novo ataque detectado via Backbone.');
+                        this._tick();
+                    } catch (e) {
+                        this.console.log('[AutoDodge] backbone onAdd error: ' + (e?.message ?? e));
+                    }
+                };
+
+                collection.on('add', this._boundOnAdd);
+                this._collection = collection;
+                this.console.log('[AutoDodge] Backbone hook ativo — deteccao instantanea.');
+            } catch (e) {
+                this.console.log('[AutoDodge] _hookBackbone error: ' + (e?.message ?? e));
+            }
+        };
+
+        tryHook();
+    }
+
+    _unhookBackbone() {
+        try {
+            if (this._collection && this._boundOnAdd) {
+                this._collection.off('add', this._boundOnAdd);
+            }
+        } catch (e) {}
+        this._collection = null;
+        this._boundOnAdd = null;
     }
 
     _setupIslandScraper() {
@@ -558,16 +619,19 @@ var AutoDodge = class extends MultUtil {
     }
 
     _recallSupport(townId, townName, commandId, label) {
+        // Confirmado via captura real (sniper.js): endpoint correto e
+        // command_info/cancel_command com payload {id, town_id, nl_init}
+        // NAO e frontend_bridge/execute com model_url "Commands" (nunca
+        // confirmado por captura, estava errado).
         const data = {
-            model_url: 'Commands',
-            action_name: 'cancelCommand',
-            captcha: null,
-            arguments: { id: commandId },
+            id: parseInt(commandId, 10),
+            town_id: parseInt(townId, 10),
+            nl_init: true,
         };
 
         this.console.log('[AutoDodge] ' + this.t('ad_recall_calling_log', { town: townName, label, id: commandId }));
 
-        this.ajaxPostWithTimeout('frontend_bridge', 'execute', data, 15000)
+        this.ajaxPostWithTimeout('command_info', 'cancel_command', data, 15000)
             .then((res) => {
                 this.console.log('[AutoDodge] ' + this.t('ad_recall_response_log', { label, res: JSON.stringify(res) }));
                 if (res && !res.error) {
