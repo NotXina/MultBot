@@ -47,14 +47,39 @@ var AutoGratis = class extends MultUtil {
                 'filter',
                 'brightness(100%) saturate(186%) hue-rotate(241deg)',
             );
+            // Backbone: detecta nova ordem de construcao instantaneamente
+            // (cada vez que o jogo adiciona uma BuildingOrder ao cache,
+            // o main() roda na hora sem esperar o poll de 1s)
+            this._hookBuildingOrders();
             this.autogratis = this.createGuardedInterval(this.main, 1000);
         } else {
             uw.$('#auto_gratis_title').css('filter', '');
             clearInterval(this.autogratis);
             this.autogratis = null;
+            this._unhookBuildingOrders();
         }
         this.storage.save('enable_autogratis', !!this.autogratis);
     };
+
+    _hookBuildingOrders() {
+        try {
+            const col = uw.MM.getOnlyCollectionByName('BuildingOrder');
+            if (!col) return;
+            this._boundOnOrderAdd = () => { if (this.autogratis) this.main(); };
+            col.on('add', this._boundOnOrderAdd);
+            this._buildingOrderCol = col;
+        } catch (e) {}
+    }
+
+    _unhookBuildingOrders() {
+        try {
+            if (this._buildingOrderCol && this._boundOnOrderAdd) {
+                this._buildingOrderCol.off('add', this._boundOnOrderAdd);
+            }
+        } catch (e) {}
+        this._buildingOrderCol = null;
+        this._boundOnOrderAdd = null;
+    }
 
     /* Persist the active-town-only toggle and reflect it in subsequent ticks. */
     setOnlyActiveTown = (value) => {
@@ -106,18 +131,18 @@ var AutoGratis = class extends MultUtil {
                 try {
                     if (this.tryTown(uw.ITowns.towns[town_id], now)) return;
                 } catch (e) {
-                    this.console.log(`[AutoGratis] Erro ao verificar ${town_id}: ${e?.message ?? e}`);
+                    this.console.log('[AutoGratis] Erro ao verificar ' + town_id + ': ' + (e?.message ?? e));
                 }
             }
         } catch (e) {
-            this.console.log(`[AutoGratis] Erro no ciclo principal: ${e?.message ?? e}`);
+            this.console.log('[AutoGratis] Erro no ciclo principal: ' + (e?.message ?? e));
         }
     };
 
     /* Post request to call the gratis */
     callGratis = async (town_id, order_id) => {
         const data = {
-            "model_url": `BuildingOrder/${order_id}`,
+            "model_url": "BuildingOrder/" + order_id,
             "action_name": "buyInstant",
             "arguments": {
                 "order_id": order_id
@@ -125,16 +150,16 @@ var AutoGratis = class extends MultUtil {
             "town_id": town_id
         };
 
-        this.console.log(`${uw.ITowns.towns[town_id].getName()}: calling gratis for order ${order_id}`);
+        this.console.log('[AutoGratis] ' + uw.ITowns.towns[town_id].getName() + ': calling gratis for order ' + order_id);
 
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', data);
             if (res && res.error) {
-                this.console.log(`[AutoGratis] Erro ao usar gratis (ordem ${order_id}): ${res.error}`);
+                this.console.log('[AutoGratis] Erro ao usar gratis (ordem ' + order_id + '): ' + res.error);
                 this._fired.delete(order_id); // permite tentar de novo no proximo tick
             }
         } catch (e) {
-            this.console.log(`[AutoGratis] Erro de rede ao usar gratis (ordem ${order_id}): ${e?.message ?? e}`);
+            this.console.log('[AutoGratis] Erro de rede ao usar gratis (ordem ' + order_id + '): ' + (e?.message ?? e));
             this._fired.delete(order_id); // permite tentar de novo no proximo tick
         }
     };
