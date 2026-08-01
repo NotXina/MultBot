@@ -203,14 +203,14 @@ var AutoAttack = class extends MultUtil {
         html += '</select>';
         html += '</div>';
         html += '<div style="width:140px;">';
-        html += '<label style="font-size:11px;font-weight:bold;" title="" + this.t('aa_rest_tooltip') + "">' + this.t('aa_rest_label') + '</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;" title="' + this.t('aa_rest_tooltip') + '">' + this.t('aa_rest_label') + '</label><br>';
         html += '<input type="number" id="attack_rest_minutes" min="0" placeholder="0" style="width:100%;padding:3px;" value="0">';
         html += '</div>';
         html += '</div>';
 
         html += '<div style="display:flex; gap:10px; align-items:flex-end; margin-top:6px; flex-wrap:wrap;">';
         html += '<div style="flex:1; min-width:180px;">';
-        html += '<label style="font-size:11px;font-weight:bold;" title="" + this.t('aa_hero_tooltip') + "">' + this.t('aa_hero_label') + '</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;" title="' + this.t('aa_hero_tooltip') + '">' + this.t('aa_hero_label') + '</label><br>';
         html += '<select id="attack_hero_select" style="width:100%;padding:3px;">';
         html += this._getHeroOptionsHtml();
         html += '</select>';
@@ -229,7 +229,7 @@ var AutoAttack = class extends MultUtil {
         html += '<input type="number" id="attack_qty" min="1" placeholder="100" style="width:100%;padding:3px;">';
         html += '</div>';
         html += '<div style="width:60px;">';
-        html += '<label style="font-size:11px;font-weight:bold;" title="" + this.t('aa_max_tooltip') + "">&nbsp;</label><br>';
+        html += '<label style="font-size:11px;font-weight:bold;" title="' + this.t('aa_max_tooltip') + '">&nbsp;</label><br>';
         html += '<label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer;padding:4px 0;">';
         html += '<input type="checkbox" id="attack_qty_max" onchange="window.multBot.autoAttack.toggleMaxQty()"> Max';
         html += '</label>';
@@ -243,7 +243,7 @@ var AutoAttack = class extends MultUtil {
 
         html += '<div style="margin-top:6px;">';
         html += '<label style="font-size:11px;font-weight:bold;">' + this.t('aa_target_label') + '</label>';
-        html += '<textarea id="attack_targets" rows="1" style="width:100%;padding:4px;box-sizing:border-box;" placeholder="" + this.t('aa_target_placeholder') + """></textarea>';
+        html += '<textarea id="attack_targets" rows="1" style="width:100%;padding:4px;box-sizing:border-box;" placeholder="' + this.t('aa_target_placeholder') + '"></textarea>';
         html += '</div>';
 
         html += '<div style="margin-top:6px;">';
