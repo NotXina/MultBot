@@ -165,8 +165,13 @@ var MultTools = class extends MultUtil {
             // Agrupa por oceano, ordenando dentro de cada grupo pelo ID da cidade
             const byOcean = {};
             for (const town of towns) {
-                const x = town.getIslandCoordinateX();
-                const y = town.getIslandCoordinateY();
+                // getIslandX/Y confirmado hoje via inspecao real do
+                // prototipo do modelo towns_collection — e diferente de
+                // getIslandCoordinateX/Y que existe em ITowns.towns mas
+                // pode nao estar disponivel em todos os contextos.
+                // Usa fallback pra garantir compatibilidade.
+                const x = town.getIslandX ? town.getIslandX() : town.getIslandCoordinateX();
+                const y = town.getIslandY ? town.getIslandY() : town.getIslandCoordinateY();
                 const ocean = this.getOceanNumber(x, y);
                 if (!byOcean[ocean]) byOcean[ocean] = [];
                 byOcean[ocean].push(town);
