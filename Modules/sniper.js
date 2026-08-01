@@ -330,26 +330,17 @@ var Sniper = class extends MultUtil {
         }
     }
 
-    /* Navega e SELECIONA uma cidade do jogador — chamado via onclick
-       inline do painel de cidades proximas.
-       Confirmado via interceptacao real de evento:
-       - HelperTown.handleInfoWindowJumpToTownClick: move o mapa ate
-         a cidade (foco visual no mapa)
-       - GameEvents.town.town_switch com {town_id}: seleciona a cidade
-         (equivalente a clicar "Selecionar cidade" no menu do mapa) */
+    /* SELECIONA uma cidade do jogador como cidade ativa — chamado
+       via onclick inline do painel de cidades proximas.
+       Confirmado via inspecao real do codigo fonte do jogo:
+       ITowns.getCurrentTown() le direto de Game.townId, entao
+       setar Game.townId e suficiente para trocar a cidade ativa.
+       Nao move o mapa — so seleciona, que e o comportamento pedido. */
     _goToTown(townId) {
         try {
             var id = parseInt(townId, 10);
-            var town = uw.ITowns.towns[id];
-            if (!town) return;
-            // 1. Move o mapa ate a cidade
-            uw.HelperTown.handleInfoWindowJumpToTownClick(
-                { x: town.getIslandCoordinateX(), y: town.getIslandCoordinateY(), id: id },
-                null,
-                function() { uw.MapTiles.focusTown(id); }
-            );
-            // 2. Seleciona a cidade (troca a cidade ativa)
-            uw.$.Observer(uw.GameEvents.town.town_switch).publish({ town_id: id });
+            if (!uw.ITowns.towns[id]) return;
+            uw.Game.townId = id;
         } catch (e) {
             this.console.log('[Sniper] _goToTown erro: ' + (e?.message ?? e));
         }
