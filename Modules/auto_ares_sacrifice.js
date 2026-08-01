@@ -29,7 +29,9 @@ var AutoAresSacrifice = class extends MultUtil {
     FAVOR_COST = 100;
     MAX_FURY = 5000;
     MIN_LAND_TROOPS = 50;
-    CHECK_INTERVAL_MS = 500;
+    // Intervalo de 2s: favor de Ares acumula lentamente (1 por vitoria)
+    // — 500ms era 4x por segundo sem necessidade.
+    CHECK_INTERVAL_MS = 2000;
 
     constructor(c, s) {
         super(c, s);
@@ -131,6 +133,12 @@ var AutoAresSacrifice = class extends MultUtil {
         this.storage.save('ares_sac_active', true);
         this._updateTitle();
         this.console.log('[AutoAresSacrifice] ' + this.t('ar_started'));
+
+        // Backbone: reage imediatamente quando o favor de Ares muda
+        // (player_gods e um modelo Backbone — confirmado via inspecao
+        // de ITowns.player_gods.attributes hoje)
+        this._hookFavorChange();
+
         this._tick();
         this._intervalId = this.createGuardedInterval(() => this._tick(), this.CHECK_INTERVAL_MS);
     }
@@ -139,8 +147,44 @@ var AutoAresSacrifice = class extends MultUtil {
         this._active = false;
         this.storage.save('ares_sac_active', false);
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
+        this._unhookFavorChange();
         this._updateTitle();
         this.console.log('[AutoAresSacrifice] ' + this.t('ar_stopped_log'));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  BACKBONE — reage imediatamente ao acumulo de favor de Ares
+    // ─────────────────────────────────────────────────────────────
+
+    _hookFavorChange() {
+        try {
+            const playerGods = uw.ITowns.player_gods;
+            if (!playerGods) return;
+
+            this._boundOnFavorChange = () => {
+                if (!this._active) return;
+                // Reage imediatamente quando o favor muda — sem esperar
+                // o proximo ciclo do createGuardedInterval
+                this._tick();
+            };
+
+            playerGods.on('change:' + this.GOD_ID + '_favor', this._boundOnFavorChange);
+            playerGods.on('change:fury', this._boundOnFavorChange);
+            this.console.log('[AutoAresSacrifice] Backbone hook ativo — reage ao acumulo de favor.');
+        } catch (e) {
+            this.console.log('[AutoAresSacrifice] _hookFavorChange erro: ' + (e?.message ?? e));
+        }
+    }
+
+    _unhookFavorChange() {
+        try {
+            const playerGods = uw.ITowns.player_gods;
+            if (playerGods && this._boundOnFavorChange) {
+                playerGods.off('change:' + this.GOD_ID + '_favor', this._boundOnFavorChange);
+                playerGods.off('change:fury', this._boundOnFavorChange);
+            }
+        } catch (e) {}
+        this._boundOnFavorChange = null;
     }
 
     _updateTitle() {
