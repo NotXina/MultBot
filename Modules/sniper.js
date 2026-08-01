@@ -133,15 +133,12 @@ var Sniper = class extends MultUtil {
                 <div class="mult_sniper_status" style="font-size:10.5px;margin-top:5px;color:#5a3a0a;"></div>
 
                 <div style="margin-top:10px;border-top:1px solid rgba(163,128,63,0.4);padding-top:8px;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                    <div style="margin-bottom:4px;">
                         <span style="font-weight:bold;font-size:11px;color:#5a3a0a;">📍 ${this.t('sniper_closest_title')}</span>
-                        <div class="button_new" style="cursor:pointer;margin:0;" id="sniper_refresh_btn_${targetId}">
-                            <div class="left"></div><div class="right"></div>
-                            <div class="caption js-caption">${this.t('sniper_refresh_btn')}<div class="effect js-effect"></div></div>
-                        </div>
                     </div>
-                    <div id="sniper_closest_panel_${targetId}" style="min-height:18px;font-size:11px;color:#5a3a0a;"></div>
-                    <div style="font-size:10px;color:#9a7a4a;margin-top:3px;font-style:italic;">${this.t('sniper_closest_hint')}</div>
+                    <div id="sniper_closest_panel_${targetId}" style="min-height:18px;font-size:11px;color:#5a3a0a;">
+                        <span style="color:#9a7a4a;font-style:italic;">${this.t('sniper_closest_hint')}</span>
+                    </div>
                 </div>
             `;
 
@@ -154,15 +151,27 @@ var Sniper = class extends MultUtil {
                 this._onScheduleClick(windowEl, targetId, panel);
             });
 
-            // Botao Refresh: re-renderiza o painel de proximidade
-            panel.querySelector('#sniper_refresh_btn_' + targetId).addEventListener('click', () => {
-                this._renderClosestPanel(windowEl, targetId);
+            // MutationObserver interno: detecta quando o conteudo da aba
+            // Informacao e inserido no DOM (o jogo carrega o conteudo de
+            // cada aba so quando ela e clicada) e popula o painel
+            // automaticamente, sem precisar de botao Refresh.
+            // Confirmado via captura real: o link gp_island_link com o
+            // JSON Base64 {ix, iy} so aparece no DOM apos a aba Info
+            // ser aberta pelo jogador.
+            const container = windowEl.closest('.js-window-main-container') || windowEl;
+            const tabObserver = new MutationObserver(() => {
+                const coords = this._getTargetCoords(windowEl);
+                if (coords) {
+                    this._renderClosestPanel(windowEl, targetId);
+                    // Para de observar apos encontrar as coords — nao
+                    // precisa continuar verificando cada mudanca de DOM
+                    tabObserver.disconnect();
+                }
             });
+            tabObserver.observe(container, { childList: true, subtree: true });
 
-            // Tenta popular automaticamente ja na abertura (funciona se
-            // a aba Informacao ja foi visitada antes ou se o cache do
-            // jogo ja tem a ilha - caso contrario o jogador clica Refresh
-            // apos abrir a aba Informacao uma vez)
+            // Tenta popular ja na abertura — funciona se a aba Info
+            // ja foi visitada antes nessa mesma sessao de janela
             this._renderClosestPanel(windowEl, targetId);
 
         } catch (e) {
@@ -233,7 +242,8 @@ var Sniper = class extends MultUtil {
 
             const coords = this._getTargetCoords(windowEl);
             if (!coords) {
-                panelEl.innerHTML = '<span style="color:#9a7a4a;">' + this.t('sniper_no_closest_found') + '</span>';
+                // Nao sobrescreve o hint inicial — deixa o texto
+                // "clique na aba Informacao" visivel ate as coords chegarem
                 return;
             }
 
