@@ -2,7 +2,11 @@
 //  MODULE: AutoMilitia
 //  Ativa milícia automaticamente em cidades com ataque
 //  entrante. Endpoint: building_farm / request_militia
-//  Payload exato do Noct AutoMilitia.
+//
+//  Deteccao via evento Backbone (add no MovementsUnits) —
+//  reage instantaneamente a novos ataques, sem esperar
+//  o poll periodico de 15s. Poll mantido como fallback
+//  (ataques ja existentes ao ativar, reloads de pagina).
 // ══════════════════════════════════════════════════════
 var AutoMilitia = class extends MultUtil {
     constructor(c, s) {
@@ -10,7 +14,9 @@ var AutoMilitia = class extends MultUtil {
 
         this._active        = false;
         this._intervalId    = null;
-        this._scheduled     = new Map(); // townId -> timeoutId, ataques já agendados
+        this._scheduled     = new Map(); // townId -> timeoutId
+        this._boundOnAdd    = null;      // referencia do listener backbone
+        this._collection    = null;
 
         if (this.storage.load('militia_active', false)) {
             setTimeout(() => this.start(), 2000);
@@ -45,9 +51,14 @@ var AutoMilitia = class extends MultUtil {
         this.storage.save('militia_active', true);
         this._updateButtons();
         this.console.log('[AutoMilicia] ' + this.t('am_started_log'));
+
+        // Deteccao instantanea via Backbone
+        this._hookBackbone();
+
+        // Poll de seguranca: pega ataques ja existentes ao ativar
+        // e cobre qualquer evento perdido por reload.
+        // respectSleep=false: modulo de defesa critico.
         this._tick();
-        // respectSleep=false: modulo de defesa critico, precisa
-        // continuar rodando mesmo durante a janela do Sleeper.
         this._intervalId = this.createGuardedInterval(() => this._tick(), 15000, false);
     }
 
@@ -59,8 +70,83 @@ var AutoMilitia = class extends MultUtil {
         for (const timeoutId of this._scheduled.values()) clearTimeout(timeoutId);
         this._scheduled.clear();
 
+        this._unhookBackbone();
         this._updateButtons();
         this.console.log('[AutoMilicia] ' + this.t('am_stopped_log'));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  BACKBONE — deteccao instantanea de novos ataques
+    // ─────────────────────────────────────────────────────────────
+
+    _hookBackbone() {
+        this._unhookBackbone();
+
+        const MAX_WAIT_MS = 10000;
+        const RETRY_MS   = 500;
+        const start      = Date.now();
+
+        const tryHook = () => {
+            try {
+                const collection = uw.MM.getOnlyCollectionByName('MovementsUnits');
+                if (!collection) {
+                    if (Date.now() - start < MAX_WAIT_MS) setTimeout(tryHook, RETRY_MS);
+                    else this.console.log('[AutoMilicia] MovementsUnits nao encontrado - so poll ativo.');
+                    return;
+                }
+
+                this._boundOnAdd = (model) => {
+                    try {
+                        const mv = model?.attributes;
+                        if (!mv) return;
+                        const isAttack = mv.type === 'attack' || mv.type === 'attack_with_spy';
+                        const isOurTown = uw.ITowns?.towns?.[mv.target_town_id];
+                        if (!isAttack || !isOurTown) return;
+
+                        const townId = String(mv.target_town_id);
+                        if (this._scheduled.has(townId)) return;
+
+                        const arrival = mv.arrival_at ?? mv.time_of_arrival ?? 0;
+                        if (!arrival) return;
+
+                        const now = Math.floor(Date.now() / 1000);
+                        const remaining = arrival - now;
+                        const fireInMs = Math.max(0, (remaining - 8) * 1000);
+
+                        const timeoutId = setTimeout(() => {
+                            this._scheduled.delete(townId);
+                            this._activateMilitia(townId);
+                        }, fireInMs);
+
+                        this._scheduled.set(townId, timeoutId);
+                        this.console.log('[AutoMilicia] [INSTANT] ' + this.t('am_scheduled_log', {
+                            town: uw.ITowns.towns[townId]?.getName?.() ?? townId,
+                            sec: Math.round(fireInMs / 1000),
+                        }));
+                    } catch (e) {
+                        this.console.log('[AutoMilicia] backbone onAdd error: ' + (e?.message ?? e));
+                    }
+                };
+
+                collection.on('add', this._boundOnAdd);
+                this._collection = collection;
+                this.console.log('[AutoMilicia] Backbone hook ativo — deteccao instantanea.');
+            } catch (e) {
+                this.console.log('[AutoMilicia] _hookBackbone error: ' + (e?.message ?? e));
+            }
+        };
+
+        tryHook();
+    }
+
+    _unhookBackbone() {
+        try {
+            if (this._collection && this._boundOnAdd) {
+                this._collection.off('add', this._boundOnAdd);
+            }
+        } catch (e) {}
+        this._collection = null;
+        this._boundOnAdd = null;
     }
 
     _updateButtons() {
@@ -74,6 +160,7 @@ var AutoMilitia = class extends MultUtil {
             const attacks = this._getIncomingAttacks();
             const now     = Math.floor(Date.now() / 1000);
 
+            // Cancela timers de ataques que ja sumiram
             const attackedTowns = new Set(attacks.map(a => String(a.target_town_id)));
             for (const townId of this._scheduled.keys()) {
                 if (!attackedTowns.has(townId)) {
