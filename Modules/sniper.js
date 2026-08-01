@@ -292,16 +292,12 @@ var Sniper = class extends MultUtil {
                 return;
             }
 
-            // ⚓ icones de unidade via GameData (mesmo padrao do jogo nativo)
-            var iconFarol  = '<img src="https://gpbr.innogamescdn.com/images/game/units/attack_ship.png" style="width:14px;height:14px;vertical-align:middle;margin-right:2px;">';
-            var iconBireme = '<img src="https://gpbr.innogamescdn.com/images/game/units/bireme.png" style="width:14px;height:14px;vertical-align:middle;margin-right:2px;">';
-
             var html = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
             html += '<tr style="color:#7a5a2a;font-size:10px;border-bottom:1px solid rgba(163,128,63,0.3);">';
             html += '<th style="text-align:left;padding:1px 4px;">#</th>';
             html += '<th style="text-align:left;padding:1px 4px;">Cidade</th>';
-            html += '<th style="text-align:center;padding:1px 4px;">' + iconFarol + 'Farol</th>';
-            html += '<th style="text-align:center;padding:1px 4px;">' + iconBireme + 'Birreme</th>';
+            html += '<th style="text-align:center;padding:1px 4px;">⚡ Farol</th>';
+            html += '<th style="text-align:center;padding:1px 4px;">🛡️ Birreme</th>';
             html += '</tr>';
 
             for (var i = 0; i < closest.length; i++) {
@@ -332,15 +328,17 @@ var Sniper = class extends MultUtil {
 
     /* SELECIONA uma cidade do jogador como cidade ativa — chamado
        via onclick inline do painel de cidades proximas.
-       Confirmado via inspecao real do codigo fonte do jogo:
-       ITowns.getCurrentTown() le direto de Game.townId, entao
-       setar Game.townId e suficiente para trocar a cidade ativa.
-       Nao move o mapa — so seleciona, que e o comportamento pedido. */
+       Confirmado via teste real no console (2 passos necessarios):
+       1. Game.townId = id        → troca a cidade logicamente
+       2. town_switch publish     → atualiza a UI (sem isso a barra
+          de recursos/nome nao muda visivelmente)
+       So seleciona — nao move o mapa. */
     _goToTown(townId) {
         try {
             var id = parseInt(townId, 10);
             if (!uw.ITowns.towns[id]) return;
             uw.Game.townId = id;
+            uw.$.Observer(uw.GameEvents.town.town_switch).publish({ town_id: id });
         } catch (e) {
             this.console.log('[Sniper] _goToTown erro: ' + (e?.message ?? e));
         }
