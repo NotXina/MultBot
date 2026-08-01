@@ -225,21 +225,44 @@ var Sniper = class extends MultUtil {
         }
     }
 
+    /* Converte segundos em string HH:MM:SS */
+    _formatTravelTime(seconds) {
+        var h = Math.floor(seconds / 3600);
+        var m = Math.floor((seconds % 3600) / 60);
+        var s = Math.floor(seconds % 60);
+        return [h, m, s].map(function(n) { return String(n).padStart(2, '0'); }).join(':');
+    }
+
     /* Retorna as N cidades do jogador mais proximas do alvo,
        ordenadas por distancia crescente.
        Formula confirmada (mesma do Commander):
-       dist = sqrt(dx^2 + dy^2) * 1.415 */
+       dist = sqrt(dx^2 + dy^2) * 1.415
+       Tempo de viagem: dist / speed * 3600 segundos.
+       Velocidades confirmadas via GameData:
+         attack_ship (Farol): speed 39
+         bireme:              speed 45 */
     _getClosestTowns(targetX, targetY, limit) {
         limit = limit || 5;
+        // Velocidades confirmadas via uw.GameData.units (captura real)
+        var SPEED_FAROL  = uw.GameData.units['attack_ship'] ? uw.GameData.units['attack_ship'].speed : 39;
+        var SPEED_BIREME = uw.GameData.units['bireme']      ? uw.GameData.units['bireme'].speed      : 45;
         try {
-            const towns = Object.values(uw.ITowns.towns);
-            const withDist = towns.map(function(t) {
-                const tx = t.getIslandCoordinateX();
-                const ty = t.getIslandCoordinateY();
-                const dx = tx - targetX;
-                const dy = ty - targetY;
-                const dist = Math.sqrt(dx * dx + dy * dy) * 1.415;
-                return { town: t, dist: Math.round(dist) };
+            var towns = Object.values(uw.ITowns.towns);
+            var withDist = towns.map(function(t) {
+                var tx = t.getIslandCoordinateX();
+                var ty = t.getIslandCoordinateY();
+                var dx = tx - targetX;
+                var dy = ty - targetY;
+                var dist = Math.sqrt(dx * dx + dy * dy) * 1.415;
+                // travel_s = dist / speed * 3600  (formula confirmada, Commander)
+                var travelFarol  = dist / SPEED_FAROL  * 3600;
+                var travelBireme = dist / SPEED_BIREME * 3600;
+                return {
+                    town: t,
+                    dist: Math.round(dist),
+                    travelFarol:  Math.round(travelFarol),
+                    travelBireme: Math.round(travelBireme),
+                };
             });
             withDist.sort(function(a, b) { return a.dist - b.dist; });
             return withDist.slice(0, limit);
@@ -269,15 +292,36 @@ var Sniper = class extends MultUtil {
                 return;
             }
 
-            let html = '<ol style="margin:2px 0 0 0;padding-left:18px;">';
+            // ⚓ icones de unidade via GameData (mesmo padrao do jogo nativo)
+            var iconFarol  = '<img src="https://gpbr.innogamescdn.com/images/game/units/attack_ship.png" style="width:14px;height:14px;vertical-align:middle;margin-right:2px;">';
+            var iconBireme = '<img src="https://gpbr.innogamescdn.com/images/game/units/bireme.png" style="width:14px;height:14px;vertical-align:middle;margin-right:2px;">';
+
+            var html = '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
+            html += '<tr style="color:#7a5a2a;font-size:10px;border-bottom:1px solid rgba(163,128,63,0.3);">';
+            html += '<th style="text-align:left;padding:1px 4px;">#</th>';
+            html += '<th style="text-align:left;padding:1px 4px;">Cidade</th>';
+            html += '<th style="text-align:center;padding:1px 4px;">' + iconFarol + 'Farol</th>';
+            html += '<th style="text-align:center;padding:1px 4px;">' + iconBireme + 'Birreme</th>';
+            html += '</tr>';
+
             for (var i = 0; i < closest.length; i++) {
                 var entry = closest[i];
-                html += '<li style="margin-bottom:2px;">';
-                html += '<b>' + entry.town.getName() + '</b>';
-                html += ' <span style="color:#7a5a2a;">— ' + this.t('sniper_distance_units', { dist: entry.dist }) + '</span>';
-                html += '</li>';
+                var townId = entry.town.id;
+                var bg = i % 2 === 0 ? 'rgba(0,0,0,0.03)' : 'transparent';
+                html += '<tr style="background:' + bg + ';">';
+                html += '<td style="padding:2px 4px;color:#9a7a4a;">' + (i + 1) + '</td>';
+                // Nome clicavel: abre a cidade no jogo via ITowns.setCurrentTown
+                // (Layout.wnd.Create falhou em teste real - confirmado nao disponivel)
+                html += '<td style="padding:2px 4px;">';
+                html += '<a href="#" onclick="uw.ITowns.setCurrentTown(' + townId + ');return false;" ';
+                html += 'style="color:#5a3a0a;font-weight:bold;text-decoration:underline;cursor:pointer;">';
+                html += entry.town.getName();
+                html += '</a></td>';
+                html += '<td style="padding:2px 4px;text-align:center;color:#3a2a0a;">' + this._formatTravelTime(entry.travelFarol) + '</td>';
+                html += '<td style="padding:2px 4px;text-align:center;color:#3a2a0a;">' + this._formatTravelTime(entry.travelBireme) + '</td>';
+                html += '</tr>';
             }
-            html += '</ol>';
+            html += '</table>';
 
             panelEl.innerHTML = html;
         } catch (e) {
