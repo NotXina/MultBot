@@ -85,15 +85,23 @@ var Sniper = class extends MultUtil {
                     if (node.nodeType !== 1) continue;
                     let el = null;
                     if (node.classList && node.classList.contains('attack_support_window')) {
+                        // Caso direto: o proprio no e a janela
                         el = node;
                     } else if (node.querySelector) {
+                        // Caso real confirmado via captura: a attack_support_window
+                        // e inserida DENTRO do gpwindow_content (nao como filho
+                        // direto do body) - precisa buscar dentro do no adicionado
                         el = node.querySelector('.attack_support_window');
                     }
-                    if (el) this._onWindowFound(el);
+                    if (el && !el.querySelector('.mult_sniper_panel')) {
+                        this._onWindowFound(el);
+                    }
                 }
             }
         });
 
+        // subtree:true garante que detecta nos inseridos em qualquer
+        // nivel de profundidade, incluindo dentro do gpwindow_content
         this._observer.observe(document.body, { childList: true, subtree: true });
     }
 
@@ -152,23 +160,24 @@ var Sniper = class extends MultUtil {
             });
 
             // MutationObserver interno: detecta quando o conteudo da aba
-            // Informacao e inserido no DOM (o jogo carrega o conteudo de
-            // cada aba so quando ela e clicada) e popula o painel
-            // automaticamente, sem precisar de botao Refresh.
+            // Informacao e inserido no DOM (o jogo substitui o conteudo
+            // do gpwindow_content inteiro ao trocar de aba) e popula o
+            // painel automaticamente.
             // Confirmado via captura real: o link gp_island_link com o
-            // JSON Base64 {ix, iy} so aparece no DOM apos a aba Info
-            // ser aberta pelo jogador.
-            const container = windowEl.closest('.js-window-main-container') || windowEl;
+            // JSON Base64 {ix, iy} so aparece apos clicar na aba Info.
+            // Observa o gpwindow_content (pai direto da attack_support_window)
+            // porque e ele que recebe o novo conteudo ao trocar de aba —
+            // o js-window-main-container e so o frame externo (ui-dialog).
+            const gpContent = windowEl.closest('.gpwindow_content') || windowEl.parentElement;
             const tabObserver = new MutationObserver(() => {
-                const coords = this._getTargetCoords(windowEl);
+                const coords = this._getTargetCoords(gpContent);
                 if (coords) {
                     this._renderClosestPanel(windowEl, targetId);
-                    // Para de observar apos encontrar as coords — nao
-                    // precisa continuar verificando cada mudanca de DOM
+                    // Para de observar apos encontrar as coords
                     tabObserver.disconnect();
                 }
             });
-            tabObserver.observe(container, { childList: true, subtree: true });
+            tabObserver.observe(gpContent, { childList: true, subtree: true });
 
             // Tenta popular ja na abertura — funciona se a aba Info
             // ja foi visitada antes nessa mesma sessao de janela
@@ -191,7 +200,13 @@ var Sniper = class extends MultUtil {
        ao menos uma vez - por isso existe o botao Refresh. */
     _getTargetCoords(windowEl) {
         try {
-            const container = windowEl.closest('.js-window-main-container') || windowEl;
+            // Sobe ate o js-window-main-container ou gpwindow_content,
+            // o que vier primeiro — ambos sao raizes validas dependendo
+            // de qual elemento foi passado (attack_support_window ou
+            // gpwindow_content direto do tabObserver)
+            const container = windowEl.closest('.js-window-main-container')
+                || windowEl.closest('.gpwindow_content')
+                || windowEl;
             const link = container.querySelector('a.gp_island_link');
             if (!link) return null;
 
