@@ -190,7 +190,11 @@ var StatusPanel = class extends MultUtil {
             const gratisActive = !!bot.autoGratis?.autogratis;
             const cssActive   = !!bot.colonizeShipSender?._running;
             const asrActive   = !!bot.autoSendResources?._active;
-            const militiaActive = !!bot.autoMilitia?._active;
+            const militiaActive    = !!bot.autoMilitia?._active;
+            const hideActive       = !!bot.autoHide?._active;
+            const questActive      = !!bot.autoQuest?._active;
+            const discordActive    = !!bot.discordAlert?._active;
+            const sniperPending    = (bot.sniper?._scheduled ?? []).filter(s => s.status === 'pending').length;
 
             // These modules already existed and already expose
             // _active + toggle(), they just weren't being read here
@@ -215,6 +219,10 @@ var StatusPanel = class extends MultUtil {
             rows.push(this._row(this.t('row_dodge'),  dodgeActive,    dodgeActive    ? this.t('active') : this.t('stopped'), 'autoDodge',         'toggle'));
             rows.push(this._row(this.t('row_ares'),  aresActive,     aresActive     ? this.t('active') : this.t('stopped'), 'autoAresSacrifice', 'toggle'));
             rows.push(this._row(this.t('row_research'),       researchActive, researchActive ? this.t('active') : this.t('stopped'), 'autoResearch',      'toggle'));
+            rows.push(this._row(this.t('row_hide'),          hideActive,    hideActive    ? this.t('active') : this.t('stopped'),                'autoHide',          'toggle'));
+            rows.push(this._row(this.t('row_quest'),         questActive,   questActive   ? this.t('active') : this.t('stopped'),                'autoQuest',         'toggle'));
+            rows.push(this._row(this.t('row_discord'),       discordActive, discordActive ? this.t('active') : this.t('stopped'),                'discordAlert',      'toggle'));
+            rows.push(this._row(this.t('row_sniper'),        sniperPending > 0, sniperPending > 0 ? this.t('row_sniper_pending', { n: sniperPending }) : this.t('stopped'), null, null));
 
             uw.$('#status_rows').html(rows.join(''));
             this._renderSleeperStatus();
