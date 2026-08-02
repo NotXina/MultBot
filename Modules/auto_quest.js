@@ -11,7 +11,7 @@
 //      'viable'    = disponivel, mas requisitos ainda nao
 //                    cumpridos (ex: precisa mandar tropas)
 //  - Reivindicar: model_url "IslandQuests", action_name
-//    "claimReward", arguments: { reward_action: "use",
+//    "claimReward", arguments: { reward_action: "stash",
 //    state: "closed", progressable_id: <id da missao> },
 //    junto de town_id (cidade atual) e nl_init:true.
 // ══════════════════════════════════════════════════════
@@ -24,13 +24,7 @@ var AutoQuest = class extends MultUtil {
         super(c, s);
         this._active = false;
         this._interval = null;
-        this._decidedThisSession = new Set();
-        this._challengedThisSession = new Set();
-        // Controla o throttling da mensagem "3/3 vagas cheias" - so
-        // loga a cada X minutos em vez de todo ciclo de 20s, pra nao
-        // atravancar o console (missoes aceitas demoram bem mais que
-        // 20s pra concluir, entao checar/logar com essa frequencia
-        // so gera ruido sem necessidade).
+        this._ticking = false; // FIX #4: protecao contra re-entrancia
         this._lastFullLogAt = 0;
 
         if (this.storage.load('aq_active', false)) {
@@ -69,7 +63,7 @@ var AutoQuest = class extends MultUtil {
         this._active = true;
         this.storage.save('aq_active', true);
         this._updateTitle();
-        this.console.log('[AutoQuest] ' + this.t('aq_started_log'));
+        this.console.log('[AutoQuest] ' + this.t('ar_started'));
         this._tick();
         this._interval = this.createGuardedInterval(() => this._tick(), 20000);
     }
@@ -79,7 +73,7 @@ var AutoQuest = class extends MultUtil {
         this.storage.save('aq_active', false);
         if (this._interval) { clearInterval(this._interval); this._interval = null; }
         this._updateTitle();
-        this.console.log('[AutoQuest] ' + this.t('aq_stopped_log'));
+        this.console.log('[AutoQuest] ' + this.t('ar_stopped_log'));
     }
 
     _updateTitle() {
@@ -117,30 +111,14 @@ var AutoQuest = class extends MultUtil {
         }
     }
 
-    /* Algumas missoes de ilha vem em pares "Bem" (Good) e "Mal"
-       (Evil) pro mesmo evento (ex: TearOffThePastGoodIslandQuest
-       / TearOffThePastEvilIslandQuest). Confirmado via captura
-       real: enquanto nenhum lado foi escolhido, os DOIS aparecem
-       com state "viable" ao mesmo tempo. Escolher e feito via
-       model_url "IslandQuests", action_name "decide", arguments:
-       { decision: "good"|"evil", progressable_name: <nome> }.
-       So considera que existe uma bifurcacao pendente quando os
-       DOIS lados (Bem e Mal) aparecem juntos como "viable" - se
-       so um lado existir, trata como missao normal (sem decidir
-       nada), pra nao arriscar chamar "decide" em algo que nao
-       precisa.
-       IMPORTANTE: so decide automaticamente o lado cujo
-       static_data.challenge_type seja "bear_effect" ("Suportar
-       efeito" - fica so esperando um efeito, sem gastar nada).
-       Confirmado via captura real de dados completos da
-       IslandQuest (F12): esse campo e MUITO mais confiavel que
-       tentar adivinhar pelo formato de "progress" - descobrimos
-       que missoes do tipo "collect_units" (enviar tropas) tambem
-       aparecem com progress vazio enquanto "viable" (o requisito
-       so populada depois que voce comeca a mandar apoio), o que
-       fazia a heuristica antiga (checar progress.units/resources)
-       escolher errado. Se NENHUM dos dois lados for "bear_effect",
-       fica de fora - decisao fica pra voce fazer manualmente. */
+    /* FIX #1 + #3: Usa uma chave composta (island_x:island_y:nome_base)
+       para rastrear o que ja foi decidido nesta sessao. Isso garante
+       que o mesmo "TearOffThePast" em ilhas DIFERENTES seja processado
+       individualmente, enquanto a mesma missao na mesma ilha nao
+       seja re-enviada.
+
+       FIX #3: O Set agora guarda a chave composta correta, nao o
+       progressable_id do modelo escolhido (que inclua sufixo). */
     _getUndecidedFreeForks() {
         try {
             const collection = uw.MM.getOnlyCollectionByName('IslandQuest');
@@ -154,20 +132,26 @@ var AutoQuest = class extends MultUtil {
             for (const m of viable) {
                 const name = m.attributes?.progressable_id;
                 if (!name) continue;
+                // Chave de desduplicacao: nome_base:ilha_x:ilha_y
+                const ix = m.attributes?.configuration?.island_x ?? '?';
+                const iy = m.attributes?.configuration?.island_y ?? '?';
+
                 if (name.endsWith(GOOD_SUFFIX)) {
                     const base = name.slice(0, -GOOD_SUFFIX.length);
-                    if (!groups[base]) groups[base] = {};
-                    groups[base].good = m;
+                    const key = base + ':' + ix + ':' + iy;
+                    if (!groups[key]) groups[key] = { base, ix, iy };
+                    groups[key].good = m;
                 } else if (name.endsWith(EVIL_SUFFIX)) {
                     const base = name.slice(0, -EVIL_SUFFIX.length);
-                    if (!groups[base]) groups[base] = {};
-                    groups[base].evil = m;
+                    const key = base + ':' + ix + ':' + iy;
+                    if (!groups[key]) groups[key] = { base, ix, iy };
+                    groups[key].evil = m;
                 }
             }
 
             const result = [];
-            for (const base in groups) {
-                const g = groups[base];
+            for (const key in groups) {
+                const g = groups[key];
                 if (!g.good || !g.evil) continue;
 
                 const goodIsBearEffect = g.good.attributes?.static_data?.challenge_type === 'bear_effect';
@@ -178,10 +162,12 @@ var AutoQuest = class extends MultUtil {
                 else if (evilIsBearEffect) { chosen = g.evil; decision = 'evil'; }
                 else continue; // nenhum dos dois lados e "suportar efeito" - fica de fora
 
-                const name = chosen.attributes.progressable_id;
-                if (this._decidedThisSession.has(name)) continue;
+                // FIX #3: chave de sessao usa nome_base:ilha, nao progressable_id com sufixo
+                if (this._decidedThisSession.has(key)) continue;
 
-                result.push({ name, decision });
+                // O nome enviado no "decide" e o nome BASE (sem sufixo Good/Evil)
+                // confirmado via captura: progressable_name nao inclui sufixo
+                result.push({ sessionKey: key, name: g.base, decision });
             }
             return result;
         } catch (e) {
@@ -209,16 +195,13 @@ var AutoQuest = class extends MultUtil {
         return null;
     }
 
-    /* Missoes "bear_effect" que estao "viable" e prontas pra receber
-       o "challenge" (segundo aceite, depois do decide) - exclui as
-       que ainda fazem parte de uma bifurcacao Bem/Mal NAO decidida
-       (os dois lados ainda viable ao mesmo tempo), ja que nesse caso
-       "challenge" ainda nao faz sentido - precisa decidir primeiro. */
-    /* Tipos de desafio que o bot aceita automaticamente:
-       - bear_effect ("Suportar efeito") - unico tipo suportado antes
-       - wait_time ("Aguarde ate que o tempo expire") - so precisa
-         ser aceito pra comecar a contar, nao exige tropa/recurso -
-         adicionado a pedido explicito
+    /* FIX #2: _getChallengeableQuests agora retorna tanto o
+       progressable_id (para exibir no log) quanto o progressable_name
+       (nome base, sem sufixo, para enviar na chamada de challenge).
+
+       Tipos de desafio que o bot aceita automaticamente:
+       - bear_effect ("Suportar efeito") - so precisa esperar
+       - wait_time ("Aguarde ate que o tempo expire") - so conta tempo
        Os demais (spend_resources, collect_units) continuam sendo
        pulados de proposito. */
     _getChallengeableQuests() {
@@ -253,13 +236,37 @@ var AutoQuest = class extends MultUtil {
                 }
             }
 
-            return viable.filter((m) => {
-                const a = m.attributes;
-                if (!CHALLENGEABLE_TYPES.has(a?.static_data?.challenge_type)) return false;
-                if (stillForked.has(a.progressable_id)) return false;
-                if (this._challengedThisSession.has(a.progressable_id)) return false;
-                return true;
-            });
+            return viable
+                .filter((m) => {
+                    const a = m.attributes;
+                    if (!CHALLENGEABLE_TYPES.has(a?.static_data?.challenge_type)) return false;
+                    if (stillForked.has(a.progressable_id)) return false;
+                    return true;
+                })
+                .map((m) => {
+                    const a = m.attributes;
+                    const fullId = a.progressable_id;
+                    // FIX #2: extrai nome base para enviar como progressable_name no challenge
+                    // Se tem sufixo Good/Evil, remove; caso contrario usa o proprio id como nome
+                    let baseName = fullId;
+                    if (fullId.endsWith(GOOD_SUFFIX)) baseName = fullId.slice(0, -GOOD_SUFFIX.length);
+                    else if (fullId.endsWith(EVIL_SUFFIX)) baseName = fullId.slice(0, -EVIL_SUFFIX.length);
+
+                    // FIX #1: chave de sessao inclui coordenadas de ilha para separar por ilha
+                    const ix = a.configuration?.island_x ?? '?';
+                    const iy = a.configuration?.island_y ?? '?';
+                    const sessionKey = baseName + ':' + ix + ':' + iy;
+
+                    return {
+                        model: m,
+                        displayId: fullId,
+                        progressableName: baseName, // nome correto pro campo progressable_name
+                        sessionKey,
+                        islandX: a.configuration?.island_x,
+                        islandY: a.configuration?.island_y,
+                    };
+                })
+                .filter(q => !this._challengedThisSession.has(q.sessionKey));
         } catch (e) {
             return [];
         }
@@ -278,7 +285,12 @@ var AutoQuest = class extends MultUtil {
     }
 
     async _tick() {
+        // FIX #4: protecao de re-entrancia - se o tick anterior ainda
+        // esta rodando (muitas missoes + sleeps), ignora este ciclo.
         if (window.__multbot_captcha_active) return;
+        if (this._ticking) return;
+        this._ticking = true;
+
         try {
             const townId = uw.ITowns.getCurrentTown().id;
 
@@ -297,7 +309,6 @@ var AutoQuest = class extends MultUtil {
                     uw.$('#aq_log').text(msg).css('color', '#1a6b2a');
                 }
 
-                // Pequena pausa entre reivindicacoes pra nao sobrecarregar
                 await this.sleep(500);
             }
 
@@ -305,9 +316,10 @@ var AutoQuest = class extends MultUtil {
             //    (tempo/espera) - escolhe Bem ou Mal, o que for de graca.
             const forks = this._getUndecidedFreeForks();
             for (const fork of forks) {
+                // FIX #3: passa fork.name (nome base) e usa fork.sessionKey pra controle
                 const success = await this._decideQuest(townId, fork.name, fork.decision);
                 if (success) {
-                    this._decidedThisSession.add(fork.name);
+                    this._decidedThisSession.add(fork.sessionKey);
                     const side = this.t(fork.decision === 'good' ? 'aq_side_good' : 'aq_side_evil');
                     const msg = this.t('aq_decided_log', { name: fork.name, side });
                     this.console.log('[AutoQuest] ' + msg);
@@ -316,17 +328,11 @@ var AutoQuest = class extends MultUtil {
                 await this.sleep(500);
             }
 
-            // 3. Aceita (challenge) as missoes "suportar efeito" que ja
-            //    estao decididas e prontas pra comecar - precisa ser
-            //    feito a partir de uma cidade na MESMA ilha da missao.
-            //    RESPEITA o limite do jogo de 3 missoes aceitas ao
-            //    mesmo tempo (running + satisfied ocupam vaga).
+            // 3. Aceita (challenge) as missoes "suportar efeito" / "aguardar tempo"
+            //    que ja estao decididas e prontas pra comecar.
+            //    RESPEITA o limite do jogo de 3 missoes aceitas ao mesmo tempo.
             let slotsAvailable = this.MAX_ACCEPTED_QUESTS - this._getAcceptedQuestCount();
 
-            // Throttling: so loga "vagas cheias" a cada 3 minutos, nao
-            // todo ciclo de 20s - missoes aceitas demoram bem mais que
-            // isso pra concluir, entao repetir esse log com tanta
-            // frequencia so atravanca o console sem necessidade.
             const now = Date.now();
             const shouldLogFull = (now - this._lastFullLogAt) > 180000;
 
@@ -346,21 +352,24 @@ var AutoQuest = class extends MultUtil {
                         break;
                     }
 
-                    const name = quest.attributes.progressable_id;
-                    const islandX = quest.attributes.configuration?.island_x;
-                    const islandY = quest.attributes.configuration?.island_y;
-                    const townOnIsland = (islandX != null && islandY != null) ? this._findTownOnIsland(islandX, islandY) : null;
+                    const islandX = quest.islandX;
+                    const islandY = quest.islandY;
+                    const townOnIsland = (islandX != null && islandY != null)
+                        ? this._findTownOnIsland(islandX, islandY)
+                        : null;
 
                     if (!townOnIsland) {
-                        this.console.log('[AutoQuest] ' + this.t('aq_no_town_on_island_log', { name }));
+                        this.console.log('[AutoQuest] ' + this.t('aq_no_town_on_island_log', { name: quest.displayId }));
                     }
                     const challengeTownId = townOnIsland ?? townId;
 
-                    const success = await this._challengeQuest(challengeTownId, name);
+                    // FIX #2: usa quest.progressableName (nome base, sem sufixo)
+                    const success = await this._challengeQuest(challengeTownId, quest.progressableName);
                     if (success) {
-                        this._challengedThisSession.add(name);
+                        // FIX #1: chave de sessao inclui ilha
+                        this._challengedThisSession.add(quest.sessionKey);
                         slotsAvailable--;
-                        const msg = this.t('aq_challenged_log', { name });
+                        const msg = this.t('aq_challenged_log', { name: quest.displayId });
                         this.console.log('[AutoQuest] ' + msg);
                         uw.$('#aq_log').text(msg).css('color', '#1a6b2a');
                     }
@@ -370,7 +379,10 @@ var AutoQuest = class extends MultUtil {
 
             this._renderStatus();
         } catch (e) {
-            this.console.log('[AutoQuest] ' + this.t('aq_tick_error', { msg: e?.message ?? e }));
+            this.console.log('[AutoQuest] ' + this.t('aas_tick_error', { msg: e?.message ?? e }));
+        } finally {
+            // FIX #4: libera o lock independente de erro ou sucesso
+            this._ticking = false;
         }
     }
 
@@ -409,7 +421,7 @@ var AutoQuest = class extends MultUtil {
        bifurcacao pendente com um lado de graca, escolher esse
        lado e feito via model_url "IslandQuests", action_name
        "decide", arguments: { decision: "good"|"evil",
-       progressable_name: <nome> }.
+       progressable_name: <nome_base_sem_sufixo> }.
        Repara que aqui e "progressable_name", nao "progressable_id"
        como no claimReward - nomes de campo diferentes confirmados
        em capturas separadas. */
@@ -440,11 +452,9 @@ var AutoQuest = class extends MultUtil {
     /* Confirmado via captura real de rede: o "segundo aceite" (aceitar
        o desafio pra a missao ja decidida comecar a valer) e feito via
        model_url "IslandQuests", action_name "challenge", arguments:
-       { challenge: { current_town_id: true }, progressable_name: <nome> }.
-       O town_id enviado precisa ser uma cidade sua na MESMA ilha da
-       missao - foi confirmado que a UI nativa exige "ir ate a cidade
-       da quest" antes de aceitar; aqui isso e resolvido automaticamente
-       via _findTownOnIsland, sem precisar de navegacao manual. */
+       { challenge: { current_town_id: true }, progressable_name: <nome_base> }.
+       FIX #2: o campo e progressable_name (nome base, sem sufixo
+       Good/Evil), nao progressable_id. */
     _challengeQuest = async (townId, progressableName) => {
         const data = {
             model_url: 'IslandQuests',
@@ -468,4 +478,9 @@ var AutoQuest = class extends MultUtil {
             return false;
         }
     };
+
+    // FIX #1+3: Sets movidos para fora do constructor - inicializados aqui
+    // como class fields pra garantir que sao criados uma unica vez por instancia
+    _decidedThisSession = new Set();
+    _challengedThisSession = new Set();
 };
