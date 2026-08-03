@@ -110,7 +110,7 @@ var AutoSpells = class extends MultUtil {
         '  <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
 
         // Título principal
-        this.getTitleHtml('asp_panel_title', this.t('asp_title'), null, '', false) +
+        '<div class="game_header bold" style="padding:4px 10px;">' + this.t('asp_title') + '</div>' +
 
         // ── Seção: Terremoto + Felicidade compartilham cidade alvo ──
         '  <div style="padding:6px 10px 2px;font-weight:bold;font-size:11px;border-bottom:1px solid #c9a96e;">🎯 ' + this.t('asp_spell_target_section') + '</div>' +
