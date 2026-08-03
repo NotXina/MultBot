@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  Automação modular para Grepolis: construção, recrutamento, ataque, defesa, farm e mais.
-// @version      1.8.0
+// @version      1.8.1
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -57,7 +57,7 @@
         'auto_militia.js',
         'auto_dodge.js',
         'auto_attack.js',
-        'auto_ares_sacrifice.js',
+        'auto_spells.js',
         'auto_research.js',
         'auto_send_resources.js',
         'colonize_ship_sender.js',
