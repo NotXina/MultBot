@@ -172,7 +172,6 @@ var MultBot = class {
         html += this.multTools ? this.multTools.settings() : this._missingModuleHtml('Mult Tools');
         html += this.colonizeShipSender ? this.colonizeShipSender.settings() : this._missingModuleHtml('Colonize Ship Sender');
         html += this.autoResearch ? this.autoResearch.settings() : this._missingModuleHtml('Auto Research');
-        html += this.autoAresSacrifice ? this.autoAresSacrifice.settings() : this._missingModuleHtml('Auto Ares Sacrifice');
         return html;
     };
 
