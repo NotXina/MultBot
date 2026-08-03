@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  MODULE: AutoSendResources  (v2.0 - Balanceamento)
+//  MODULE: AutoSendResources  (v2.1 - Anti-Overflow Fix)
 //
 //  MODOS DE OPERACAO:
 //  ─────────────────────────────────────────────────────
@@ -19,8 +19,10 @@
 //  REGRAS GERAIS:
 //  - Remetente precisa ter mercado ativo (nivel >= 1)
 //  - Capacidade minima de 200 unidades de comercio
-//  - Nunca envia se o destino ja tiver > 95% de armazem
-//  - Margem de seguranca de 5% no destino (nao estoura)
+//  - Nunca envia se o destino ja tiver > 90% de armazem
+//    em QUALQUER recurso individualmente (fix v2.1)
+//  - Margem de seguranca de 10% no destino (fix v2.1)
+//  - Espaco minimo real por recurso verificado antes do envio
 // ══════════════════════════════════════════════════════
 var AutoSendResources = class extends MultUtil {
     constructor(c, s) {
@@ -342,9 +344,9 @@ var AutoSendResources = class extends MultUtil {
                     senders.push(id);
                 } else {
                     // Destinatario: tem espaco e esta abaixo da media em pelo menos 1 recurso
-                    const roomLeft = (storage - res.wood) + (storage - res.stone) + (storage - res.iron);
+                    // FIX v2.1: usa _hasRoomForAny() para garantir espaco real por recurso
                     const needsRes = res.wood < avgW || res.stone < avgS || res.iron < avgI;
-                    if (roomLeft > 200 && needsRes && !this._isAlmostFull(id)) {
+                    if (needsRes && !this._isAlmostFull(id) && this._hasRoomForAny(id)) {
                         receivers.push({ id, score: this._getDevelopmentScore(town) });
                     }
                 }
@@ -416,6 +418,14 @@ var AutoSendResources = class extends MultUtil {
             return;
         }
 
+        // FIX v2.1: Verifica se destino tem espaço ANTES de tentar enviar
+        if (this._isAlmostFull(this.manualTargetId)) {
+            const msg = '⚠ Destino ' + this.getTownName(this.manualTargetId) + ' está com armazém cheio (≥90%). Envio cancelado.';
+            this.console.log('[AutoRecursos] [Manual] ' + msg);
+            this._setLog(msg);
+            return;
+        }
+
         const senders = townIds.filter(id => id !== this.manualTargetId && this._isOverflowing(id));
         if (!senders.length) {
             const msg = 'Nenhuma cidade em ' + this.overflowThreshold + '%+ de armazém.';
@@ -454,14 +464,33 @@ var AutoSendResources = class extends MultUtil {
         }
     }
 
-    // Verdadeiro se a cidade esta quase cheia (>= 95%) — exclui de ser destino
+    // FIX v2.1: Verdadeiro se QUALQUER recurso esta em >= 90% do armazem
+    // BUG ORIGINAL: usava && (todos cheios) em vez de || (qualquer um cheio)
+    // Isso fazia cidades com 1 recurso cheio serem aceitas como destino
     _isAlmostFull(townId) {
         try {
-            const res  = uw.ITowns.towns[townId].resources();
-            const cap  = res.storage * 0.95;
-            return res.wood >= cap && res.stone >= cap && res.iron >= cap;
+            const res = uw.ITowns.towns[townId].resources();
+            const cap = res.storage * 0.90; // 90% — nao aceita como destino
+            // CORRIGIDO: || em vez de && → bloqueia se QUALQUER recurso estiver cheio
+            return res.wood >= cap || res.stone >= cap || res.iron >= cap;
         } catch (e) {
-            return true;
+            return true; // em caso de erro, assume cheio por seguranca
+        }
+    }
+
+    // FIX v2.1: Verifica se destino tem espaco minimo util em pelo menos 1 recurso
+    // Garante que nao aceitamos destinos com espaco apenas residual
+    _hasRoomForAny(townId) {
+        try {
+            const res     = uw.ITowns.towns[townId].resources();
+            const minRoom = 500; // espaco minimo util por recurso
+            return (
+                (res.storage - res.wood)  >= minRoom ||
+                (res.storage - res.stone) >= minRoom ||
+                (res.storage - res.iron)  >= minRoom
+            );
+        } catch (e) {
+            return false;
         }
     }
 
@@ -481,15 +510,22 @@ var AutoSendResources = class extends MultUtil {
     }
 
     // Lista de cidades candidatas a destino, ordenadas da MENOS desenvolvida
-    // para a mais, filtrando as que estao quase cheias (>= 95% do armazem).
+    // para a mais, filtrando as que estao quase cheias.
+    // FIX v2.1: room minimo aumentado de 150 para 500 por recurso
     _findLeastDevelopedTowns(townIds) {
         const candidates = [];
         for (const id of townIds) {
             try {
                 const town   = uw.ITowns.towns[id];
                 const res    = town.resources();
-                const room   = (res.storage - res.wood) + (res.storage - res.stone) + (res.storage - res.iron);
-                if (room < 150) continue;
+
+                // FIX v2.1: verifica espaco minimo POR RECURSO (nao soma total)
+                const roomW = res.storage - res.wood;
+                const roomS = res.storage - res.stone;
+                const roomI = res.storage - res.iron;
+                const hasUsefulRoom = roomW >= 500 || roomS >= 500 || roomI >= 500;
+
+                if (!hasUsefulRoom) continue;
                 if (this._isAlmostFull(id)) continue;
                 candidates.push({ id, score: this._getDevelopmentScore(town) });
             } catch (e) {}
@@ -500,8 +536,11 @@ var AutoSendResources = class extends MultUtil {
 
     // ─────────────────────────────────────────────────────────────
     //  ENVIO DE RECURSOS
-    //  urgent=true  → envia TODO o excedente acima de 5% (modo urgente)
+    //  urgent=true  → envia TODO o excedente acima de 10% (modo urgente)
     //  urgent=false → envia excedente acima de sendThreshold% (balancear)
+    //
+    //  FIX v2.1: margem de seguranca no destino aumentada de 5% para 10%
+    //  FIX v2.1: verifica espaco real por recurso ANTES de calcular envio
     // ─────────────────────────────────────────────────────────────
     _sendResources = async (fromId, toId, urgent) => {
         try {
@@ -513,19 +552,26 @@ var AutoSendResources = class extends MultUtil {
 
             if (cap < 100) return false;
 
+            // FIX v2.1: rejeita destino se qualquer recurso ja em >= 90%
+            if (this._isAlmostFull(toId)) {
+                this.console.log('[AutoRecursos] ✗ Destino ' + this.getTownName(toId) + ' com armazém cheio, pulando.');
+                return false;
+            }
+
             // Limite inferior para o remetente
-            const keepPct  = urgent ? 0.05 : (this.sendThreshold / 100);
+            const keepPct  = urgent ? 0.10 : (this.sendThreshold / 100);
             const keepAmt  = fromRes.storage * keepPct;
 
             const excessW = Math.max(0, Math.floor(fromRes.wood  - keepAmt));
             const excessS = Math.max(0, Math.floor(fromRes.stone - keepAmt));
             const excessI = Math.max(0, Math.floor(fromRes.iron  - keepAmt));
 
-            // Espaco livre no destino (margem de seguranca de 5%)
-            const safe  = toRes.storage * 0.05;
-            const roomW = Math.max(0, Math.floor(toRes.storage - toRes.wood  - safe));
-            const roomS = Math.max(0, Math.floor(toRes.storage - toRes.stone - safe));
-            const roomI = Math.max(0, Math.floor(toRes.storage - toRes.iron  - safe));
+            // FIX v2.1: margem de seguranca de 10% no destino (era 5%)
+            // Garante que nunca enviamos mais do que o espaco disponivel
+            const safetyPct = 0.10;
+            const roomW = Math.max(0, Math.floor(toRes.storage * (1 - safetyPct) - toRes.wood));
+            const roomS = Math.max(0, Math.floor(toRes.storage * (1 - safetyPct) - toRes.stone));
+            const roomI = Math.max(0, Math.floor(toRes.storage * (1 - safetyPct) - toRes.iron));
 
             // Distribui a capacidade de comercio igualmente entre os 3 recursos
             const perRes = Math.floor(cap / 3);
