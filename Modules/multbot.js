@@ -77,6 +77,11 @@ var MultBot = class {
                     render: this.settingsSniper,
                 },
                 {
+                    title: multT('tab_spells'),
+                    id: 'spells',
+                    render: this.settingsSpells,
+                },
+                {
                     title: multT('tab_mult'),
                     id: 'mult',
                     render: this.settingsMult,
@@ -135,7 +140,6 @@ var MultBot = class {
         let html = '';
         html += this.autoBootcamp ? this.autoBootcamp.settings() : this._missingModuleHtml('Auto Bootcamp');
         html += this.autoParty ? this.autoParty.settings() : this._missingModuleHtml('Auto Party');
-        html += this.autoSpells ? this.autoSpells.settings() : this._missingModuleHtml('Auto Spells');
         html += this.autoHide ? this.autoHide.settings() : this._missingModuleHtml('Auto Hide');
         html += this.autoMilitia ? this.autoMilitia.settings() : this._missingModuleHtml('Auto Militia');
         html += this.autoDodge ? this.autoDodge.settings() : this._missingModuleHtml('Auto Dodge');
@@ -153,6 +157,12 @@ var MultBot = class {
     settingsSniper = () => {
         let html = '';
         html += this.sniper ? this.sniper.settings() : this._missingModuleHtml('Sniper');
+        return html;
+    };
+
+    settingsSpells = () => {
+        let html = '';
+        html += this.autoSpells ? this.autoSpells.settings() : this._missingModuleHtml('Auto Spells');
         return html;
     };
 
