@@ -31,6 +31,7 @@ var MultBot = class {
         this.autoMilitia        = this._safeInit('AutoMilitia', () => new AutoMilitia(this.console, this.storage));
         this.autoDodge          = this._safeInit('AutoDodge', () => new AutoDodge(this.console, this.storage));
         this.autoAttack         = this._safeInit('AutoAttack', () => new AutoAttack(this.console, this.storage));
+        this.autoSpells          = this._safeInit('AutoSpells', () => new AutoSpells(this.console, this.storage));
         this.autoAresSacrifice  = this._safeInit('AutoAresSacrifice', () => new AutoAresSacrifice(this.console, this.storage));
         this.autoResearch       = this._safeInit('AutoResearch', () => new AutoResearch(this.console, this.storage));
         this.autoSendResources  = this._safeInit('AutoSendResources', () => new AutoSendResources(this.console, this.storage));
@@ -135,6 +136,7 @@ var MultBot = class {
         let html = '';
         html += this.autoBootcamp ? this.autoBootcamp.settings() : this._missingModuleHtml('Auto Bootcamp');
         html += this.autoParty ? this.autoParty.settings() : this._missingModuleHtml('Auto Party');
+        html += this.autoSpells ? this.autoSpells.settings() : this._missingModuleHtml('Auto Spells');
         html += this.autoHide ? this.autoHide.settings() : this._missingModuleHtml('Auto Hide');
         html += this.autoMilitia ? this.autoMilitia.settings() : this._missingModuleHtml('Auto Militia');
         html += this.autoDodge ? this.autoDodge.settings() : this._missingModuleHtml('Auto Dodge');
@@ -161,17 +163,21 @@ var MultBot = class {
         return html;
     };
 
-    /* Colonize Ships, Auto Trade e Auto Research ficam aqui, na aba
-       Mult, junto com os presets e o Auto Sacrifice.
-       FIX: settingsTrade existia mas nao tinha aba correspondente no
-       array de tabs - autoTrade estava inacessivel pela UI. Corrigido
-       movendo para settingsMult. */
+    /* Colonize Ships now renders here, inside the Mult tab,
+       alongside the presets, Auto Research and Auto Sacrifice.
+       The separate Ships tab was removed - it was the one that
+       was broken because of this._getTownName. */
     settingsMult = () => {
         let html = '';
         html += this.multTools ? this.multTools.settings() : this._missingModuleHtml('Mult Tools');
         html += this.colonizeShipSender ? this.colonizeShipSender.settings() : this._missingModuleHtml('Colonize Ship Sender');
         html += this.autoResearch ? this.autoResearch.settings() : this._missingModuleHtml('Auto Research');
         html += this.autoAresSacrifice ? this.autoAresSacrifice.settings() : this._missingModuleHtml('Auto Ares Sacrifice');
+        return html;
+    };
+
+    settingsTrade = () => {
+        let html = ``;
         html += this.autoTrade ? this.autoTrade.settings() : this._missingModuleHtml('Auto Trade');
         return html;
     };
