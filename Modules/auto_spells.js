@@ -97,8 +97,9 @@ var AutoSpells = class extends MultUtil {
         this.getTitleHtml('asp_eq_title', this.t('asp_earthquake_title'), this._toggleEq, '', this._eqActive) +
         '  <div style="padding:2px 10px 3px;font-size:11px;">' + this.t('asp_earthquake_desc') + '</div>' +
         '  <div style="padding:3px 10px;display:flex;gap:6px;align-items:center;">' +
-        '    <label style="font-size:11px;font-weight:bold;">' + this.t('asp_city_label') + '</label>' +
-        '    <select id="asp_eq_town_sel" style="flex:1;padding:3px;font-size:11px;">' + this._townOpts('eqTownId') + '</select>' +
+        '    <label style="font-size:11px;font-weight:bold;">' + this.t('asp_eq_city_label') + '</label>' +
+        '    <input id="asp_eq_town_input" type="text" placeholder="' + this.t('asp_eq_city_placeholder') + '"' +
+        '           value="' + (this.eqTownId || '') + '" style="width:110px;padding:3px 5px;font-size:12px;" />' +
         this.getButtonHtml('asp_eq_save_btn', this.t('asp_save_btn'), this._saveEqTown) +
         '  </div>' +
         '  <div id="asp_eq_status" style="padding:1px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
@@ -184,13 +185,16 @@ var AutoSpells = class extends MultUtil {
     //  Salvar cidade — cada feitiço independente
     // ═════════════════════════════════════════════════
     _saveEqTown = () => {
-        const id = (uw.$('#asp_eq_town_sel').val() || '').trim();
-        if (!id) { uw.$('#asp_eq_status').text(this.t('aas_select_city_log')).css('color', '#f87171'); return; }
+        const raw = (uw.$('#asp_eq_town_input').val() || '').trim();
+        const id  = String(parseInt(raw, 10));
+        if (!raw || isNaN(parseInt(raw, 10))) {
+            uw.$('#asp_eq_status').text(this.t('asp_city_invalid')).css('color', '#f87171');
+            return;
+        }
         this.eqTownId = id;
         this.storage.save('asp_eq_town_id', id);
-        const name = this._townName(id);
-        uw.$('#asp_eq_status').text(this.t('asp_city_saved', { name, id })).css('color', '#1a6b2a');
-        this.console.log('[AutoSpells/EQ] ' + this.t('asp_city_saved', { name, id }));
+        uw.$('#asp_eq_status').text(this.t('asp_eq_city_saved', { id })).css('color', '#1a6b2a');
+        this.console.log('[AutoSpells/EQ] ' + this.t('asp_eq_city_saved', { id }));
     };
 
     _saveHapTown = () => {
