@@ -1,88 +1,72 @@
 // ══════════════════════════════════════════════════════
-//  MODULE: AutoSpells  (v2.0 — Unified Spells Hub)
+//  MODULE: AutoSpells  (v3.0 — Per-spell city selector)
 //
-//  Reúne em uma única aba todos os feitiços automáticos:
+//  Aba exclusiva "Spells" com 4 feitiços independentes,
+//  cada um com seu próprio dropdown de cidade alvo:
 //
 //  [🌍 Auto Terremoto]
-//     Lança poseidon_earthquake na cidade-alvo a cada 1h.
+//     power_id: earthquake           — cidade própria
+//     Intervalo: 1 hora
 //
 //  [😊 Auto Felicidade]
-//     Lança zeus_divine_sign na cidade-alvo a cada 3h.
+//     power_id: happiness            — cidade própria
+//     Intervalo: 3 horas
+//     (Feitiço de HERA, não Zeus)
 //
-//  [🔥 Auto Sacrifício de Ares]  ← absorvido do AutoAresSacrifice
-//     Lança ares_sacrifice assim que houver 100 de favor
-//     E >= 50 tropas terrestres próprias na cidade escolhida.
-//     Para automaticamente ao atingir 5000 de fúria.
-//     Cada cidade tem seu próprio dropdown (ex-comportamento).
+//  [🔥 Auto Sacrifício de Ares]
+//     power_id: ares_sacrifice      — cidade própria
+//     Verifica a cada 20s; requer favor >= 100
+//     e >= 50 tropas terrestres próprias.
+//     Para automaticamente em 5000 fúria.
 //
 //  [🎪 Auto Festival da Caridade]
-//     Antes de cada Desfile (triumph), tenta lançar o
-//     Festival da Caridade (ares_carnival) na mesma cidade.
-//     Só lança se o favor de Ares for suficiente.
-//     Integrado ao fluxo do checkTriumph do AutoParty.
-//     OBS: O AutoParty continua no módulo auto_party.js;
-//     aqui apenas adicionamos a chamada de pré-desfile.
-//     power_id: "ares_carnival"
+//     power_id: charitable_festival  — todas as cidades
+//     sem triumph ativo. Verifica a cada 30s.
 //
-//  ARQUITETURA:
-//  - Terremoto e Felicidade usam cidade-alvo única (ID)
-//  - Sacrifício de Ares usa dropdown de cidade própria
-//  - Festival da Caridade atua em TODAS as cidades com
-//    desfile disponível (não requer cidade fixa)
-//  - Todos os intervals respeitam createGuardedInterval
-//  - Countdown em tempo real (HH:MM:SS) para Terremoto
-//    e Felicidade
-//  - Auto-start persistido por feitiço individualmente
+//  STORAGE KEYS (por feitiço, independentes):
+//    asp_eq_town_id      asp_eq_active
+//    asp_hap_town_id     asp_hap_active
+//    asp_ares_town_id    asp_ares_active
+//    asp_carnival_active (sem cidade fixa — percorre todas)
 // ══════════════════════════════════════════════════════
 
 var AutoSpells = class extends MultUtil {
 
     // ── Constantes ───────────────────────────────────
-    EQ_INTERVAL_MS     = 60 * 60 * 1000;      // Terremoto: 1 hora
-    HAP_INTERVAL_MS    = 3 * 60 * 60 * 1000;  // Felicidade: 3 horas
-    ARES_CHECK_MS      = 20 * 1000;            // Sacrifício: verifica a cada 20s
-    CARNIVAL_CHECK_MS  = 30 * 1000;            // Festival: verifica a cada 30s
+    EQ_INTERVAL_MS     = 60 * 60 * 1000;
+    HAP_INTERVAL_MS    = 3 * 60 * 60 * 1000;
+    ARES_CHECK_MS      = 20 * 1000;
+    CARNIVAL_CHECK_MS  = 30 * 1000;
     CLOCK_TICK_MS      = 1000;
 
-    // Ares
-    ARES_GOD_ID        = 'ares';
     ARES_FAVOR_COST    = 100;
     ARES_MAX_FURY      = 5000;
     ARES_MIN_TROOPS    = 50;
-
-    // Carnival
-    CARNIVAL_FAVOR_COST = 100;  // custo estimado — confirmar via DevTools
-    CARNIVAL_POWER_ID   = 'ares_carnival';
+    CARNIVAL_FAVOR_COST = 100;
 
     constructor(c, s) {
         super(c, s);
 
-        // ── Estado: Terremoto ────────────────────────
-        this._eqActive       = false;
-        this._eqIntervalId   = null;
-        this._nextEqTs       = null;
+        // Estado e cidade de cada feitiço
+        this._eqActive      = false;
+        this._eqIntervalId  = null;
+        this._nextEqTs      = null;
+        this.eqTownId       = this.storage.load('asp_eq_town_id', '');
 
-        // ── Estado: Felicidade ───────────────────────
-        this._hapActive      = false;
-        this._hapIntervalId  = null;
-        this._nextHapTs      = null;
+        this._hapActive     = false;
+        this._hapIntervalId = null;
+        this._nextHapTs     = null;
+        this.hapTownId      = this.storage.load('asp_hap_town_id', '');
 
-        // ── Estado: Sacrifício de Ares ───────────────
         this._aresActive     = false;
         this._aresIntervalId = null;
         this.aresTownId      = this.storage.load('asp_ares_town_id', '');
 
-        // ── Estado: Festival da Caridade ─────────────
         this._carnivalActive     = false;
         this._carnivalIntervalId = null;
 
-        // ── Cidade alvo de Terremoto / Felicidade ────
-        this.targetId = this.storage.load('asp_target_id', '');
-
-        // ── Clock de countdown ───────────────────────
         this._clockIntervalId = null;
 
-        // ── Auto-start ───────────────────────────────
         if (this.storage.load('asp_eq_active',       false)) setTimeout(() => this._startEq(),       2500);
         if (this.storage.load('asp_hap_active',      false)) setTimeout(() => this._startHap(),      2600);
         if (this.storage.load('asp_ares_active',     false)) setTimeout(() => this._startAres(),     2700);
@@ -90,7 +74,7 @@ var AutoSpells = class extends MultUtil {
     }
 
     // ═════════════════════════════════════════════════
-    //  UI — Settings Panel
+    //  UI
     // ═════════════════════════════════════════════════
     settings = () => {
         requestAnimationFrame(() => {
@@ -109,95 +93,125 @@ var AutoSpells = class extends MultUtil {
         '  <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
         '  <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
 
-        // Título principal
-        '<div class="game_header bold" style="padding:4px 10px;">' + this.t('asp_title') + '</div>' +
-
-        // ── Seção: Terremoto + Felicidade compartilham cidade alvo ──
-        '  <div style="padding:6px 10px 2px;font-weight:bold;font-size:11px;border-bottom:1px solid #c9a96e;">🎯 ' + this.t('asp_spell_target_section') + '</div>' +
-        '  <div style="padding:6px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
-        '    <span style="font-size:11px;font-weight:bold;">' + this.t('asp_city_label') + '</span>' +
-        '    <input id="asp_city_input" type="text" placeholder="' + this.t('asp_city_placeholder') + '"' +
-        '           value="' + (this.targetId || '') + '" style="width:110px;padding:3px 5px;font-size:12px;" />' +
-        this.getButtonHtml('asp_save_city_btn', this.t('asp_save_btn'), this._saveCity) +
-        '    <span id="asp_city_status" style="font-size:11px;color:#5a3a0a;"></span>' +
-        '  </div>' +
-
-        // ── Auto Terremoto ──────────────────────────────────────────
-        '  <div class="game_border" style="margin:4px 10px;padding:5px 8px;">' +
-        '    <div class="game_border_top"></div><div class="game_border_bottom"></div>' +
-        '    <div class="game_border_left"></div><div class="game_border_right"></div>' +
-        '    <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
-        '    <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
+        // ── Auto Terremoto ──
         this.getTitleHtml('asp_eq_title', this.t('asp_earthquake_title'), this._toggleEq, '', this._eqActive) +
-        '    <div style="padding:1px 6px 3px;font-size:11px;">' + this.t('asp_earthquake_desc') + '</div>' +
-        '    <div id="asp_eq_status" style="padding:0 6px 5px;font-size:11px;color:#5a3a0a;min-height:14px;"></div>' +
+        '  <div style="padding:2px 10px 3px;font-size:11px;">' + this.t('asp_earthquake_desc') + '</div>' +
+        '  <div style="padding:3px 10px;display:flex;gap:6px;align-items:center;">' +
+        '    <label style="font-size:11px;font-weight:bold;">' + this.t('asp_city_label') + '</label>' +
+        '    <select id="asp_eq_town_sel" style="flex:1;padding:3px;font-size:11px;">' + this._townOpts('eqTownId') + '</select>' +
+        this.getButtonHtml('asp_eq_save_btn', this.t('asp_save_btn'), this._saveEqTown) +
         '  </div>' +
+        '  <div id="asp_eq_status" style="padding:1px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
 
-        // ── Auto Felicidade ─────────────────────────────────────────
-        '  <div class="game_border" style="margin:4px 10px;padding:5px 8px;">' +
-        '    <div class="game_border_top"></div><div class="game_border_bottom"></div>' +
-        '    <div class="game_border_left"></div><div class="game_border_right"></div>' +
-        '    <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
-        '    <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
+        '</div>' +
+
+        '<div class="game_border" style="margin-bottom:20px;">' +
+        '  <div class="game_border_top"></div><div class="game_border_bottom"></div>' +
+        '  <div class="game_border_left"></div><div class="game_border_right"></div>' +
+        '  <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
+        '  <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
+
+        // ── Auto Felicidade ──
         this.getTitleHtml('asp_hap_title', this.t('asp_happiness_title'), this._toggleHap, '', this._hapActive) +
-        '    <div style="padding:1px 6px 3px;font-size:11px;">' + this.t('asp_happiness_desc') + '</div>' +
-        '    <div id="asp_hap_status" style="padding:0 6px 5px;font-size:11px;color:#5a3a0a;min-height:14px;"></div>' +
+        '  <div style="padding:2px 10px 3px;font-size:11px;">' + this.t('asp_happiness_desc') + '</div>' +
+        '  <div style="padding:3px 10px;display:flex;gap:6px;align-items:center;">' +
+        '    <label style="font-size:11px;font-weight:bold;">' + this.t('asp_city_label') + '</label>' +
+        '    <select id="asp_hap_town_sel" style="flex:1;padding:3px;font-size:11px;">' + this._townOpts('hapTownId') + '</select>' +
+        this.getButtonHtml('asp_hap_save_btn', this.t('asp_save_btn'), this._saveHapTown) +
         '  </div>' +
+        '  <div id="asp_hap_status" style="padding:1px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
 
-        // ── Seção: Feitiços de Ares ─────────────────────────────────
-        '  <div style="padding:6px 10px 2px;font-weight:bold;font-size:11px;border-bottom:1px solid #c9a96e;">🔥 ' + this.t('asp_ares_section') + '</div>' +
+        '</div>' +
 
-        // ── Auto Sacrifício de Ares ─────────────────────────────────
-        '  <div class="game_border" style="margin:4px 10px;padding:5px 8px;">' +
-        '    <div class="game_border_top"></div><div class="game_border_bottom"></div>' +
-        '    <div class="game_border_left"></div><div class="game_border_right"></div>' +
-        '    <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
-        '    <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
+        '<div class="game_border" style="margin-bottom:20px;">' +
+        '  <div class="game_border_top"></div><div class="game_border_bottom"></div>' +
+        '  <div class="game_border_left"></div><div class="game_border_right"></div>' +
+        '  <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
+        '  <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
+
+        // ── Auto Sacrifício de Ares ──
         this.getTitleHtml('asp_ares_title', this.t('asp_ares_title'), this._toggleAres, '', this._aresActive) +
-        '    <div style="padding:1px 6px 3px;font-size:11px;">' + this.t('asp_ares_desc', { favor: this.ARES_FAVOR_COST, troops: this.ARES_MIN_TROOPS, fury: this.ARES_MAX_FURY }) + '</div>' +
-        '    <div style="padding:3px 6px;display:flex;gap:6px;align-items:center;">' +
-        '      <label style="font-size:11px;font-weight:bold;">' + this.t('aas_city_label') + '</label>' +
-        '      <select id="asp_ares_town_select" style="flex:1;padding:3px;font-size:11px;">' + this._getAresTownOptionsHtml() + '</select>' +
-        this.getButtonHtml('asp_ares_save_btn', this.t('apply'), this._saveAresTown) +
-        '    </div>' +
-        '    <div id="asp_ares_status" style="padding:1px 6px 3px;font-size:11px;color:#5a3a0a;min-height:14px;"></div>' +
-        '    <div id="asp_ares_log"    style="padding:0 6px 5px;font-size:11px;color:#5a3a0a;min-height:14px;"></div>' +
+        '  <div style="padding:2px 10px 3px;font-size:11px;">' + this.t('asp_ares_desc', { favor: this.ARES_FAVOR_COST, troops: this.ARES_MIN_TROOPS, fury: this.ARES_MAX_FURY }) + '</div>' +
+        '  <div style="padding:3px 10px;display:flex;gap:6px;align-items:center;">' +
+        '    <label style="font-size:11px;font-weight:bold;">' + this.t('asp_city_label') + '</label>' +
+        '    <select id="asp_ares_town_sel" style="flex:1;padding:3px;font-size:11px;">' + this._townOpts('aresTownId') + '</select>' +
+        this.getButtonHtml('asp_ares_save_btn', this.t('asp_save_btn'), this._saveAresTown) +
         '  </div>' +
+        '  <div id="asp_ares_status" style="padding:1px 10px 3px;font-size:11px;color:#5a3a0a;min-height:14px;"></div>' +
+        '  <div id="asp_ares_log"    style="padding:0 10px 8px;font-size:11px;color:#5a3a0a;min-height:14px;"></div>' +
 
-        // ── Auto Festival da Caridade ───────────────────────────────
-        '  <div class="game_border" style="margin:4px 10px 10px;padding:5px 8px;">' +
-        '    <div class="game_border_top"></div><div class="game_border_bottom"></div>' +
-        '    <div class="game_border_left"></div><div class="game_border_right"></div>' +
-        '    <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
-        '    <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
+        '</div>' +
+
+        '<div class="game_border" style="margin-bottom:20px;">' +
+        '  <div class="game_border_top"></div><div class="game_border_bottom"></div>' +
+        '  <div class="game_border_left"></div><div class="game_border_right"></div>' +
+        '  <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
+        '  <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
+
+        // ── Auto Festival da Caridade ──
         this.getTitleHtml('asp_carnival_title', this.t('asp_carnival_title'), this._toggleCarnival, '', this._carnivalActive) +
-        '    <div style="padding:1px 6px 3px;font-size:11px;">' + this.t('asp_carnival_desc') + '</div>' +
-        '    <div id="asp_carnival_status" style="padding:0 6px 5px;font-size:11px;color:#5a3a0a;min-height:14px;"></div>' +
-        '  </div>' +
+        '  <div style="padding:2px 10px 3px;font-size:11px;">' + this.t('asp_carnival_desc') + '</div>' +
+        '  <div id="asp_carnival_status" style="padding:0 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>' +
 
         '</div>';
     };
 
     // ═════════════════════════════════════════════════
-    //  CIDADE ALVO: Terremoto + Felicidade
+    //  Dropdown helper — gera <option> para cidade alvo
     // ═════════════════════════════════════════════════
-    _saveCity = () => {
-        const raw = (uw.$('#asp_city_input').val() || '').trim();
-        if (!raw || isNaN(parseInt(raw, 10))) {
-            uw.$('#asp_city_status').text(this.t('asp_city_invalid')).css('color', '#f87171');
-            return;
+    _townOpts(currentFieldName) {
+        try {
+            const towns  = uw.ITowns.towns;
+            const current = this[currentFieldName];
+            const keys   = Object.keys(towns).sort((a, b) => {
+                const na = towns[a].getName ? towns[a].getName() : '';
+                const nb = towns[b].getName ? towns[b].getName() : '';
+                return na.localeCompare(nb);
+            });
+            let html = '<option value="">' + this.t('aas_select_city') + '</option>';
+            keys.forEach(id => {
+                const name = towns[id].getName ? towns[id].getName() : ('#' + id);
+                const sel  = String(id) === String(current) ? ' selected' : '';
+                html += '<option value="' + id + '"' + sel + '>' + name + ' (#' + id + ')</option>';
+            });
+            return html;
+        } catch (e) {
+            return '<option value="">' + this.t('aas_error_loading_cities') + '</option>';
         }
-        const id   = String(parseInt(raw, 10));
-        const town = uw.ITowns.towns[id];
-        if (!town) {
-            uw.$('#asp_city_status').text(this.t('asp_city_not_found', { id })).css('color', '#f87171');
-            return;
-        }
-        this.targetId = id;
-        this.storage.save('asp_target_id', id);
-        const name = town.getName ? town.getName() : ('#' + id);
-        uw.$('#asp_city_status').text(this.t('asp_city_saved', { name, id })).css('color', '#1a6b2a');
-        this.console.log('[AutoSpells] ' + this.t('asp_city_saved', { name, id }));
+    }
+
+    // ═════════════════════════════════════════════════
+    //  Salvar cidade — cada feitiço independente
+    // ═════════════════════════════════════════════════
+    _saveEqTown = () => {
+        const id = (uw.$('#asp_eq_town_sel').val() || '').trim();
+        if (!id) { uw.$('#asp_eq_status').text(this.t('aas_select_city_log')).css('color', '#f87171'); return; }
+        this.eqTownId = id;
+        this.storage.save('asp_eq_town_id', id);
+        const name = this._townName(id);
+        uw.$('#asp_eq_status').text(this.t('asp_city_saved', { name, id })).css('color', '#1a6b2a');
+        this.console.log('[AutoSpells/EQ] ' + this.t('asp_city_saved', { name, id }));
+    };
+
+    _saveHapTown = () => {
+        const id = (uw.$('#asp_hap_town_sel').val() || '').trim();
+        if (!id) { uw.$('#asp_hap_status').text(this.t('aas_select_city_log')).css('color', '#f87171'); return; }
+        this.hapTownId = id;
+        this.storage.save('asp_hap_town_id', id);
+        const name = this._townName(id);
+        uw.$('#asp_hap_status').text(this.t('asp_city_saved', { name, id })).css('color', '#1a6b2a');
+        this.console.log('[AutoSpells/HAP] ' + this.t('asp_city_saved', { name, id }));
+    };
+
+    _saveAresTown = () => {
+        const id = (uw.$('#asp_ares_town_sel').val() || '').trim();
+        if (!id) { uw.$('#asp_ares_log').text(this.t('aas_select_city_log')).css('color', '#f87171'); return; }
+        this.aresTownId = id;
+        this.storage.save('asp_ares_town_id', id);
+        const name = this._townName(id);
+        uw.$('#asp_ares_log').text(this.t('aas_city_saved_status', { name })).css('color', '#1a6b2a');
+        this.console.log('[AutoSpells/Ares] ' + this.t('aas_city_saved_log', { name, id }));
+        this._renderAresStatus();
     };
 
     // ═════════════════════════════════════════════════
@@ -207,7 +221,10 @@ var AutoSpells = class extends MultUtil {
 
     _startEq() {
         if (this._eqActive) return;
-        if (!this._validateSpellTarget()) return;
+        if (!this.eqTownId) {
+            uw.$('#asp_eq_status').text(this.t('asp_select_before_start')).css('color', '#eab308');
+            return;
+        }
         this._eqActive = true;
         this.storage.save('asp_eq_active', true);
         this._refreshBtn('asp_eq_title', true);
@@ -217,7 +234,7 @@ var AutoSpells = class extends MultUtil {
             this._castEarthquake();
             this._nextEqTs = Date.now() + this.EQ_INTERVAL_MS;
         }, this.EQ_INTERVAL_MS);
-        this.console.log('[AutoSpells] Terremoto iniciado. Alvo: ' + this._getTargetName());
+        this.console.log('[AutoSpells/EQ] Iniciado. Alvo: ' + this._townName(this.eqTownId));
         this._startClock();
     }
 
@@ -228,40 +245,42 @@ var AutoSpells = class extends MultUtil {
         this._nextEqTs = null;
         this._refreshBtn('asp_eq_title', false);
         uw.$('#asp_eq_status').text(this.t('asp_stopped_log'));
-        this.console.log('[AutoSpells] Terremoto parado.');
+        this.console.log('[AutoSpells/EQ] Parado.');
         this._maybeStopClock();
     }
 
     _castEarthquake = async () => {
         if (window.__multbot_captcha_active) return;
-        if (!this.targetId) return;
+        if (!this.eqTownId) return;
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
                 model_url: 'CastedPowers', action_name: 'cast', captcha: null,
-                arguments: { power_id: 'poseidon_earthquake', target_id: parseInt(this.targetId, 10) },
+                arguments: { power_id: 'earthquake',          target_id: parseInt(this.eqTownId, 10) },
             });
-            const name = this._getTargetName();
+            const name = this._townName(this.eqTownId);
             if (res && !res.error) {
-                this.console.log('[AutoSpells] ' + this.t('asp_earthquake_cast_log', { name }));
+                this.console.log('[AutoSpells/EQ] ' + this.t('asp_earthquake_cast_log', { name }));
             } else {
                 const reason = (res && res.error) ? res.error : this.t('asp_unknown_reason');
-                this.console.log('[AutoSpells] ' + this.t('asp_earthquake_fail_log', { reason }));
+                this.console.log('[AutoSpells/EQ] ' + this.t('asp_earthquake_fail_log', { reason }));
                 uw.$('#asp_eq_status').text(this.t('asp_earthquake_fail_log', { reason })).css('color', '#f87171');
             }
         } catch (e) {
-            const reason = this.t('asp_network_error');
-            this.console.log('[AutoSpells] ' + this.t('asp_earthquake_fail_log', { reason }));
+            this.console.log('[AutoSpells/EQ] ' + this.t('asp_earthquake_fail_log', { reason: this.t('asp_network_error') }));
         }
     };
 
     // ═════════════════════════════════════════════════
-    //  FELICIDADE
+    //  FELICIDADE (HERA — hera_divine_sign)
     // ═════════════════════════════════════════════════
     _toggleHap = () => { if (this._hapActive) this._stopHap(); else this._startHap(); };
 
     _startHap() {
         if (this._hapActive) return;
-        if (!this._validateSpellTarget()) return;
+        if (!this.hapTownId) {
+            uw.$('#asp_hap_status').text(this.t('asp_select_before_start')).css('color', '#eab308');
+            return;
+        }
         this._hapActive = true;
         this.storage.save('asp_hap_active', true);
         this._refreshBtn('asp_hap_title', true);
@@ -271,7 +290,7 @@ var AutoSpells = class extends MultUtil {
             this._castHappiness();
             this._nextHapTs = Date.now() + this.HAP_INTERVAL_MS;
         }, this.HAP_INTERVAL_MS);
-        this.console.log('[AutoSpells] Felicidade iniciada. Alvo: ' + this._getTargetName());
+        this.console.log('[AutoSpells/HAP] Iniciado. Alvo: ' + this._townName(this.hapTownId));
         this._startClock();
     }
 
@@ -282,74 +301,36 @@ var AutoSpells = class extends MultUtil {
         this._nextHapTs = null;
         this._refreshBtn('asp_hap_title', false);
         uw.$('#asp_hap_status').text(this.t('asp_stopped_log'));
-        this.console.log('[AutoSpells] Felicidade parada.');
+        this.console.log('[AutoSpells/HAP] Parado.');
         this._maybeStopClock();
     }
 
     _castHappiness = async () => {
         if (window.__multbot_captcha_active) return;
-        if (!this.targetId) return;
+        if (!this.hapTownId) return;
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
                 model_url: 'CastedPowers', action_name: 'cast', captcha: null,
-                arguments: { power_id: 'zeus_divine_sign', target_id: parseInt(this.targetId, 10) },
+                // HERA — não Zeus
+                arguments: { power_id: 'happiness',        target_id: parseInt(this.hapTownId, 10) },
             });
-            const name = this._getTargetName();
+            const name = this._townName(this.hapTownId);
             if (res && !res.error) {
-                this.console.log('[AutoSpells] ' + this.t('asp_happiness_cast_log', { name }));
+                this.console.log('[AutoSpells/HAP] ' + this.t('asp_happiness_cast_log', { name }));
             } else {
                 const reason = (res && res.error) ? res.error : this.t('asp_unknown_reason');
-                this.console.log('[AutoSpells] ' + this.t('asp_happiness_fail_log', { reason }));
+                this.console.log('[AutoSpells/HAP] ' + this.t('asp_happiness_fail_log', { reason }));
                 uw.$('#asp_hap_status').text(this.t('asp_happiness_fail_log', { reason })).css('color', '#f87171');
             }
         } catch (e) {
-            const reason = this.t('asp_network_error');
-            this.console.log('[AutoSpells] ' + this.t('asp_happiness_fail_log', { reason }));
+            this.console.log('[AutoSpells/HAP] ' + this.t('asp_happiness_fail_log', { reason: this.t('asp_network_error') }));
         }
     };
 
     // ═════════════════════════════════════════════════
     //  SACRIFÍCIO DE ARES
-    //  Migrado integralmente de AutoAresSacrifice.
-    //  Mesma lógica de favor, fúria, tropas mínimas e
-    //  exclusão de unidades especiais.
     // ═════════════════════════════════════════════════
     _toggleAres = () => { if (this._aresActive) this._stopAres(); else this._startAres(); };
-
-    _getAresTownOptionsHtml() {
-        try {
-            const towns = uw.ITowns.towns;
-            const keys  = Object.keys(towns).sort((a, b) => {
-                const na = towns[a].getName ? towns[a].getName() : '';
-                const nb = towns[b].getName ? towns[b].getName() : '';
-                return na.localeCompare(nb);
-            });
-            let html = '<option value="">' + this.t('aas_select_city') + '</option>';
-            keys.forEach(id => {
-                const name = towns[id].getName ? towns[id].getName() : ('#' + id);
-                const sel  = String(id) === String(this.aresTownId) ? ' selected' : '';
-                html += '<option value="' + id + '"' + sel + '>' + name + ' (#' + id + ')</option>';
-            });
-            return html;
-        } catch (e) {
-            return '<option value="">' + this.t('aas_error_loading_cities') + '</option>';
-        }
-    }
-
-    _saveAresTown = () => {
-        const raw = (uw.$('#asp_ares_town_select').val() || '').trim();
-        if (!raw) {
-            uw.$('#asp_ares_log').text(this.t('aas_select_city_log')).css('color', '#f87171');
-            return;
-        }
-        this.aresTownId = raw;
-        this.storage.save('asp_ares_town_id', raw);
-        const town = uw.ITowns.towns[raw];
-        const name = town && town.getName ? town.getName() : ('#' + raw);
-        uw.$('#asp_ares_log').text(this.t('aas_city_saved_status', { name })).css('color', '#1a6b2a');
-        this.console.log('[AutoSpells/Ares] ' + this.t('aas_city_saved_log', { name, id: raw }));
-        this._renderAresStatus();
-    };
 
     _startAres() {
         if (this._aresActive) return;
@@ -375,17 +356,13 @@ var AutoSpells = class extends MultUtil {
     }
 
     _isSpecialUnit(unitId) {
-        try {
-            const d = uw.GameData.units[unitId];
-            if (!d) return true;
-            return !!(d.is_naval || d.god_id);
-        } catch (e) { return true; }
+        try { const d = uw.GameData.units[unitId]; return !d || !!(d.is_naval || d.god_id); } catch (e) { return true; }
     }
 
     _getLandTroopCount(town) {
         try {
-            const units   = town.units() || {};
-            let support   = {};
+            const units = town.units() || {};
+            let support = {};
             try { support = town.unitsSupport() || {}; } catch (e) {}
             let total = 0;
             for (const unit of Object.keys(units)) {
@@ -397,7 +374,7 @@ var AutoSpells = class extends MultUtil {
     }
 
     _getAresFavor() {
-        try { return uw.ITowns.player_gods.attributes[this.ARES_GOD_ID + '_favor'] || 0; } catch (e) { return 0; }
+        try { return uw.ITowns.player_gods.attributes.ares_favor || 0; } catch (e) { return 0; }
     }
 
     _getCurrentFury() {
@@ -406,18 +383,18 @@ var AutoSpells = class extends MultUtil {
 
     _renderAresStatus() {
         try {
-            const fury      = this._getCurrentFury();
-            const favor     = this._getAresFavor();
-            const town      = this.aresTownId ? uw.ITowns.towns[this.aresTownId] : null;
-            const townName  = town && town.getName ? town.getName()
-                            : (this.aresTownId ? '#' + this.aresTownId + ' (' + this.t('aas_not_found') + ')'
-                                               : this.t('aas_none_selected'));
-            const troops    = town ? this._getLandTroopCount(town) : 0;
-            const color     = troops >= this.ARES_MIN_TROOPS ? '#1a6b2a' : '#8a2a2a';
+            const fury     = this._getCurrentFury();
+            const favor    = this._getAresFavor();
+            const town     = this.aresTownId ? uw.ITowns.towns[this.aresTownId] : null;
+            const townName = town && town.getName ? town.getName()
+                           : (this.aresTownId ? '#' + this.aresTownId + ' (' + this.t('aas_not_found') + ')'
+                                              : this.t('aas_none_selected'));
+            const troops   = town ? this._getLandTroopCount(town) : 0;
+            const color    = troops >= this.ARES_MIN_TROOPS ? '#1a6b2a' : '#8a2a2a';
             uw.$('#asp_ares_status').html(
-                this.t('aas_current_fury', { fury, max: this.ARES_MAX_FURY }) +
-                this.t('aas_favor_account', { god: 'Ares', favor }) +
-                this.t('aas_city_status',   { name: townName }) +
+                this.t('aas_current_fury',    { fury, max: this.ARES_MAX_FURY }) +
+                this.t('aas_favor_account',   { god: 'Ares', favor }) +
+                this.t('aas_city_status',     { name: townName }) +
                 this.t('aas_own_land_troops', { color, count: troops, min: this.ARES_MIN_TROOPS })
             );
         } catch (e) {}
@@ -435,12 +412,12 @@ var AutoSpells = class extends MultUtil {
                 return;
             }
             const town = uw.ITowns.towns[this.aresTownId];
-            if (!town) { this.console.log('[AutoSpells/Ares] ' + this.t('aas_city_not_found_log', { id: this.aresTownId })); return; }
+            if (!town) return;
             const favor = this._getAresFavor();
             this._renderAresStatus();
             if (favor < this.ARES_FAVOR_COST) return;
             const troops   = this._getLandTroopCount(town);
-            const townName = town.getName ? town.getName() : ('#' + this.aresTownId);
+            const townName = this._townName(this.aresTownId);
             if (troops < this.ARES_MIN_TROOPS) {
                 this.console.log('[AutoSpells/Ares] ' + this.t('aas_waiting_reinforcement_log', { town: townName, count: troops, min: this.ARES_MIN_TROOPS }));
                 return;
@@ -467,21 +444,7 @@ var AutoSpells = class extends MultUtil {
     }
 
     // ═════════════════════════════════════════════════
-    //  FESTIVAL DA CARIDADE (ares_carnival)
-    //  Percorre TODAS as cidades com Desfile (triumph)
-    //  disponível. Para cada uma, tenta lançar o Festival
-    //  da Caridade antes — se o favor de Ares for
-    //  suficiente. O jogo recusa silenciosamente se o
-    //  feitiço já estiver ativo na cidade (nenhum dano).
-    //
-    //  FLUXO:
-    //  1. Lista cidades onde triumph está disponível
-    //     (cidades sem triumph ativo no momento)
-    //  2. Para cada uma, checa favor de Ares >= custo
-    //  3. Lança ares_carnival nessa cidade
-    //  4. Aguarda 800ms entre cada envio (anti-spam)
-    //  5. Não lança o triumph aqui — o AutoParty cuida
-    //     disso no próprio módulo
+    //  FESTIVAL DA CARIDADE
     // ═════════════════════════════════════════════════
     _toggleCarnival = () => { if (this._carnivalActive) this._stopCarnival(); else this._startCarnival(); };
 
@@ -509,58 +472,37 @@ var AutoSpells = class extends MultUtil {
         try {
             const favor = this._getAresFavor();
             if (favor < this.CARNIVAL_FAVOR_COST) {
-                uw.$('#asp_carnival_status').text(
-                    this.t('asp_carnival_low_favor', { favor, cost: this.CARNIVAL_FAVOR_COST })
-                ).css('color', '#eab308');
+                uw.$('#asp_carnival_status').text(this.t('asp_carnival_low_favor', { favor, cost: this.CARNIVAL_FAVOR_COST })).css('color', '#eab308');
                 return;
             }
-
-            // Cidades que JÁ têm triumph ativo (não precisam de carnival agora)
             const activeTriumphs = this._getActiveCelebrationTowns('triumph');
-
-            // Todas as cidades do jogador que NÃO têm triumph ativo
-            // são candidatas a receber o carnival pré-desfile
-            const candidateTowns = Object.keys(uw.ITowns.towns)
-                .filter(id => !activeTriumphs.includes(parseInt(id, 10)));
-
-            if (candidateTowns.length === 0) {
+            const candidates = Object.keys(uw.ITowns.towns).filter(id => !activeTriumphs.includes(parseInt(id, 10)));
+            if (!candidates.length) {
                 uw.$('#asp_carnival_status').text(this.t('asp_carnival_all_have_triumph')).css('color', '#5a3a0a');
                 return;
             }
-
             let castCount = 0;
-            let availFavor = favor;
-
-            for (const townId of candidateTowns) {
-                if (availFavor < this.CARNIVAL_FAVOR_COST) break;
+            let avail = favor;
+            for (const townId of candidates) {
+                if (avail < this.CARNIVAL_FAVOR_COST) break;
                 const ok = await this._castCarnival(townId);
-                if (ok) {
-                    castCount++;
-                    availFavor -= this.CARNIVAL_FAVOR_COST;
-                    await this.sleep(800); // pausa anti-spam entre cidades
-                }
+                if (ok) { castCount++; avail -= this.CARNIVAL_FAVOR_COST; await this.sleep(800); }
             }
-
-            if (castCount > 0) {
-                const msg = this.t('asp_carnival_cast_log', { count: castCount });
-                this.console.log('[AutoSpells/Carnival] ' + msg);
-                uw.$('#asp_carnival_status').text(msg).css('color', '#1a6b2a');
-            } else {
-                uw.$('#asp_carnival_status').text(this.t('asp_carnival_none_cast')).css('color', '#5a3a0a');
-            }
+            const msg = castCount > 0
+                ? this.t('asp_carnival_cast_log', { count: castCount })
+                : this.t('asp_carnival_none_cast');
+            uw.$('#asp_carnival_status').text(msg).css('color', castCount > 0 ? '#1a6b2a' : '#5a3a0a');
+            if (castCount > 0) this.console.log('[AutoSpells/Carnival] ' + msg);
         } catch (e) {
             this.console.log('[AutoSpells/Carnival] Erro: ' + (e && e.message ? e.message : e));
         }
     }
 
-    // Retorna lista de town_id (número) com celebration_type ativo
     _getActiveCelebrationTowns(type) {
         try {
             const models = uw.MM.getModels().Celebration;
             if (!models) return [];
-            return Object.values(models)
-                .filter(m => m.attributes.celebration_type === type)
-                .map(m => m.attributes.town_id);
+            return Object.values(models).filter(m => m.attributes.celebration_type === type).map(m => m.attributes.town_id);
         } catch (e) { return []; }
     }
 
@@ -568,9 +510,8 @@ var AutoSpells = class extends MultUtil {
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
                 model_url: 'CastedPowers', action_name: 'cast', captcha: null,
-                arguments: { power_id: this.CARNIVAL_POWER_ID, target_id: parseInt(townId, 10) },
+                arguments: { power_id: 'charitable_festival', target_id: parseInt(townId, 10) },
             });
-            // Sucesso: sem erro. Jogo retorna erro se já ativo — ignoramos.
             return !!(res && !res.error);
         } catch (e) { return false; }
     };
@@ -601,9 +542,8 @@ var AutoSpells = class extends MultUtil {
     }
 
     // ═════════════════════════════════════════════════
-    //  HELPERS COMPARTILHADOS
+    //  HELPERS
     // ═════════════════════════════════════════════════
-
     _refreshBtn(id, active) {
         uw.$('#' + id).css('filter', active ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
@@ -617,18 +557,7 @@ var AutoSpells = class extends MultUtil {
                String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
     }
 
-    _getTargetName() {
-        try {
-            const t = uw.ITowns.towns[this.targetId];
-            return t && t.getName ? t.getName() : ('#' + this.targetId);
-        } catch (e) { return '#' + this.targetId; }
-    }
-
-    _validateSpellTarget() {
-        if (!this.targetId) {
-            uw.$('#asp_city_status').text(this.t('asp_select_before_start')).css('color', '#eab308');
-            return false;
-        }
-        return true;
+    _townName(id) {
+        try { const t = uw.ITowns.towns[id]; return t && t.getName ? t.getName() : ('#' + id); } catch (e) { return '#' + id; }
     }
 };
