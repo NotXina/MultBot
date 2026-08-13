@@ -1,20 +1,14 @@
 // ══════════════════════════════════════════════════════
-//  MODULE: DiscordAlert
-//  Avisa via webhook do Discord assim que um ataque a caminho e
-//  detectado - sem repetir aviso pro mesmo ataque.
+//  MODULE: DiscordAlert  v2.0  (Instant + Guardian)
 //
-//  Deteccao de ataque via EVENTO BACKBONE (add no
-//  MovementsUnits) - reage instantaneamente quando o jogo
-//  adiciona um novo movimento ao cache, sem esperar o proximo
-//  poll periodico. O poll de 15s continua rodando so como
-//  rede de seguranca (ex: ataques que ja existiam ao ativar
-//  o modulo, ou em caso de perda de evento).
+//  DETECCAO IMEDIATA: listener Backbone no MovementsUnits.on('add')
+//  dispara no mesmo instante que o jogo recebe o ataque via websocket/poll.
 //
-//  Webhook do Discord: POST direto pra URL configurada (fora do
-//  jogo, chamada via fetch() do navegador, nao via uw.gpAjax -
-//  webhooks do Discord sao feitos pra aceitar chamada direta de
-//  qualquer pagina, documentado publicamente pela propria API
-//  do Discord).
+//  GUARDIAN PERSISTENTE: interval de 15s como fallback de seguranca
+//  (cobre reconexao de pagina, ataques que ja existiam ao ativar, etc).
+//
+//  Webhook: POST direto via fetch() - webhooks do Discord aceitam
+//  chamada direta de qualquer pagina (API publica do Discord).
 // ══════════════════════════════════════════════════════
 var DiscordAlert = class extends MultUtil {
     constructor(c, s) {
@@ -23,7 +17,7 @@ var DiscordAlert = class extends MultUtil {
         this._webhookUrl = this.storage.load('discord_alert_webhook', '');
         this._notifiedIds = new Set();
         this._intervalId = null;
-        this._boundOnAdd = null; // referencia da funcao vinculada ao evento backbone
+        this._boundOnAdd = null; // referencia ao listener para poder remover
 
         if (this._active) {
             setTimeout(() => this.start(), 2500);
@@ -33,24 +27,21 @@ var DiscordAlert = class extends MultUtil {
     settings = () => {
         requestAnimationFrame(() => this._updateTitle());
 
-        return `
-        <div class="game_border" style="margin-bottom:20px;">
-            <div class="game_border_top"></div><div class="game_border_bottom"></div>
-            <div class="game_border_left"></div><div class="game_border_right"></div>
-            <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
-            <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            ${this.getTitleHtml('discord_alert_title', this.t('da_title'), this.toggle, '', this._active)}
-            <div style="padding:5px 10px;font-weight:bold;">
-                ${this.t('da_desc')}
-            </div>
-            <div style="padding:4px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                <label style="font-size:11px;font-weight:bold;">${this.t('da_webhook_label')}</label>
-                <input type="text" id="da_webhook_input" value="${this._webhookUrl}" placeholder="https://discord.com/api/webhooks/..." style="flex:1;min-width:220px;padding:3px 5px;" />
-                ${this.getButtonHtml('da_save_btn', this.t('apply'), this.saveWebhook)}
-                ${this.getButtonHtml('da_test_btn', this.t('da_test_btn'), this.testWebhook)}
-            </div>
-            <div id="da_status" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;"></div>
-        </div>`;
+        return '<div class="game_border" style="margin-bottom:20px;">' +
+            '<div class="game_border_top"></div><div class="game_border_bottom"></div>' +
+            '<div class="game_border_left"></div><div class="game_border_right"></div>' +
+            '<div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>' +
+            '<div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>' +
+            this.getTitleHtml('discord_alert_title', this.t('da_title'), this.toggle, '', this._active) +
+            '<div style="padding:5px 10px;font-weight:bold;">' + this.t('da_desc') + '</div>' +
+            '<div style="padding:4px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">' +
+                '<label style="font-size:11px;font-weight:bold;">' + this.t('da_webhook_label') + '</label>' +
+                '<input type="text" id="da_webhook_input" value="' + this._webhookUrl + '" placeholder="https://discord.com/api/webhooks/..." style="flex:1;min-width:220px;padding:3px 5px;" />' +
+                this.getButtonHtml('da_save_btn', this.t('apply'), this.saveWebhook) +
+                this.getButtonHtml('da_test_btn', this.t('da_test_btn'), this.testWebhook) +
+            '</div>' +
+            '<div id="da_status" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;"></div>' +
+        '</div>';
     };
 
     saveWebhook = () => {
@@ -106,14 +97,18 @@ var DiscordAlert = class extends MultUtil {
         this._active = true;
         this.storage.save('discord_alert_active', true);
         this._updateTitle();
-        this.console.log('[DiscordAlert] ' + this.t('da_started_log'));
+        this.console.log('[DiscordAlert] ' + this.t('ar_started'));
 
-        // Escuta eventos instantaneos do backbone: qualquer novo
-        // movimento adicionado ao cache e verificado na hora.
-        this._hookBackbone();
+        // ── 1) LISTENER IMEDIATO ─────────────────────────────────
+        // Registra no evento Backbone 'add' da colecao MovementsUnits.
+        // Dispara no exato momento que o jogo insere um novo movimento
+        // na colecao (via websocket ou primeiro poll).
+        this._attachInstantListener();
 
-        // Poll de seguranca: pega ataques ja existentes ao ativar,
-        // e cobre qualquer evento perdido (ex: recarregamento de pagina).
+        // ── 2) GUARDIAN PERSISTENTE (fallback) ──────────────────
+        // Varre todos os ataques existentes agora (ataques que ja
+        // estavam ativos quando o modulo foi ligado) e continua
+        // verificando a cada 15s (reconexao de pagina, etc).
         this._tick();
         this._intervalId = this.createGuardedInterval(() => this._tick(), 15000);
     }
@@ -121,93 +116,77 @@ var DiscordAlert = class extends MultUtil {
     stop() {
         this._active = false;
         this.storage.save('discord_alert_active', false);
+        this._detachInstantListener();
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
-        this._unhookBackbone();
         this._updateTitle();
-        this.console.log('[DiscordAlert] ' + this.t('da_stopped_log'));
+        this.console.log('[DiscordAlert] ' + this.t('ar_stopped_log'));
     }
 
-    // ─────────────────────────────────────────────────────────────
-    //  EVENTO BACKBONE — deteccao instantanea
-    // ─────────────────────────────────────────────────────────────
-
-    /* Vincula ao evento "add" da colecao Backbone MovementsUnits.
-       O jogo adiciona cada novo movimento (ataque, apoio, etc) a
-       essa colecao assim que o servidor confirma — por isso e
-       instantaneo em vez de depender de um poll de N segundos.
-       A colecao pode ainda nao estar populada na hora do start()
-       (ex: pagina acabou de carregar) — tenta a cada 500ms ate
-       achar, com timeout de 10s pra nao ficar rodando pra sempre
-       caso o jogo nao tenha essa colecao disponivel. */
-    _hookBackbone() {
-        this._unhookBackbone(); // garante que nao duplica se chamado duas vezes
-
-        const MAX_WAIT_MS = 10000;
-        const RETRY_MS = 500;
-        const start = Date.now();
-
-        const tryHook = () => {
-            try {
-                const collection = uw.MM.getOnlyCollectionByName('MovementsUnits');
-                if (!collection) {
-                    if (Date.now() - start < MAX_WAIT_MS) {
-                        setTimeout(tryHook, RETRY_MS);
-                    } else {
-                        this.console.log('[DiscordAlert] MovementsUnits collection nao encontrada - so o poll periodico ativo.');
-                    }
-                    return;
-                }
-
-                // Arrow function pra manter "this" da classe; guardada
-                // em _boundOnAdd pra poder remover depois com .off()
-                this._boundOnAdd = (model) => {
-                    try {
-                        const mv = model?.attributes;
-                        if (!mv) return;
-                        const isAttack = mv.type === 'attack' || mv.type === 'attack_with_spy';
-                        const isOurTown = uw.ITowns && uw.ITowns.towns && uw.ITowns.towns[mv.target_town_id];
-                        if (isAttack && isOurTown) {
-                            const id = String(mv.id);
-                            if (!this._notifiedIds.has(id)) {
-                                this._sendAlert(mv).then(sent => {
-                                    if (sent) this._notifiedIds.add(id);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        this.console.log('[DiscordAlert] backbone onAdd error: ' + (e?.message ?? e));
-                    }
-                };
-
-                collection.on('add', this._boundOnAdd);
-                this.console.log('[DiscordAlert] Backbone hook ativo — alertas instantaneos.');
-                this._collection = collection; // guarda referencia pra poder fazer .off() depois
-            } catch (e) {
-                this.console.log('[DiscordAlert] _hookBackbone error: ' + (e?.message ?? e));
-            }
-        };
-
-        tryHook();
-    }
-
-    /* Remove o listener do backbone ao parar o modulo. */
-    _unhookBackbone() {
+    // ── LISTENER BACKBONE ────────────────────────────────────────────
+    // MovementsUnits e uma colecao Backbone - o evento 'add' e emitido
+    // toda vez que um novo modelo e adicionado (novo ataque/apoio
+    // chegando do servidor). Usamos isso para deteccao instantanea.
+    _attachInstantListener() {
         try {
-            if (this._collection && this._boundOnAdd) {
-                this._collection.off('add', this._boundOnAdd);
+            const collection = uw.MM.getModels().MovementsUnits;
+            if (!collection || typeof collection.on !== 'function') {
+                this.console.log('[DiscordAlert] MovementsUnits nao e colecao Backbone - apenas guardian ativo.');
+                return;
             }
-        } catch (e) {}
-        this._collection = null;
+
+            // Guarda referencia para poder remover depois (off precisa da mesma funcao)
+            this._boundOnAdd = (model) => {
+                try {
+                    const mv = model && model.attributes ? model.attributes : model;
+                    if (!mv) return;
+                    const isAttack = mv.type === 'attack' || mv.type === 'attack_with_spy';
+                    const targetExists = uw.ITowns && uw.ITowns.towns && uw.ITowns.towns[mv.target_town_id];
+                    if (!isAttack || !targetExists) return;
+
+                    const id = String(mv.id);
+                    if (this._notifiedIds.has(id)) return;
+
+                    this.console.log('[DiscordAlert] ⚡ Ataque detectado INSTANTANEAMENTE (id=' + id + ')');
+                    // Envia o alerta de forma assincrona - nao bloqueia o evento Backbone
+                    this._sendAlert(mv).then((sent) => {
+                        if (sent) this._notifiedIds.add(id);
+                    }).catch((e) => {
+                        this.console.log('[DiscordAlert] Erro no listener instantaneo: ' + (e?.message ?? e));
+                    });
+                } catch (e) {
+                    this.console.log('[DiscordAlert] Erro no callback do listener: ' + (e?.message ?? e));
+                }
+            };
+
+            collection.on('add', this._boundOnAdd);
+            this.console.log('[DiscordAlert] ⚡ Listener instantaneo registrado em MovementsUnits.');
+        } catch (e) {
+            this.console.log('[DiscordAlert] Nao foi possivel registrar listener instantaneo: ' + (e?.message ?? e));
+        }
+    }
+
+    _detachInstantListener() {
+        try {
+            if (!this._boundOnAdd) return;
+            const collection = uw.MM.getModels().MovementsUnits;
+            if (collection && typeof collection.off === 'function') {
+                collection.off('add', this._boundOnAdd);
+                this.console.log('[DiscordAlert] Listener instantaneo removido.');
+            }
+        } catch (e) {
+            // silencioso - nao critico ao parar
+        }
         this._boundOnAdd = null;
     }
 
+    // ── UPDATETITLE ──────────────────────────────────────────────────
     _updateTitle() {
         uw.$('#discord_alert_title').css('filter', this._active
             ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
 
-    /* Mesma logica de deteccao ja confirmada e em producao no
-       auto_dodge.js - usada pelo poll periodico de seguranca. */
+    // ── DETECCAO (poll) ───────────────────────────────────────────────
+    // Mesma logica confirmada em producao no auto_dodge.js.
     _getIncomingAttacks() {
         try {
             const models = uw.MM.getModels().MovementsUnits;
@@ -229,6 +208,7 @@ var DiscordAlert = class extends MultUtil {
         }
     }
 
+    // ── TICK (guardian 15s) ───────────────────────────────────────────
     async _tick() {
         if (!this._webhookUrl) return;
 
@@ -236,7 +216,7 @@ var DiscordAlert = class extends MultUtil {
             const attacks = this._getIncomingAttacks();
             const currentIds = new Set(attacks.map(a => String(a.id)));
 
-            // Limpa notificacoes de ataques que ja sumiram da lista
+            // Limpa ids de ataques que ja passaram/foram cancelados
             for (const id of this._notifiedIds) {
                 if (!currentIds.has(id)) this._notifiedIds.delete(id);
             }
@@ -244,6 +224,7 @@ var DiscordAlert = class extends MultUtil {
             for (const atk of attacks) {
                 const id = String(atk.id);
                 if (this._notifiedIds.has(id)) continue;
+                // Marca DEPOIS de confirmar entrega do webhook
                 const sent = await this._sendAlert(atk);
                 if (sent) this._notifiedIds.add(id);
             }
@@ -252,6 +233,7 @@ var DiscordAlert = class extends MultUtil {
         }
     }
 
+    // ── UTILITARIOS ───────────────────────────────────────────────────
     _formatDuration(totalSeconds) {
         const s = Math.max(0, totalSeconds);
         const h = Math.floor(s / 3600);
@@ -260,12 +242,7 @@ var DiscordAlert = class extends MultUtil {
         return [h, m, sec].map(n => String(n).padStart(2, '0')).join(':');
     }
 
-    /* Confirmado via captura real: town_info/info (GET) na cidade
-       de ORIGEM do ataque devolve um HTML que contem
-       data-player_name="NomeDoJogador" - extrai isso via regex.
-       FIX: o objeto que ajaxGetWithTimeout resolve ja vem
-       desembrulhado pelo proprio jogo como {menu, html} - o html
-       fica DIRETO em res.html, nao em res.plain.html. */
+    // Confirmado via captura real: data-player_name no HTML de town_info/info
     async _resolveAttackerName(homeTownId) {
         try {
             const activeTownId = uw.ITowns.getCurrentTown().id;
@@ -297,6 +274,7 @@ var DiscordAlert = class extends MultUtil {
         }
     }
 
+    // ── ENVIO DO ALERTA ───────────────────────────────────────────────
     async _sendAlert(atk) {
         try {
             const townName = this.getTownName(atk.target_town_id);
@@ -307,6 +285,8 @@ var DiscordAlert = class extends MultUtil {
             if (!arrival) return false;
 
             const arrivalDate = new Date(arrival * 1000);
+            const now = Math.floor(Date.now() / 1000);
+            const remaining = arrival - now;
             const isSpy = atk.type === 'attack_with_spy';
 
             const embed = {
@@ -314,15 +294,16 @@ var DiscordAlert = class extends MultUtil {
                 title: '🚨 ' + this.t('da_alert_title'),
                 color: 15158332,
                 fields: [
-                    { name: '⚔️ ' + this.t('da_field_enemy'), value: '\u200b', inline: false },
-                    { name: this.t('da_field_player'), value: attackerName || this.t('da_unknown'), inline: true },
-                    { name: this.t('da_field_city'), value: originName || this.t('da_unknown'), inline: true },
+                    { name: '⚔️ ' + this.t('da_field_enemy'),    value: '\u200b', inline: false },
+                    { name: this.t('da_field_player'),            value: attackerName || this.t('da_unknown'), inline: true },
+                    { name: this.t('da_field_city'),              value: originName  || this.t('da_unknown'), inline: true },
                     { name: '🛡️ ' + this.t('da_field_defender'), value: '\u200b', inline: false },
-                    { name: this.t('da_field_player'), value: defenderName, inline: true },
-                    { name: this.t('da_field_city'), value: townName, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: false },
-                    { name: '⚔️ ' + this.t('da_field_type'), value: isSpy ? this.t('da_type_spy') : this.t('da_type_normal'), inline: true },
-                    { name: '⏰ ' + this.t('da_field_arrival'), value: arrivalDate.toLocaleString(), inline: true },
+                    { name: this.t('da_field_player'),            value: defenderName, inline: true },
+                    { name: this.t('da_field_city'),              value: townName,     inline: true },
+                    { name: '\u200b',                             value: '\u200b', inline: false },
+                    { name: '⚔️ ' + this.t('da_field_type'),     value: isSpy ? this.t('da_type_spy') : this.t('da_type_normal'), inline: true },
+                    { name: '⏰ ' + this.t('da_field_arrival'),  value: arrivalDate.toLocaleString(), inline: true },
+                    { name: '⏳ ' + this.t('da_field_remaining'), value: this._formatDuration(remaining), inline: true },
                 ],
                 footer: { text: this.t('da_brand_footer') },
                 timestamp: new Date().toISOString(),
