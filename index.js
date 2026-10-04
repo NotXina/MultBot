@@ -2,7 +2,7 @@
 // @name         MultBot
 // @author       NotXina
 // @description  Automação modular para Grepolis: construção, recrutamento, ataque, defesa, farm e mais.
-// @version      1.8.1
+// @version      1.9.0
 // @match        http://*.grepolis.com/game/*
 // @match        https://*.grepolis.com/game/*
 // @grant        none
@@ -38,6 +38,7 @@
 
     const BASE_URL = 'https://raw.githubusercontent.com/NotXina/MultBot/main/Modules';
     const MAX_RETRIES = 2;
+    const TOTAL_ATTEMPTS = MAX_RETRIES + 1;
     const FETCH_TIMEOUT_MS = 15000;
 
     const MODULES = [
@@ -69,9 +70,19 @@
     ];
 
     const codes = new Array(MODULES.length).fill(null);
+    const failedModules = new Set();
     let completed = 0;
 
     function injectAll() {
+        // Sem a infraestrutura ou o bootstrap final, um bundle parcial
+        // nunca conseguiria iniciar. Nesse caso é melhor falhar com uma
+        // mensagem clara do que criar um interval que lança erros sem parar.
+        const missingCritical = ['core.js', 'multbot.js'].filter(mod => failedModules.has(mod));
+        if (missingCritical.length > 0) {
+            console.error(`[MultBot] ✗ Inicialização cancelada: módulo(s) essencial(is) indisponível(is): ${missingCritical.join(', ')}.`);
+            console.error('[MultBot] Verifique a conexão e recarregue a página.');
+            return;
+        }
         /* Segunda trava, agora bem na hora de injetar de fato no DOM
            real da pagina - mesmo que o guard la em cima (uw.__multbot_index_running__)
            tenha falhado por algum motivo (ex: sandbox reiniciado sem
@@ -117,7 +128,10 @@
         try {
             const runBundle = new Function(fullCode);
             runBundle();
-            console.log('[MultBot] ✓ Todos os módulos injetados! (index.js v1.8.0)');
+            const suffix = failedModules.size > 0
+                ? ` (${failedModules.size} módulo(s) opcional(is) indisponível(is))`
+                : '';
+            console.log(`[MultBot] ✓ Bundle injetado! (index.js v1.9.0)${suffix}`);
         } catch (e) {
             /* Se AINDA ASSIM colidir (ex: essa PRIMEIRA tentativa real
                esbarrando em lixo de uma sessao anterior preservada pelo
@@ -145,7 +159,6 @@
                 cache: 'no-store',
                 signal: controller.signal,
             });
-            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 retryOrFail(index, attempt, `HTTP ${response.status}`);
@@ -153,14 +166,20 @@
             }
 
             const text = await response.text();
+            if (!text.trim()) {
+                retryOrFail(index, attempt, 'Resposta vazia');
+                return;
+            }
+
             codes[index] = text;
             console.log(`[MultBot] ✓ baixado: ${mod}`);
             completed++;
             if (completed === MODULES.length) injectAll();
         } catch (err) {
-            clearTimeout(timeoutId);
             const reason = err?.name === 'AbortError' ? 'Timeout' : (err?.message ?? 'Falha de rede');
             retryOrFail(index, attempt, reason);
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
@@ -168,23 +187,35 @@
         const mod = MODULES[index];
         if (attempt < MAX_RETRIES) {
             const nextAttempt = attempt + 1;
-            console.warn(`[MultBot] ⚠ ${reason} ao baixar ${mod} — tentativa ${nextAttempt}/${MAX_RETRIES}`);
+            console.warn(`[MultBot] ⚠ ${reason} ao baixar ${mod} — próxima tentativa ${nextAttempt + 1}/${TOTAL_ATTEMPTS}`);
             setTimeout(() => fetchModule(index, nextAttempt), 800 * nextAttempt);
         } else {
-            codes[index] = `console.error('[MultBot] Falha definitiva ao carregar ${mod} após ${MAX_RETRIES} tentativas (${reason})');`;
-            console.error(`[MultBot] ✗ Desistindo de ${mod} após ${MAX_RETRIES} tentativas: ${reason}`);
+            failedModules.add(mod);
+            const message = `[MultBot] Falha definitiva ao carregar ${mod} após ${TOTAL_ATTEMPTS} tentativas (${reason})`;
+            codes[index] = `console.error(${JSON.stringify(message)});`;
+            console.error(`[MultBot] ✗ Desistindo de ${mod} após ${TOTAL_ATTEMPTS} tentativas: ${reason}`);
             completed++;
             if (completed === MODULES.length) injectAll();
         }
     }
 
+    const gameWaitStartedAt = Date.now();
+    const GAME_WAIT_TIMEOUT_MS = 2 * 60 * 1000;
+
     function waitForGame() {
-        if (typeof Game !== 'undefined' && Game.player_id) {
+        if (uw.Game && uw.Game.player_id) {
             console.log('[MultBot] Game detectado, baixando módulos...');
             MODULES.forEach((_, i) => fetchModule(i));
-        } else {
-            setTimeout(waitForGame, 500);
+            return;
         }
+
+        if (Date.now() - gameWaitStartedAt >= GAME_WAIT_TIMEOUT_MS) {
+            console.error('[MultBot] ✗ O jogo não ficou pronto em 2 minutos. Recarregue a página para tentar novamente.');
+            uw.__multbot_index_running__ = false;
+            return;
+        }
+
+        setTimeout(waitForGame, 500);
     }
 
     waitForGame();

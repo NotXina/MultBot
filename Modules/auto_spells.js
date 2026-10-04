@@ -168,7 +168,7 @@ var AutoSpells = class extends MultUtil {
             keys.forEach(id => {
                 const name = towns[id].getName ? towns[id].getName() : ('#' + id);
                 const sel  = String(id) === String(current) ? ' selected' : '';
-                html += '<option value="' + id + '"' + sel + '>' + name + ' (#' + id + ')</option>';
+                html += '<option value="' + this.escapeHtml(id) + '"' + sel + '>' + this.escapeHtml(name) + ' (#' + this.escapeHtml(id) + ')</option>';
             });
             return html;
         } catch (e) {
@@ -250,7 +250,7 @@ var AutoSpells = class extends MultUtil {
     }
 
     _castEarthquake = async () => {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         if (!this.eqTownId) return;
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
@@ -306,7 +306,7 @@ var AutoSpells = class extends MultUtil {
     }
 
     _castHappiness = async () => {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         if (!this.hapTownId) return;
         try {
             const res = await this.ajaxPostWithTimeout('frontend_bridge', 'execute', {
@@ -394,14 +394,14 @@ var AutoSpells = class extends MultUtil {
             uw.$('#asp_ares_status').html(
                 this.t('aas_current_fury',    { fury, max: this.ARES_MAX_FURY }) +
                 this.t('aas_favor_account',   { god: 'Ares', favor }) +
-                this.t('aas_city_status',     { name: townName }) +
+                this.t('aas_city_status',     { name: this.escapeHtml(townName) }) +
                 this.t('aas_own_land_troops', { color, count: troops, min: this.ARES_MIN_TROOPS })
             );
         } catch (e) {}
     }
 
     async _tickAres() {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         if (!this.aresTownId) return;
         try {
             const fury = this._getCurrentFury();
@@ -469,7 +469,7 @@ var AutoSpells = class extends MultUtil {
     }
 
     async _tickCarnival() {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         try {
             const activeTriumphs = this._getActiveCelebrationTowns('triumph');
             const candidates = Object.keys(uw.ITowns.towns).filter(id => !activeTriumphs.includes(parseInt(id, 10)));

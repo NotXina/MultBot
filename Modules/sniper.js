@@ -312,7 +312,7 @@ var Sniper = class extends MultUtil {
                 html += '<td style="padding:2px 4px;">';
                 html += '<a href="#" onclick="window.multBot.sniper._goToTown(' + townId + ');return false;" ';
                 html += 'style="color:#5a3a0a;font-weight:bold;text-decoration:underline;cursor:pointer;">';
-                html += entry.town.getName();
+                html += this.escapeHtml(entry.town.getName());
                 html += '</a></td>';
                 html += '<td style="padding:2px 4px;text-align:center;color:#3a2a0a;">' + this._formatTravelTime(entry.travelFarol) + '</td>';
                 html += '<td style="padding:2px 4px;text-align:center;color:#3a2a0a;">' + this._formatTravelTime(entry.travelBireme) + '</td>';
@@ -576,6 +576,9 @@ var Sniper = class extends MultUtil {
     async _fireIfPending(id) {
         const snipe = this._scheduled.find(s => s.id === id);
         if (!snipe || snipe.status !== 'pending') return;
+        // Mantém o agendamento pendente durante um desafio anti-bot; o
+        // checker tenta novamente após o usuário liberar a página.
+        if (uw.__multbot_captcha_active) return;
 
         snipe.status = 'firing';
 
@@ -818,7 +821,8 @@ var Sniper = class extends MultUtil {
             };
 
             const rows = sorted.map(s => {
-                const compSummary = Object.entries(s.composition || {}).map(([u, n]) => `${n}x ${this.getGameName('unit', u)}`).join(', ');
+                const compSummary = this.escapeHtml(Object.entries(s.composition || {}).map(([u, n]) => `${n}x ${this.getGameName('unit', u)}`).join(', '));
+                const targetName = this.escapeHtml(s.targetName ?? '?');
                 const st = STATUS_STYLE[s.status] || { bg: '#eee', fg: '#555', label: s.status };
                 const isNext = s.id === nextPendingId;
                 const cancelBtn = s.status === 'pending'
@@ -832,7 +836,7 @@ var Sniper = class extends MultUtil {
                     background:${isNext ? 'rgba(255, 215, 130, 0.25)' : 'rgba(0,0,0,0.025)'};
                     border-left:3px solid ${isNext ? '#c9a227' : 'transparent'};">
                     <div>
-                        <div style="font-weight:bold;color:#3a2a0a;">${typeIcon} ${s.targetName}</div>
+                        <div style="font-weight:bold;color:#3a2a0a;">${typeIcon} ${targetName}</div>
                         <div style="color:#6a5a3a;margin-top:1px;">${compSummary}</div>
                         <div style="color:#8a7a5a;font-size:10.5px;margin-top:2px;">${this.t('sniper_row_arrival', { time: new Date(s.arrivalAt).toLocaleString() })}</div>
                     </div>

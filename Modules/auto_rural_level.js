@@ -75,7 +75,7 @@ var AutoRuralLevel = class extends MultUtil {
     };
 
     main = async () => {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active) return;
         try {
             let player_relation_models = uw.MM.getOnlyCollectionByName('FarmTownPlayerRelation').models;
             let farm_town_models = uw.MM.getOnlyCollectionByName('FarmTown').models;

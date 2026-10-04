@@ -14,7 +14,8 @@ var AutoMilitia = class extends MultUtil {
 
         this._active        = false;
         this._intervalId    = null;
-        this._scheduled     = new Map(); // townId -> timeoutId
+        this._scheduled     = new Map(); // townId -> { timeoutId, fireAt }
+        this._activatedTowns = new Set();
         this._boundOnAdd    = null;      // referencia do listener backbone
         this._collection    = null;
 
@@ -67,8 +68,9 @@ var AutoMilitia = class extends MultUtil {
         this.storage.save('militia_active', false);
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
 
-        for (const timeoutId of this._scheduled.values()) clearTimeout(timeoutId);
+        for (const scheduled of this._scheduled.values()) clearTimeout(scheduled.timeoutId);
         this._scheduled.clear();
+        this._activatedTowns.clear();
 
         this._unhookBackbone();
         this._updateButtons();
@@ -104,25 +106,10 @@ var AutoMilitia = class extends MultUtil {
                         if (!isAttack || !isOurTown) return;
 
                         const townId = String(mv.target_town_id);
-                        if (this._scheduled.has(townId)) return;
-
                         const arrival = mv.arrival_at ?? mv.time_of_arrival ?? 0;
                         if (!arrival) return;
 
-                        const now = Math.floor(Date.now() / 1000);
-                        const remaining = arrival - now;
-                        const fireInMs = Math.max(0, (remaining - 8) * 1000);
-
-                        const timeoutId = setTimeout(() => {
-                            this._scheduled.delete(townId);
-                            this._activateMilitia(townId);
-                        }, fireInMs);
-
-                        this._scheduled.set(townId, timeoutId);
-                        this.console.log('[AutoMilicia] [INSTANT] ' + this.t('am_scheduled_log', {
-                            town: uw.ITowns.towns[townId]?.getName?.() ?? townId,
-                            sec: Math.round(fireInMs / 1000),
-                        }));
+                        this._scheduleMilitia(townId, arrival, '[INSTANT] ');
                     } catch (e) {
                         this.console.log('[AutoMilicia] backbone onAdd error: ' + (e?.message ?? e));
                     }
@@ -154,44 +141,60 @@ var AutoMilitia = class extends MultUtil {
             ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
 
+    _scheduleMilitia(townId, arrival, logPrefix = '') {
+        if (this._activatedTowns.has(townId)) return;
+        const fireAt = (arrival - 8) * 1000;
+        const previous = this._scheduled.get(townId);
+
+        // Se já existe um disparo igual ou anterior, ele protege também
+        // contra este ataque. Se o novo ataque chega antes, reagenda.
+        if (previous && previous.fireAt <= fireAt) return;
+        if (previous) clearTimeout(previous.timeoutId);
+
+        const fireInMs = Math.max(0, fireAt - Date.now());
+        const timeoutId = setTimeout(async () => {
+            this._scheduled.delete(townId);
+            // Marca durante a requisição para impedir chamadas concorrentes;
+            // se o servidor rejeitar, libera uma nova tentativa no poll.
+            this._activatedTowns.add(townId);
+            const activated = await this._activateMilitia(townId);
+            if (!activated) this._activatedTowns.delete(townId);
+        }, fireInMs);
+
+        this._scheduled.set(townId, { timeoutId, fireAt });
+        this.console.log('[AutoMilicia] ' + logPrefix + this.t('am_scheduled_log', {
+            town: uw.ITowns.towns[townId]?.getName?.() ?? townId,
+            sec: Math.round(fireInMs / 1000),
+        }));
+    }
+
     _tick() {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active) return;
         try {
             const attacks = this._getIncomingAttacks();
-            const now     = Math.floor(Date.now() / 1000);
 
             // Cancela timers de ataques que ja sumiram
             const attackedTowns = new Set(attacks.map(a => String(a.target_town_id)));
             for (const townId of this._scheduled.keys()) {
                 if (!attackedTowns.has(townId)) {
-                    clearTimeout(this._scheduled.get(townId));
+                    clearTimeout(this._scheduled.get(townId).timeoutId);
                     this._scheduled.delete(townId);
                 }
+            }
+            for (const townId of this._activatedTowns) {
+                if (!attackedTowns.has(townId)) this._activatedTowns.delete(townId);
             }
 
             if (attacks.length === 0) return;
 
             for (const atk of attacks) {
                 const townId = String(atk.target_town_id);
-                if (this._scheduled.has(townId)) continue;
                 if (!uw.ITowns?.towns?.[townId]) continue;
 
                 const arrival = atk.arrival_at ?? atk.time_of_arrival ?? 0;
                 if (!arrival) continue;
 
-                const remaining = arrival - now;
-                const fireInMs = Math.max(0, (remaining - 8) * 1000);
-
-                const timeoutId = setTimeout(() => {
-                    this._scheduled.delete(townId);
-                    this._activateMilitia(townId);
-                }, fireInMs);
-
-                this._scheduled.set(townId, timeoutId);
-                this.console.log('[AutoMilicia] ' + this.t('am_scheduled_log', {
-                    town: uw.ITowns.towns[townId]?.getName?.() ?? townId,
-                    sec: Math.round(fireInMs / 1000),
-                }));
+                this._scheduleMilitia(townId, arrival);
             }
         } catch(e) {
             this.console.log('[AutoMilicia] ' + this.t('am_tick_error', { msg: e?.message ?? e }));
@@ -215,6 +218,7 @@ var AutoMilitia = class extends MultUtil {
     }
 
     _activateMilitia = async (townId) => {
+        if (uw.__multbot_captcha_active) return false;
         try {
             const townName = uw.ITowns.towns[townId]?.getName?.() ?? '#' + townId;
             this.console.log('[AutoMilicia] ' + this.t('am_activating_log', { town: townName }));
@@ -227,13 +231,16 @@ var AutoMilitia = class extends MultUtil {
                 this.console.log('[AutoMilicia] ' + msg);
                 uw.$('#militia_log').text(msg).css('color', '#1a6b2a');
                 if (uw.HumanMessage) uw.HumanMessage.success(msg);
-            } else {
-                const msg = this.t('am_activate_fail_log', { town: townName, reason: res?.error ?? '?' });
-                this.console.log('[AutoMilicia] ' + msg);
-                uw.$('#militia_log').text(msg).css('color', '#8a2a2a');
+                return true;
             }
+
+            const msg = this.t('am_activate_fail_log', { town: townName, reason: res?.error ?? '?' });
+            this.console.log('[AutoMilicia] ' + msg);
+            uw.$('#militia_log').text(msg).css('color', '#8a2a2a');
+            return false;
         } catch(e) {
             this.console.log('[AutoMilicia] ' + this.t('am_activate_exception_log', { id: townId, msg: e?.message ?? e }));
+            return false;
         }
     };
 };

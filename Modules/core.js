@@ -118,9 +118,9 @@ __MultBotI18N.dict = {
 		auto_refresh_label: 'Auto Refresh:',
 		sleeper_label: 'Sleeper:',
 		sleeper_to: 'to',
-		sleeper_desc: 'While active, pauses ALL other modules during this daily window - except Auto Militia and Auto Dodge, which keep running for defense.',
+		sleeper_desc: 'While active, pauses other modules during this daily window. Auto Militia and Auto Dodge keep running for defense; explicitly scheduled Sniper commands also keep their exact timing.',
 		sleeper_invalid: 'Set both a start and end time.',
-		sleeper_enabled_log: 'Enabled: {start} - {end} (pauses everything except Militia and Dodge).',
+		sleeper_enabled_log: 'Enabled: {start} - {end} (Militia, Dodge and scheduled Sniper commands remain active).',
 		sleeper_disabled_log: 'Disabled.',
 		sleeper_disable: 'Disable',
 		sleeper_active_now: '😴 Sleeping now - other modules paused',
@@ -140,6 +140,82 @@ __MultBotI18N.dict = {
 		row_dodge: '🛡️ Auto Dodge',
 		row_ares: '🔥 Ares Sacrifice',
 		row_research: '📚 Auto Research',
+		row_hide: '🕵️ Auto Hide',
+		row_quest: '📜 Auto Quest',
+		row_discord: '🔔 Discord Alert',
+		row_sniper: '🎯 Sniper',
+		row_sniper_pending: '{n} pending',
+		mt_colonize_label: 'Colonize Ships',
+		at_min_batch_tip: 'Minimum share of the configured storage limit required before creating a recruitment order.',
+		ah_silver_desc: 'Automatically stores silver in every eligible hideout.',
+		ah_silver_trigger_log: '✓ {town}: silver storage triggered ({amount}).',
+		am_stopped_log: 'Stopped.',
+		am_scheduled_log: '{town}: militia scheduled in {sec}s.',
+		am_tick_error: 'Error checking attacks: {msg}',
+		am_activating_log: '{town}: activating militia...',
+		am_activated_log: '✓ Militia activated in {town}.',
+		am_activate_fail_log: '✗ Could not activate militia in {town}: {reason}',
+		am_activate_exception_log: 'Error activating militia in town #{id}: {msg}',
+		ad_tooltip: 'Land and naval units are evacuated separately and recalled automatically after the last detected attack.',
+		ad_stopped_log: 'Stopped.',
+		ad_learned_towns_log: 'Learned {n} town(s) from island links.',
+		ad_safety_evac_log: '{town}: attack arrives in {sec}s; evacuating now.',
+		ad_evac_scheduled_log: '{from} → {to}: evacuation scheduled in {sec}s ({lead}s before impact).',
+		ad_evac_scheduled_no_island_log: '{town}: evacuation scheduled in {sec}s; searching for a safe town at execution time.',
+		ad_tick_error: 'Error checking attacks: {msg}',
+		ad_find_island_error: 'Error finding a town on the same island: {msg}',
+		ad_evac_no_island_log: '{town}: no safe town found on the same island.',
+		ad_evac_no_island_status: 'No safe town found for {town}.',
+		ad_no_troops_log: '{town}: no troops available to evacuate.',
+		ad_evacuating_log: '{town}: evacuating troops to {safe}...',
+		ad_no_land_troops_log: '{town}: no land troops to evacuate.',
+		ad_no_naval_troops_log: '{town}: no naval troops to evacuate.',
+		ad_evacuated_log: '✓ {town}: troops evacuated to {safe}.',
+		ad_evacuate_error: 'Error evacuating town #{id}: {msg}',
+		ad_group_response_log: '{label} support response: {res}',
+		ad_command_found_log: '{town}: {label} support command found (#{id}).',
+		ad_command_not_found_log: '{town}: could not find the {label} support command for automatic recall.',
+		ad_command_not_found_status: 'Could not schedule the {label} recall for {town}.',
+		ad_send_group_fail_log: 'Failed to evacuate {label} troops from {town}: {msg}',
+		ad_recall_scheduled_log: '{town}: {label} recall scheduled in {sec}s (command #{id}).',
+		ad_reconcile_start_log: 'Restoring {n} pending recall(s).',
+		ad_reconcile_fire_now_log: '{town}: running overdue {label} recall now.',
+		ad_reconcile_reschedule_log: '{town}: {label} recall restored; {sec}s remaining.',
+		ad_reconcile_error: 'Error restoring pending recalls: {msg}',
+		ad_recall_calling_log: '{town}: recalling {label} support (command #{id})...',
+		ad_recall_response_log: '{label} recall response: {res}',
+		ad_recall_success_log: '✓ {town}: {label} troops are returning.',
+		ad_recall_fail_log: '✗ {town}: {label} recall failed: {res}',
+		ad_recall_fail_status: 'Could not recall {label} troops from {town}.',
+		ad_recall_network_error: 'Network error recalling {label} troops from {town}: {msg}',
+		aa_title: 'Auto Attack',
+		aa_desc: 'Sends a configured army automatically when all required units are available.',
+		aa_origin_label: 'Origin city',
+		aa_rest_label: 'Rest (min)',
+		aa_rest_tooltip: 'Minimum delay between attacks from this plan, with a small random variation.',
+		aa_hero_label: 'Hero (optional)',
+		aa_hero_tooltip: 'The selected hero is sent with the attack when available.',
+		aa_unit_label: 'Unit',
+		aa_qty_label: 'Quantity',
+		aa_max_tooltip: 'Send every currently available unit of this type.',
+		aa_add_unit_btn: '+ Add Unit',
+		aa_target_label: 'Targets',
+		aa_target_placeholder: 'Town IDs separated by commas or new lines',
+		aa_add_plan_btn: '+ Add Plan',
+		aa_plans_active: 'Configured plans',
+		aa_no_unit_selected: 'Select a unit first.',
+		aa_invalid_qty: 'Enter a valid quantity.',
+		aa_no_origin: 'Select an origin city.',
+		aa_no_units: 'Add at least one unit to the army.',
+		aa_no_targets: 'Enter at least one valid target town ID.',
+		aa_plan_updated: '✓ Plan updated.',
+		aa_plan_added: '✓ Plan added.',
+		aa_editing_plan: 'Editing the plan from {town}.',
+		aa_edit_cancelled: 'Plan editing cancelled.',
+		aa_attack_ok: '✓ {origin} → {target}: attack sent with {comp}.',
+		aa_attack_fail: '✗ Attack on {target} failed: {msg}',
+		arl_unlock_fail_log: 'Island {island}: failed to unlock {name}: {reason}',
+		arl_upgrade_fail_log: 'Island {island}: failed to upgrade {name}: {reason}',
 		am_title: 'Auto Militia',
 		am_desc: 'Automatically activates militia in cities under attack.',
 		am_started_log: 'Started.',
@@ -333,6 +409,7 @@ __MultBotI18N.dict = {
 		da_test_btn: 'Test',
 		da_webhook_saved: '✓ Webhook saved.',
 		da_webhook_cleared: 'Webhook cleared.',
+		da_invalid_webhook: 'Enter a valid HTTPS Discord webhook URL.',
 		da_no_webhook: 'Set a webhook URL first.',
 		da_sending_test: 'Sending test message...',
 		da_test_title: 'MultBot Test',
@@ -506,9 +583,9 @@ __MultBotI18N.dict = {
 		auto_refresh_label: 'Auto Refresh:',
 		sleeper_label: 'Sleeper:',
 		sleeper_to: 'até',
-		sleeper_desc: 'Enquanto ativo, pausa TODOS os outros módulos durante essa janela diária - exceto Auto Milícia e Auto Fuga, que continuam rodando pra defesa.',
+		sleeper_desc: 'Enquanto ativo, pausa os outros módulos durante essa janela. Auto Milícia e Auto Fuga continuam na defesa; comandos agendados no Sniper também mantêm o horário exato.',
 		sleeper_invalid: 'Defina um horário de início e de fim.',
-		sleeper_enabled_log: 'Ativado: {start} - {end} (pausa tudo, exceto Milícia e Fuga).',
+		sleeper_enabled_log: 'Ativado: {start} - {end} (Milícia, Fuga e comandos agendados no Sniper continuam ativos).',
 		sleeper_disabled_log: 'Desativado.',
 		sleeper_disable: 'Desativar',
 		sleeper_active_now: '😴 Dormindo agora - outros módulos pausados',
@@ -528,6 +605,82 @@ __MultBotI18N.dict = {
 		row_dodge: '🛡️ Auto Fuga (Dodge)',
 		row_ares: '🔥 Sacrifício de Ares',
 		row_research: '📚 Auto Pesquisa',
+		row_hide: '🕵️ Auto Esconderijo',
+		row_quest: '📜 Auto Missão',
+		row_discord: '🔔 Alerta Discord',
+		row_sniper: '🎯 Sniper',
+		row_sniper_pending: '{n} pendente(s)',
+		mt_colonize_label: 'Navios Colonizadores',
+		at_min_batch_tip: 'Parcela mínima do limite de armazém configurado necessária antes de criar uma ordem de recrutamento.',
+		ah_silver_desc: 'Guarda prata automaticamente em todos os esconderijos elegíveis.',
+		ah_silver_trigger_log: '✓ {town}: armazenamento de prata acionado ({amount}).',
+		am_stopped_log: 'Parado.',
+		am_scheduled_log: '{town}: milícia agendada para daqui a {sec}s.',
+		am_tick_error: 'Erro ao verificar ataques: {msg}',
+		am_activating_log: '{town}: ativando milícia...',
+		am_activated_log: '✓ Milícia ativada em {town}.',
+		am_activate_fail_log: '✗ Não foi possível ativar a milícia em {town}: {reason}',
+		am_activate_exception_log: 'Erro ao ativar milícia na cidade #{id}: {msg}',
+		ad_tooltip: 'Tropas terrestres e navais são evacuadas separadamente e chamadas de volta após o último ataque detectado.',
+		ad_stopped_log: 'Parado.',
+		ad_learned_towns_log: '{n} cidade(s) aprendida(s) pelos links da ilha.',
+		ad_safety_evac_log: '{town}: ataque chega em {sec}s; evacuando agora.',
+		ad_evac_scheduled_log: '{from} → {to}: evacuação agendada para daqui a {sec}s ({lead}s antes do impacto).',
+		ad_evac_scheduled_no_island_log: '{town}: evacuação agendada para daqui a {sec}s; procurando cidade segura na hora do envio.',
+		ad_tick_error: 'Erro ao verificar ataques: {msg}',
+		ad_find_island_error: 'Erro ao procurar cidade na mesma ilha: {msg}',
+		ad_evac_no_island_log: '{town}: nenhuma cidade segura encontrada na mesma ilha.',
+		ad_evac_no_island_status: 'Nenhuma cidade segura encontrada para {town}.',
+		ad_no_troops_log: '{town}: nenhuma tropa disponível para evacuar.',
+		ad_evacuating_log: '{town}: evacuando tropas para {safe}...',
+		ad_no_land_troops_log: '{town}: nenhuma tropa terrestre para evacuar.',
+		ad_no_naval_troops_log: '{town}: nenhuma tropa naval para evacuar.',
+		ad_evacuated_log: '✓ {town}: tropas evacuadas para {safe}.',
+		ad_evacuate_error: 'Erro ao evacuar a cidade #{id}: {msg}',
+		ad_group_response_log: 'Resposta do apoio {label}: {res}',
+		ad_command_found_log: '{town}: comando de apoio {label} encontrado (#{id}).',
+		ad_command_not_found_log: '{town}: não foi possível encontrar o comando de apoio {label} para o retorno automático.',
+		ad_command_not_found_status: 'Não foi possível agendar o retorno {label} de {town}.',
+		ad_send_group_fail_log: 'Falha ao evacuar tropas {label} de {town}: {msg}',
+		ad_recall_scheduled_log: '{town}: retorno {label} agendado para daqui a {sec}s (comando #{id}).',
+		ad_reconcile_start_log: 'Restaurando {n} retorno(s) pendente(s).',
+		ad_reconcile_fire_now_log: '{town}: executando agora o retorno {label} atrasado.',
+		ad_reconcile_reschedule_log: '{town}: retorno {label} restaurado; faltam {sec}s.',
+		ad_reconcile_error: 'Erro ao restaurar retornos pendentes: {msg}',
+		ad_recall_calling_log: '{town}: chamando apoio {label} de volta (comando #{id})...',
+		ad_recall_response_log: 'Resposta do retorno {label}: {res}',
+		ad_recall_success_log: '✓ {town}: tropas {label} estão retornando.',
+		ad_recall_fail_log: '✗ {town}: retorno {label} falhou: {res}',
+		ad_recall_fail_status: 'Não foi possível retornar as tropas {label} de {town}.',
+		ad_recall_network_error: 'Erro de rede ao retornar tropas {label} de {town}: {msg}',
+		aa_title: 'Auto Ataque',
+		aa_desc: 'Envia automaticamente o exército configurado quando todas as unidades necessárias estiverem disponíveis.',
+		aa_origin_label: 'Cidade de origem',
+		aa_rest_label: 'Descanso (min)',
+		aa_rest_tooltip: 'Intervalo mínimo entre ataques deste plano, com uma pequena variação aleatória.',
+		aa_hero_label: 'Herói (opcional)',
+		aa_hero_tooltip: 'O herói selecionado é enviado junto com o ataque quando estiver disponível.',
+		aa_unit_label: 'Unidade',
+		aa_qty_label: 'Quantidade',
+		aa_max_tooltip: 'Envia todas as unidades deste tipo disponíveis no momento.',
+		aa_add_unit_btn: '+ Adicionar Unidade',
+		aa_target_label: 'Alvos',
+		aa_target_placeholder: 'IDs das cidades separados por vírgula ou nova linha',
+		aa_add_plan_btn: '+ Adicionar Plano',
+		aa_plans_active: 'Planos configurados',
+		aa_no_unit_selected: 'Selecione uma unidade primeiro.',
+		aa_invalid_qty: 'Informe uma quantidade válida.',
+		aa_no_origin: 'Selecione uma cidade de origem.',
+		aa_no_units: 'Adicione pelo menos uma unidade ao exército.',
+		aa_no_targets: 'Informe ao menos um ID de cidade-alvo válido.',
+		aa_plan_updated: '✓ Plano atualizado.',
+		aa_plan_added: '✓ Plano adicionado.',
+		aa_editing_plan: 'Editando o plano de {town}.',
+		aa_edit_cancelled: 'Edição do plano cancelada.',
+		aa_attack_ok: '✓ {origin} → {target}: ataque enviado com {comp}.',
+		aa_attack_fail: '✗ Falha no ataque a {target}: {msg}',
+		arl_unlock_fail_log: 'Ilha {island}: falha ao desbloquear {name}: {reason}',
+		arl_upgrade_fail_log: 'Ilha {island}: falha ao evoluir {name}: {reason}',
 		am_title: 'Auto Milícia',
 		am_desc: 'Ativa milícia automaticamente nas cidades sob ataque.',
 		am_started_log: 'Iniciado.',
@@ -721,6 +874,7 @@ __MultBotI18N.dict = {
 		da_test_btn: 'Testar',
 		da_webhook_saved: '✓ Webhook salvo.',
 		da_webhook_cleared: 'Webhook removido.',
+		da_invalid_webhook: 'Informe uma URL HTTPS válida de webhook do Discord.',
 		da_no_webhook: 'Configure uma URL de webhook primeiro.',
 		da_sending_test: 'Enviando mensagem de teste...',
 		da_test_title: 'Teste do MultBot',
@@ -902,7 +1056,7 @@ var multT = function(key, vars) {
 };
 
 var style = document.createElement("style");
-style.textContent = `.auto_build_up_arrow{background:url(https://gpit.innogamescdn.com/images/game/academy/up.png) no-repeat -2px -2px;width:18px;height:18px;position:absolute;right:-2px;bottom:12px;transform:scale(.8);cursor:pointer}.auto_build_down_arrow{background:url(https://gpit.innogamescdn.com/images/game/academy/up.png) no-repeat -2px -2px;width:18px;height:18px;position:absolute;right:-2px;bottom:-3px;transform:scale(.8) rotate(180deg);cursor:pointer}.auto_build_box{background:url(https://gpit.innogamescdn.com/images/game/academy/tech_frame.png) no-repeat 0 0;width:58px;height:59px;position:relative;overflow:hidden;display:inline-block;vertical-align:middle}.auto_build_building{position:absolute;top:4px;left:4px;width:50px;height:50px;background:url(https://gpit.innogamescdn.com/images/game/main/buildings_sprite_50x50.png) no-repeat 0 0}.auto_build_lvl{position:absolute;bottom:3px;left:3px;margin:0;font-weight:700;font-size:12px;color:#fff;text-shadow:0 0 2px #000,1px 1px 2px #000,0 2px 2px #000}#buildings_lvl_buttons{padding:5px;max-height:400px;user-select:none}#troops_lvl_buttons{padding:5px;max-height:400px;user-select:none}.progress_bar_auto{position:absolute;z-index:1;height:100%;left:0;top:0;background-image:url(https://gpit.innogamescdn.com/images/game/border/header.png);background-position:0 -1px;filter:brightness(100%) saturate(186%) hue-rotate(241deg)}.mult_bot_settings{z-index:10;position:absolute;top:52px!important;right:116px!important}.console_multbot{width:100%;height:100%;background-color:#000;color:#fff;font-family:monospace;font-size:16px;padding:20px;box-sizing:border-box;overflow-y:scroll;display:flex;flex-direction:column-reverse}#MULT_BOT_content{height:100%;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;padding-right:4px}.console_multbot p{margin:1px}.population_icon_bot{background:url(https://gpit.innogamescdn.com/images/game/autogenerated/layout/layout_095495a.png) no-repeat -697px -647px;width:25px;height:20px;position:absolute;right:2px}.population_icon_bot p{text-align:end;position:absolute;right:30px;padding:0;margin:0;color:#000;font-weight:700}.split_content{width:100%;display:inline-flex;justify-content:space-between}@keyframes rotateForever{from{transform:rotate(0)}to{transform:rotate(360deg)}}.rotate-forever{animation:rotateForever 5s linear infinite;transform-origin:16px 15px;filter:hue-rotate(72deg) saturate(2.5)}.enabled .game_header{filter:brightness(100%) saturate(186%) hue-rotate(241deg)}.auto_build_box .unit_icon50x50{position:absolute!important;top:4px!important;left:4px!important;width:50px!important;height:50px!important;margin:0!important}`;
+style.textContent = `.auto_build_up_arrow{background:url(https://gpit.innogamescdn.com/images/game/academy/up.png) no-repeat -2px -2px;width:18px;height:18px;position:absolute;right:-2px;bottom:12px;transform:scale(.8);cursor:pointer}.auto_build_down_arrow{background:url(https://gpit.innogamescdn.com/images/game/academy/up.png) no-repeat -2px -2px;width:18px;height:18px;position:absolute;right:-2px;bottom:-3px;transform:scale(.8) rotate(180deg);cursor:pointer}.auto_build_box{background:url(https://gpit.innogamescdn.com/images/game/academy/tech_frame.png) no-repeat 0 0;width:58px;height:59px;position:relative;overflow:hidden;display:inline-block;vertical-align:middle}.auto_build_building{position:absolute;top:4px;left:4px;width:50px;height:50px;background:url(https://gpit.innogamescdn.com/images/game/main/buildings_sprite_50x50.png) no-repeat 0 0}.auto_build_lvl{position:absolute;bottom:3px;left:3px;margin:0;font-weight:700;font-size:12px;color:#fff;text-shadow:0 0 2px #000,1px 1px 2px #000,0 2px 2px #000}#buildings_lvl_buttons{padding:5px;max-height:400px;user-select:none}#troops_lvl_buttons{padding:5px;max-height:400px;user-select:none}.progress_bar_auto{position:absolute;z-index:1;height:100%;left:0;top:0;background-image:url(https://gpit.innogamescdn.com/images/game/border/header.png);background-position:0 -1px;filter:brightness(100%) saturate(186%) hue-rotate(241deg)}.mult_bot_settings{z-index:10;position:absolute;top:52px!important;right:116px!important}.console_multbot{width:100%;height:100%;background-color:#000;color:#fff;font-family:monospace;font-size:16px;padding:20px;box-sizing:border-box;overflow-y:scroll;display:block}#MULT_BOT_content{height:100%;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;padding-right:4px}.console_multbot p{margin:1px}.population_icon_bot{background:url(https://gpit.innogamescdn.com/images/game/autogenerated/layout/layout_095495a.png) no-repeat -697px -647px;width:25px;height:20px;position:absolute;right:2px}.population_icon_bot p{text-align:end;position:absolute;right:30px;padding:0;margin:0;color:#000;font-weight:700}.split_content{width:100%;display:inline-flex;justify-content:space-between}@keyframes rotateForever{from{transform:rotate(0)}to{transform:rotate(360deg)}}.rotate-forever{animation:rotateForever 5s linear infinite;transform-origin:16px 15px;filter:hue-rotate(72deg) saturate(2.5)}.enabled .game_header{filter:brightness(100%) saturate(186%) hue-rotate(241deg)}.auto_build_box .unit_icon50x50{position:absolute!important;top:4px!important;left:4px!important;width:50px!important;height:50px!important;margin:0!important}`;
 document.head.appendChild(style);
 
 var MultUtil = class {
@@ -937,6 +1091,15 @@ var MultUtil = class {
        (so a missing translation never breaks rendering - worst case
        you see the raw key instead of a crash). */
     t = (key, vars) => multT(key, vars);
+
+    /* Escapa conteúdo dinâmico antes de interpolá-lo em templates HTML.
+       Prefira .text() quando já houver um elemento jQuery disponível. */
+    escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 
     /* Returns the TRANSLATED name of a unit, building, research,
        god, or HERO, straight from the game's native data (uw.GameData) -
@@ -1113,6 +1276,9 @@ var MultUtil = class {
        explicitamente pra continuar rodando mesmo durante o sono. */
     createGuardedInterval = (fn, intervalMs, respectSleep = true) => {
         let processing = false;
+        let lastErrorLogAt = 0;
+        const safeInterval = Math.max(100, Number(intervalMs) || 1000);
+
         return setInterval(async () => {
             if (processing) return;
             if (respectSleep && this.isSleeping()) return;
@@ -1120,11 +1286,19 @@ var MultUtil = class {
             try {
                 await fn();
             } catch (e) {
-                // errors should already be handled inside fn; this is just a safety net
+                // Não engole falhas inesperadas silenciosamente. Limita o
+                // log a uma vez por minuto para não inundar o console.
+                if (Date.now() - lastErrorLogAt >= 60000) {
+                    lastErrorLogAt = Date.now();
+                    const name = this.constructor?.name || 'Module';
+                    const message = e?.message ?? e;
+                    console.error(`[MultBot/${name}] Erro não tratado no intervalo:`, e);
+                    try { this.console?.log(`[${name}] ${this.t('error')}: ${message}`); } catch (_) {}
+                }
             } finally {
                 processing = false;
             }
-        }, intervalMs);
+        }, safeInterval);
     };
 
     sleep = (ms, stdDev) => {
@@ -1340,16 +1514,18 @@ var BotConsole = class {
 	};
 
 	updateSettings = () => {
-		let console = uw.$('#mult_console');
-		this.string.forEach((e, i) => {
-			if (uw.$(`#log_id_${i}`).length) return;
-			console.prepend(`<p id="log_id_${i}">${e}</p>`);
-		});
+		const $console = uw.$('#mult_console');
+		if (!$console.length) return;
 
-		const validIds = new Set(this.string.map((_, i) => `log_id_${i}`));
-		console.find('p').each(function () {
-			if (!validIds.has(this.id)) uw.$(this).remove();
-		});
+		/* Recria no máximo 200 linhas. O código anterior reutilizava o
+		   índice do array como id; depois que o item mais antigo era
+		   removido, todos os ids continuavam iguais e o painel parava de
+		   atualizar. Usar .text() também impede que mensagens vindas do
+		   servidor sejam interpretadas como HTML. */
+		$console.empty();
+		for (let i = this.string.length - 1; i >= 0; i--) {
+			uw.$('<p>').text(this.string[i]).appendTo($console);
+		}
 	};
 };
 
@@ -1650,7 +1826,12 @@ var MultStorage = class extends Compressor {
 
 		if (savedValue !== null && savedValue !== undefined) {
 			try {
-				storage = JSON.parse(savedValue);
+				const parsed = JSON.parse(savedValue);
+				if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+					storage = parsed;
+				} else {
+					console.error('[MultBot] Invalid storage root; expected an object. Defaults restored.');
+				}
 			} catch (error) {
 				console.error(`Error parsing localStorage data: ${error}`);
 			}
@@ -1749,17 +1930,21 @@ var MultStorage = class extends Compressor {
 			'This operation will load the settings of the current note and overwrite the local settings',
 			() => {
 				const note = this.getActiveNote();
+				if (!note?.attributes) {
+					uw.HumanMessage.error('No active note selected');
+					return;
+				}
 				const { text } = note.attributes;
 				let decoded;
 				try {
 					decoded = this.decode(JSON.parse(text));
+					if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) throw new Error('Invalid settings root');
 				} catch {
-					uw.HumanMessage.error("This note don't contains the settings");
+					uw.HumanMessage.error("This note doesn't contain MultBot settings");
 					return;
 				}
 
-				this.saveStorage(decoded);
-				location.reload();
+				if (this.saveStorage(decoded)) location.reload();
 			},
 			() => {}
 		);
@@ -1768,15 +1953,60 @@ var MultStorage = class extends Compressor {
 	getActiveNote() {
 		const noteClass = uw.$('.tab.selected').attr('class');
 		if (!noteClass) return null;
-		const noteX = noteClass.match(/note(\d+)/)[1];
-		const note_index = parseInt(noteX) - 1;
+		const match = noteClass.match(/(?:^|\s)note(\d+)(?:\s|$)/);
+		if (!match) return null;
+		const note_index = parseInt(match[1], 10) - 1;
+		if (!Number.isInteger(note_index) || note_index < 0) return null;
 
 		const collection = uw.MM.getOnlyCollectionByName('PlayerNote');
 		if (!collection) return null;
-		let { models } = collection;
+		const { models } = collection;
 
-		return models[note_index];
+		return models?.[note_index] ?? null;
 	}
 };
 
-window.__multbot_captcha_active = false;
+/* Pausa automações enquanto um desafio anti-bot visível estiver aberto.
+   A flag antiga era inicializada como false e nunca mais atualizada, então
+   todos os guards espalhados pelos módulos eram inócuos. */
+if (typeof uw.__multbot_captcha_active === 'undefined') {
+	uw.__multbot_captcha_active = false;
+}
+
+(() => {
+	const captchaSelector = [
+		'#captcha',
+		'.captcha',
+		'.bot_check',
+		'.g-recaptcha',
+		'.h-captcha',
+		'iframe[src*="captcha" i]',
+		'iframe[src*="recaptcha" i]',
+		'iframe[src*="hcaptcha" i]',
+	].join(',');
+
+	const updateCaptchaState = () => {
+		let active = false;
+		try {
+			active = Array.from(document.querySelectorAll(captchaSelector)).some(el => {
+				const style = getComputedStyle(el);
+				const rect = el.getBoundingClientRect();
+				return style.display !== 'none'
+					&& style.visibility !== 'hidden'
+					&& Number(style.opacity || 1) !== 0
+					&& rect.width > 0
+					&& rect.height > 0;
+			});
+		} catch (e) {
+			active = false;
+		}
+
+		if (uw.__multbot_captcha_active !== active) {
+			uw.__multbot_captcha_active = active;
+			console.warn(`[MultBot] Proteção anti-bot ${active ? 'detectada: automações pausadas' : 'encerrada: automações liberadas'}.`);
+		}
+	};
+
+	updateCaptchaState();
+	uw.__multbot_captcha_detector__ = setInterval(updateCaptchaState, 1000);
+})();

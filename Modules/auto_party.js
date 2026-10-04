@@ -200,7 +200,7 @@ var AutoParty = class extends MultUtil {
     };
 
     main = async () => {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active) return;
         // FIX: cada checagem isolada no proprio try/catch - antes, uma
         // excecao em qualquer uma delas (ex: checkTriumph quando
         // PlayerKillpoints ainda nao carregou) escapava do main() inteiro,

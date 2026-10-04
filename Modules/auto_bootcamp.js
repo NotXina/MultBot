@@ -177,6 +177,7 @@ var AutoBootcamp = class extends MultUtil {
 
     /* Main function, call in loop */
     main = async () => {
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         try {
             if (await this.rewardBootcamp()) return;
             if (await this.attackBootcamp()) return;

@@ -287,7 +287,7 @@ var AutoQuest = class extends MultUtil {
     async _tick() {
         // FIX #4: protecao de re-entrancia - se o tick anterior ainda
         // esta rodando (muitas missoes + sleeps), ignora este ciclo.
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         if (this._ticking) return;
         this._ticking = true;
 

@@ -220,7 +220,7 @@ var AutoFarm = class extends MultUtil {
 
     /* Main loop */
     main = async () => {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active) return;
         try {
             const next_collection = this.getNextCollection();
             if (next_collection && (this.timer > next_collection + 60 * 1000 || this.timer < next_collection)) {

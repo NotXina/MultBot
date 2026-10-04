@@ -29,7 +29,8 @@ var AutoHide = class extends MultUtil {
 
     constructor(c, s) {
         super(c, s);
-        this._active     = this.storage.load('autohide_active', false);
+        const shouldAutoStart = this.storage.load('autohide_active', false);
+        this._active     = false;
         this._intervalId = null;
         // Controla quais cidades ja foram tratadas neste ciclo de
         // prata, pra nao guardar multiplas vezes seguidas enquanto
@@ -37,7 +38,7 @@ var AutoHide = class extends MultUtil {
         // valor apos o storeIron)
         this._silverCooldown = new Set();
 
-        if (this._active) {
+        if (shouldAutoStart) {
             setTimeout(() => this.start(), 2500);
         }
     }
@@ -119,12 +120,13 @@ var AutoHide = class extends MultUtil {
     }
 
     main = async () => {
-        if (!this._active) return;
+        if (!this._active || uw.__multbot_captcha_active || this.isSleeping()) return;
 
         const eligible = this._getEligibleTowns();
         this._renderStatus();
 
         for (const town of eligible) {
+            if (uw.__multbot_captcha_active || this.isSleeping()) return;
             try {
                 const res     = town.resources();
                 const iron    = res.iron;    // prata no Grepolis

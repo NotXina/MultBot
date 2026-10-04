@@ -41,19 +41,19 @@ var ColonizeShipSender = class extends MultUtil {
                         <label style="font-weight:bold;font-size:11px;">${this.t('css_target_label')}</label><br>
                         <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
                             <input id="css_target_town" type="text" placeholder="${this.t('css_target_placeholder')}"
-                                value="${cfg.targetTownId || ''}"
+                                value="${this.escapeHtml(cfg.targetTownId || '')}"
                                 style="width:120px;padding:2px 5px;" />
                             ${this.getButtonHtml('css_save_target', this.t('css_save'), this._saveTarget)}
                         </div>
                         <div id="css_target_status" style="font-size:11px;color:#5a3a0a;margin-top:3px;">
-                            ${cfg.targetTownId ? '✓ ' + this.getTownName(cfg.targetTownId) : this.t('css_none_target')}
+                            ${this.escapeHtml(cfg.targetTownId ? '✓ ' + this.getTownName(cfg.targetTownId) : this.t('css_none_target'))}
                         </div>
                     </div>
                     <div style="padding:5px 8px;">
                         <label style="font-weight:bold;font-size:11px;">${this.t('css_interval_label')}</label><br>
                         <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
                             <input id="css_interval" type="number" min="1" max="120"
-                                value="${cfg.intervalMinutes || 5}"
+                                value="${this.escapeHtml(cfg.intervalMinutes || 5)}"
                                 style="width:55px;padding:2px 5px;" />
                             ${this.getButtonHtml('css_save_interval', this.t('css_save'), this._saveInterval)}
                         </div>
@@ -103,7 +103,7 @@ var ColonizeShipSender = class extends MultUtil {
 
     _saveInterval = () => {
         const val = parseInt(uw.$('#css_interval').val(), 10);
-        if (!val || val < 1) { this._log(this.t('css_invalid_interval'), 'error'); return; }
+        if (!val || val < 1 || val > 120) { this._log(this.t('css_invalid_interval'), 'error'); return; }
         this.config.intervalMinutes = val;
         this._saveConfig();
         this._log(this.t('css_interval_saved', { val }), 'info');
@@ -146,79 +146,64 @@ var ColonizeShipSender = class extends MultUtil {
     }
 
     _tick = async () => {
-    if (window.__multbot_captcha_active) return;
-    this._log(this.t('css_checking'), 'info');
-    try {
-        const townIds = Object.keys(uw.ITowns.towns);
-        if (townIds.length === 0) { this._log(this.t('mt_no_city_found'), 'warning'); return; }
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
+        this._log(this.t('css_checking'), 'info');
+        try {
+            const townIds = Object.keys(uw.ITowns.towns);
+            if (townIds.length === 0) { this._log(this.t('mt_no_city_found'), 'warning'); return; }
 
-        // Filtra cidades com colonize_ship disponível
-        const eligible = townIds.filter(townId =>
-            String(townId) !== String(this.config.targetTownId) &&
-            this._getColonizeShipCount(townId) > 0
-        );
+            // Filtra cidades com colonize_ship disponível
+            const eligible = townIds.filter(townId =>
+                String(townId) !== String(this.config.targetTownId) &&
+                this._getColonizeShipCount(townId) > 0
+            );
 
-        if (eligible.length === 0) { this._log(this.t('css_no_ships_available'), 'info'); return; }
+            if (eligible.length === 0) { this._log(this.t('css_no_ships_available'), 'info'); return; }
 
-        // Envio SEQUENCIAL — evita corrida no swap de Game.townId
-        let totalSent = 0;
-        for (const townId of eligible) {
-            if (this._stop) break;
+            // Envio sequencial para evitar pedidos duplicados e sobrecarga.
+            let totalSent = 0;
+            for (const townId of eligible) {
+                if (this._stop || uw.__multbot_captcha_active || this.isSleeping()) break;
 
-            const count    = this._getColonizeShipCount(townId);
-            const townName = uw.ITowns.towns[townId]?.getName?.() || townId;
+                const count    = this._getColonizeShipCount(townId);
+                const townName = uw.ITowns.towns[townId]?.getName?.() || townId;
 
-            try {
-                await this._sendSupport(townId, this.config.targetTownId, count);
-                this._log(this.t('css_sent_log', { town: townName, count }), 'success');
-                totalSent += count;
-            } catch (e) {
-                this._log(this.t('css_send_error', { town: townName, msg: e?.message ?? e }), 'error');
+                try {
+                    await this._sendSupport(townId, this.config.targetTownId, count);
+                    this._log(this.t('css_sent_log', { town: townName, count }), 'success');
+                    totalSent += count;
+                } catch (e) {
+                    this._log(this.t('css_send_error', { town: townName, msg: e?.message ?? e }), 'error');
+                }
+
+                // Delay entre cada envio para não sobrecarregar e dar tempo do restore terminar
+                await this.sleep(400 + Math.random() * 300);
             }
 
-            // Delay entre cada envio para não sobrecarregar e dar tempo do restore terminar
-            await this.sleep(400 + Math.random() * 300);
+            if (totalSent > 0) this._log(this.t('css_cycle_complete', { count: totalSent }), 'success');
+        } catch (e) {
+            this._log(this.t('css_cycle_error', { msg: e?.message ?? e }), 'error');
         }
+    };
 
-        if (totalSent > 0) this._log(this.t('css_cycle_complete', { count: totalSent }), 'success');
-    } catch (e) {
-        this._log(this.t('css_cycle_error', { msg: e?.message ?? e }), 'error');
-    }
-};
     _getColonizeShipCount(townId) {
         try { return uw.ITowns.towns[townId].units()?.colonize_ship ?? 0; } catch { return 0; }
     }
 
-    _sendSupport(fromTownId, toTownId, count) {
-        return this._withTownId(fromTownId, async () => {
-            const data = {
-                id:            parseInt(toTownId, 10),
-                type:          'support',
-                colonize_ship: count
-            };
-            const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data);
-            // FIX: mesmo endpoint usado por auto_dodge.js e auto_attack.js
-            // (town_info/send_units) - ambos os modulos irmaos confirmam
-            // sucesso com "!res.error", a resposta NAO tem campo "success".
-            // O check antigo (res.success) nunca era verdadeiro -> todo
-            // envio bem-sucedido era logado como falha (css_send_error).
-            if (res && !res.error) return res;
-            throw new Error(res?.error || 'Failed to send support');
-        });
-    }
-
-    // Define Game.townId temporariamente para o envio
-    async _withTownId(townId, fn) {
-        const orig    = uw.Game.townId;
-        const origStr = uw.Game.town_id;
-        uw.Game.townId  = parseInt(townId, 10);
-        uw.Game.town_id = parseInt(townId, 10);
-        try {
-            return await fn();
-        } finally {
-            uw.Game.townId  = orig;
-            uw.Game.town_id = origStr;
-        }
+    async _sendSupport(fromTownId, toTownId, count) {
+        if (uw.__multbot_captcha_active || this.isSleeping()) throw new Error('Automation paused');
+        const data = {
+            id:            parseInt(toTownId, 10),
+            town_id:       parseInt(fromTownId, 10),
+            type:          'support',
+            colonize_ship: count,
+            nl_init:       true,
+        };
+        const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data);
+        // A resposta desse endpoint indica falha por res.error; não há
+        // um campo res.success confiável.
+        if (res && !res.error) return res;
+        throw new Error(res?.error || 'Failed to send support');
     }
 
     /* _getTownName foi removido daqui - a mesma logica (incluindo o
