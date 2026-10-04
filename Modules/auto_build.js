@@ -63,8 +63,8 @@ var AutoBuild = class extends MultUtil {
        bloqueia esse predio (ver _blockBuilding) para nao ficar
        spammando a mesma tentativa fadada a falhar a cada 5s. */
     _hookNativeErrorMessages() {
-        if (window.__multbot_humanmessage_error_hooked) return;
-        window.__multbot_humanmessage_error_hooked = true;
+        if (uw.__multbot_humanmessage_error_hooked) return;
+        uw.__multbot_humanmessage_error_hooked = true;
         try {
             const original = uw.HumanMessage.error.bind(uw.HumanMessage);
             const self = this;
@@ -294,7 +294,7 @@ var AutoBuild = class extends MultUtil {
         uw.$('[id="buildings_lvl_buttons"]').html(`
         <div id="build_settings_${town_id}">
             <div style="width: 600px; margin-bottom: 3px; display: inline-flex">
-            <a class="gp_town_link" href="${town.getLinkFragment()}">${town.getName()}</a>
+            <a class="gp_town_link" href="${this.escapeHtml(town.getLinkFragment())}">${this.escapeHtml(town.getName())}</a>
             <p style="font-weight: bold; margin: 0px 5px"> [${town.getPoints()} pts] </p>
             <p style="font-weight: bold; margin: 0px 5px"> ${groups} </p>
             </div>
@@ -371,7 +371,7 @@ var AutoBuild = class extends MultUtil {
     };
     /* Main loop for building — cidades em paralelo */
     main = async () => {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active) return;
         await Promise.allSettled(
             Object.keys(this.towns_buildings).map(async (town_id, i) => {
                 await this.sleep(i * 300); // delay escalonado

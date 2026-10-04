@@ -30,9 +30,13 @@ var AutoResearch = class extends MultUtil {
         this._failedThisCycle = new Map();
         this._townSwitchSubscribed = false;
 
-        if (this.storage.load('ares_active', false)) {
-            setTimeout(() => this.start(), 2500);
-        }
+        // Migra a chave antiga "ares_active", criada por engano por
+        // copy/paste, sem perder a preferência dos usuários existentes.
+        const shouldAutoStart = this.storage.load(
+            'auto_research_active',
+            this.storage.load('ares_active', false)
+        );
+        if (shouldAutoStart) setTimeout(() => this.start(), 2500);
     }
 
     settings = () => {
@@ -47,12 +51,12 @@ var AutoResearch = class extends MultUtil {
             <div class="game_border_left"></div><div class="game_border_right"></div>
             <div class="game_border_corner corner1"></div><div class="game_border_corner corner2"></div>
             <div class="game_border_corner corner3"></div><div class="game_border_corner corner4"></div>
-            ${this.getTitleHtml('ares_title', this.t('ar_title'), this.toggle, '', this._active)}
+            ${this.getTitleHtml('auto_research_title', this.t('ar_title'), this.toggle, '', this._active)}
             <div style="padding:5px 10px;font-weight:bold;">
                 ${this.t('ar_desc')}
             </div>
-            <div id="ares_status" style="padding:2px 10px;font-size:11px;color:#5a3a0a;"></div>
-            <div id="ares_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
+            <div id="auto_research_status" style="padding:2px 10px;font-size:11px;color:#5a3a0a;"></div>
+            <div id="auto_research_log" style="padding:2px 10px 8px;font-size:11px;color:#5a3a0a;min-height:16px;"></div>
         </div>`;
     };
 
@@ -76,15 +80,15 @@ var AutoResearch = class extends MultUtil {
             const done = this.DEFAULT_ORDER.filter(t => researches[t] && uw.GameData.researches?.[t]);
             const pending = this.DEFAULT_ORDER.filter(t => !researches[t] && uw.GameData.researches?.[t]);
 
-            const doneNames = done.map(t => this.getGameName('research', t)).join(', ') || '-';
-            const pendingNames = pending.map(t => this.getGameName('research', t)).join(' -> ') || '-';
+            const doneNames = this.escapeHtml(done.map(t => this.getGameName('research', t)).join(', ') || '-');
+            const pendingNames = this.escapeHtml(pending.map(t => this.getGameName('research', t)).join(' -> ') || '-');
 
-            const townName = town && town.getName ? town.getName() : '?';
+            const townName = this.escapeHtml(town && town.getName ? town.getName() : '?');
 
-            uw.$('#ares_status').html(
+            uw.$('#auto_research_status').html(
                 `<span style="color:#3a2a0a;font-weight:bold;">${townName}</span><br>` +
-                `<span style="color:#1a6b2a;">${this.t('ar_done_label')} ${doneNames}</span><br>` +
-                `<span style="color:#5a3a0a;">${this.t('ar_pending_label')} ${pendingNames}</span>`
+                `<span style="color:#1a6b2a;">${this.escapeHtml(this.t('ar_done_label'))} ${doneNames}</span><br>` +
+                `<span style="color:#5a3a0a;">${this.escapeHtml(this.t('ar_pending_label'))} ${pendingNames}</span>`
             );
         } catch (e) {}
     }
@@ -97,7 +101,7 @@ var AutoResearch = class extends MultUtil {
     start() {
         if (this._active) return;
         this._active = true;
-        this.storage.save('ares_active', true);
+        this.storage.save('auto_research_active', true);
         this._updateTitle();
         this.console.log('[AutoPesquisa] ' + this.t('ar_started'));
         this._tick();
@@ -106,7 +110,7 @@ var AutoResearch = class extends MultUtil {
 
     stop() {
         this._active = false;
-        this.storage.save('ares_active', false);
+        this.storage.save('auto_research_active', false);
         if (this._interval) { clearInterval(this._interval); this._interval = null; }
         this._updateTitle();
         this.console.log('[AutoPesquisa] ' + this.t('ar_stopped_log'));
@@ -123,12 +127,12 @@ var AutoResearch = class extends MultUtil {
     }
 
     _updateTitle() {
-        uw.$('#ares_title').css('filter', this._active
+        uw.$('#auto_research_title').css('filter', this._active
             ? 'brightness(100%) saturate(186%) hue-rotate(241deg)' : '');
     }
 
     async _tick() {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         // FIX: _failedThisCycle nunca era limpo em lugar nenhum - o nome
         // ("ThisCycle") indica escopo de UM ciclo, mas na pratica uma
         // pesquisa que falhasse uma vez (rejeicao pontual do servidor,
@@ -141,6 +145,7 @@ var AutoResearch = class extends MultUtil {
         let count = 0;
 
         for (const townId of townIds) {
+            if (uw.__multbot_captcha_active || this.isSleeping()) return;
             const done = await this._researchNext(townId);
             if (done) {
                 count++;
@@ -233,7 +238,7 @@ var AutoResearch = class extends MultUtil {
             if (res && !res.error) {
                 const msg = this.t('ar_research_started', { town: townName, tech: this.getGameName('research', tech) });
                 this.console.log(`[AutoPesquisa] ✓ ${msg}`);
-                uw.$('#ares_log').text(`✓ ${msg}`).css('color', '#1a6b2a');
+                uw.$('#auto_research_log').text(`✓ ${msg}`).css('color', '#1a6b2a');
                 return true;
             }
             return false;

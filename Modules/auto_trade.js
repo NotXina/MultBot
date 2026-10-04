@@ -34,6 +34,9 @@ var AutoTrade = class extends MultUtil {
         try {
             let amount;
             do {
+                while (uw.__multbot_captcha_active || this.isSleeping()) {
+                    await this.sleep(1000);
+                }
                 if (attempts++ >= MAX_ATTEMPTS) {
                     this.console.log('[AutoTrade] ' + this.t('at_max_attempts'));
                     break;
@@ -63,6 +66,7 @@ var AutoTrade = class extends MultUtil {
             }
             current = amount;
             for (const town of Object.values(uw.ITowns.towns)) {
+                if (uw.__multbot_captcha_active || this.isSleeping()) return amount;
                 if (town.id == target) continue;
                 if (amount <= 0) break;
                 try {

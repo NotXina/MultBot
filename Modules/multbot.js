@@ -204,8 +204,10 @@ var MultBot = class {
     setup = () => {
         if (this.settingsFactory) this.settingsFactory.activate();
 
+        // Evita botão duplicado caso a interface do jogo seja recriada.
+        uw.$('.mult_bot_settings').remove();
         uw.$('.gods_area_buttons').append(`
-            <div class='circle_button mult_bot_settings' onclick='window.multBot.settingsFactory.openWindow()'>
+            <div class='circle_button mult_bot_settings' onclick='window.multBot?.settingsFactory?.openWindow()'>
                 <div style='width: 27px; height: 27px; display:flex; align-items:center; justify-content:center;' class='icon js-caption' title='MultBot'>
                     <img src="https://github.com/NotXina.png?size=64" width="23" height="23"
                          style="display:block; box-sizing:border-box; border-radius:50%; object-fit:cover; object-position:center; border:1px solid rgba(0,0,0,0.4); box-shadow:0 0 2px rgba(0,0,0,0.6);"
@@ -265,11 +267,35 @@ var MultBot = class {
 
 };
 
-if (!window.__multbot_loaded__) {
-    window.__multbot_loaded__ = true;
+if (!uw.__multbot_loaded__) {
+    uw.__multbot_loaded__ = true;
+    const loaderStartedAt = Date.now();
+    const loaderTimeoutMs = 2 * 60 * 1000;
+
     var _multbot_loader = setInterval(() => {
-        if (uw.$("#loader").length > 0) return;
-        uw.multBot = new MultBot();
+        if (uw.multBot) {
+            clearInterval(_multbot_loader);
+            return;
+        }
+
+        if (Date.now() - loaderStartedAt >= loaderTimeoutMs) {
+            clearInterval(_multbot_loader);
+            uw.__multbot_loaded__ = false;
+            console.error('[MultBot] A interface do jogo não ficou pronta em 2 minutos. Recarregue a página.');
+            return;
+        }
+
+        if (uw.$('#loader').length > 0 || uw.$('#ui_box').length === 0 || uw.$('.gods_area_buttons').length === 0) return;
+
+        // Para o polling ANTES de construir. Se o construtor falhar,
+        // não cria uma nova pilha de módulos e intervals a cada 100ms.
         clearInterval(_multbot_loader);
-    }, 100);
+        try {
+            uw.multBot = new MultBot();
+            console.log('[MultBot] Inicializado com sucesso.');
+        } catch (e) {
+            uw.__multbot_loaded__ = false;
+            console.error('[MultBot] Falha fatal durante a inicialização:', e);
+        }
+    }, 250);
 }

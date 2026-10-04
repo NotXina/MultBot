@@ -232,7 +232,7 @@ var AutoSendResources = class extends MultUtil {
                 const t    = towns[id];
                 const name = t.getName ? t.getName() : ('#' + id);
                 const sel  = (String(id) === String(this.manualTargetId)) ? ' selected' : '';
-                html += '<option value="' + id + '"' + sel + '>' + name + '</option>';
+                html += '<option value="' + this.escapeHtml(id) + '"' + sel + '>' + this.escapeHtml(name) + '</option>';
             }
             return html;
         } catch (e) {
@@ -248,6 +248,7 @@ var AutoSendResources = class extends MultUtil {
     //  TICK PRINCIPAL
     // ─────────────────────────────────────────────────────────────
     async _tick() {
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         const townIds = Object.keys(uw.ITowns.towns);
         if (townIds.length < 2) return;
 
@@ -271,6 +272,7 @@ var AutoSendResources = class extends MultUtil {
     // ─────────────────────────────────────────────────────────────
     async _tickBalance(townIds) {
         const lines = [];
+        const urgentHandled = new Set();
 
         // ── PASSO 1: Urgente (90%+) ──────────────────────────────
         const urgentSenders = townIds.filter(id => this._isOverflowing(id));
@@ -290,6 +292,7 @@ var AutoSendResources = class extends MultUtil {
                 this.console.log('[AutoRecursos] [URGENTE] ' + fromName + ' → ' + toName);
 
                 const ok = await this._sendResources(fromId, toId, true);
+                if (ok) urgentHandled.add(String(fromId));
                 lines.push((ok ? '  ✓ ' : '  ✗ ') + fromName + ' → ' + toName);
             }
         }
@@ -324,6 +327,7 @@ var AutoSendResources = class extends MultUtil {
 
         for (const id of townIds) {
             try {
+                if (urgentHandled.has(String(id))) continue;
                 const town     = uw.ITowns.towns[id];
                 const res      = town.resources();
                 const storage  = res.storage;
@@ -374,24 +378,19 @@ var AutoSendResources = class extends MultUtil {
             return;
         }
 
-        // Cada remetente envia para um destino (rotativo pelos menos desenvolvidos)
-        const balanceResults = await Promise.allSettled(
-            senders.map((fromId, i) => {
-                const toId = receivers[i % receivers.length].id;
-                return this._sendResources(fromId, toId, false).then(ok => {
-                    return { fromId, toId, ok };
-                });
-            })
-        );
-
+        /* Envio sequencial: vários remetentes podem apontar para o mesmo
+           destino. Em paralelo, todos liam o mesmo espaço antigo do
+           armazém e a soma podia ultrapassar a capacidade disponível. */
         let sentCount = 0;
-        for (const r of balanceResults) {
-            if (r.status === 'fulfilled' && r.value) {
-                if (r.value.ok) sentCount++;
-                const fName = this.getTownName(r.value.fromId);
-                const tName = this.getTownName(r.value.toId);
-                lines.push('  ' + (r.value.ok ? '✓' : '✗') + ' ' + fName + ' → ' + tName);
-            }
+        for (let i = 0; i < senders.length; i++) {
+            const fromId = senders[i];
+            const toId = receivers[i % receivers.length].id;
+            const ok = await this._sendResources(fromId, toId, false);
+            if (ok) sentCount++;
+            const fName = this.getTownName(fromId);
+            const tName = this.getTownName(toId);
+            lines.push('  ' + (ok ? '✓' : '✗') + ' ' + fName + ' → ' + tName);
+            await this.sleep(300);
         }
 
         const summary = sentCount > 0
@@ -437,11 +436,13 @@ var AutoSendResources = class extends MultUtil {
         const targetName = targetTown.getName();
         this.console.log('[AutoRecursos] [Manual] ' + senders.length + ' cidade(s) enviando para ' + targetName);
 
-        const results = await Promise.allSettled(
-            senders.map(fromId => this._sendResources(fromId, this.manualTargetId, true))
-        );
-
-        const totalSent = results.filter(r => r.status === 'fulfilled' && r.value).length;
+        // Todos enviam para o mesmo destino: processa em série para que
+        // cada cálculo enxergue a capacidade consumida pelo envio anterior.
+        let totalSent = 0;
+        for (const fromId of senders) {
+            if (await this._sendResources(fromId, this.manualTargetId, true)) totalSent++;
+            await this.sleep(300);
+        }
         const msg = totalSent > 0
             ? '✓ ' + totalSent + ' cidade(s) enviaram para ' + targetName
             : 'Nenhum envio concluído (' + targetName + ' sem espaço?).';
@@ -543,6 +544,7 @@ var AutoSendResources = class extends MultUtil {
     //  FIX v2.1: verifica espaco real por recurso ANTES de calcular envio
     // ─────────────────────────────────────────────────────────────
     _sendResources = async (fromId, toId, urgent) => {
+        if (uw.__multbot_captcha_active || this.isSleeping()) return false;
         try {
             const from    = uw.ITowns.towns[fromId];
             const to      = uw.ITowns.towns[toId];

@@ -249,7 +249,7 @@ var AntiRage = class extends MultUtil {
 		}
 		// Respeita o Sleeper: pula o clique (mas continua reagendando,
 		// pra nao perder a janela quando o Sleeper acabar).
-		if (this.isSleeping()) {
+		if (uw.__multbot_captcha_active || this.isSleeping()) {
 			this.loop_funct = setInterval(this.clicker, 1000, el);
 			return;
 		}

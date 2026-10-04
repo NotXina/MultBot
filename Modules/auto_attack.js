@@ -286,7 +286,7 @@ var AutoAttack = class extends MultUtil {
             for (const id of keys) {
                 const t = towns[id];
                 const name = t.getName ? t.getName() : ('#' + id);
-                html += '<option value="' + id + '">' + name + ' (#' + id + ')</option>';
+                html += '<option value="' + this.escapeHtml(id) + '">' + this.escapeHtml(name) + ' (#' + this.escapeHtml(id) + ')</option>';
             }
             return html;
         } catch (e) {
@@ -312,7 +312,7 @@ var AutoAttack = class extends MultUtil {
 
             let html = '<option value="">Selecione...</option>';
             for (const item of items) {
-                html += '<option value="' + item.id + '">' + item.label + '</option>';
+                html += '<option value="' + this.escapeHtml(item.id) + '">' + this.escapeHtml(item.label) + '</option>';
             }
             return html;
         } catch (e) {
@@ -339,7 +339,7 @@ var AutoAttack = class extends MultUtil {
 
             let html = '<option value="">Nenhum</option>';
             for (const item of items) {
-                html += '<option value="' + item.id + '">' + item.label + '</option>';
+                html += '<option value="' + this.escapeHtml(item.id) + '">' + this.escapeHtml(item.label) + '</option>';
             }
             return html;
         } catch (e) {
@@ -432,7 +432,7 @@ var AutoAttack = class extends MultUtil {
         let html = '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
         for (const u of this._stagingUnits) {
             html += '<span style="background:rgba(0,0,0,0.08);border-radius:3px;padding:2px 6px;display:inline-flex;align-items:center;gap:4px;">';
-            html += this._formatUnitEntry(u);
+            html += this.escapeHtml(this._formatUnitEntry(u));
             html += '<span onclick="window.multBot.autoAttack.removeStagingUnit(\'' + u.unit + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;">X</span>';
             html += '</span>';
         }
@@ -698,9 +698,15 @@ var AutoAttack = class extends MultUtil {
                 restLabel += ' (proximo em ~' + remainMin + 'min)';
             }
 
+            const title = this.escapeHtml(townName + ' [' + unitsLabel + '] -> ' + targetsLabel + restLabel);
+            const safeTownName = this.escapeHtml(townName);
+            const safeUnitsLabel = this.escapeHtml(unitsLabel);
+            const safeTargetsLabel = this.escapeHtml(targetsLabel);
+            const safeRestLabel = this.escapeHtml(restLabel);
+
             html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 2px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:10px;line-height:1.3;">';
-            html += '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px;" title="' + townName + ' [' + unitsLabel + '] -> ' + targetsLabel + restLabel + '">';
-            html += '<b>' + townName + '</b> [' + unitsLabel + '] &rarr; ' + targetsLabel + restLabel;
+            html += '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px;" title="' + title + '">';
+            html += '<b>' + safeTownName + '</b> [' + safeUnitsLabel + '] &rarr; ' + safeTargetsLabel + safeRestLabel;
             html += '</div>';
             html += '<span onclick="window.multBot.autoAttack.editPlan(\'' + plan.id + '\')" style="cursor:pointer;color:#4a90d9;font-weight:bold;flex-shrink:0;padding:0 4px;" title="Editar plano">✏️</span>';
             html += '<span onclick="window.multBot.autoAttack.removePlan(\'' + plan.id + '\')" style="cursor:pointer;color:#f87171;font-weight:bold;flex-shrink:0;padding:0 4px;">X</span>';
@@ -710,22 +716,20 @@ var AutoAttack = class extends MultUtil {
         container.html(html);
     }
 
-    /* Tick verdadeiramente assincrono: espera TODOS os planos
-       terminarem de processar antes de considerar o ciclo completo.
-       Rodando dentro de this.createGuardedInterval, isso garante que
-       o proximo disparo do timer so acontece depois que este ciclo
-       inteiro (incluindo todos os envios de rede) tiver terminado. */
+    /* Processa os planos SEQUENCIALMENTE. Além de manter o tick
+       aguardável para createGuardedInterval, isso evita que dois planos
+       da mesma cidade leiam a mesma quantidade de tropas e disparem ao
+       mesmo tempo antes de o modelo local ser atualizado. */
     async _tick() {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         if (this._plans.length === 0) return;
 
-        const promises = [];
         for (const plan of this._plans) {
+            if (uw.__multbot_captcha_active || this.isSleeping()) return;
             if (!plan.enabled) continue;
-            promises.push(this._checkAndFire(plan));
+            await this._checkAndFire(plan);
+            await this.sleep(this.SEND_DELAY_MS);
         }
-
-        await Promise.all(promises);
     }
 
     _computeNextAllowedAt(restMinutes) {
@@ -829,38 +833,27 @@ var AutoAttack = class extends MultUtil {
         }
     }
 
-    _sendAttack(fromTownId, toTownId, unitsList, heroKey) {
-        return this._withTownId(fromTownId, () => {
-            const data = {
-                id: parseInt(toTownId, 10),
-                type: 'attack',
-                nl_init: true
-            };
+    async _sendAttack(fromTownId, toTownId, unitsList, heroKey) {
+        /* town_info/send_units aceita town_id explicitamente. Não troca
+           mais Game.townId global: essa troca concorria com Auto Dodge,
+           Sniper, envio de colonizador e até com a navegação do usuário. */
+        const data = {
+            id: parseInt(toTownId, 10),
+            town_id: parseInt(fromTownId, 10),
+            type: 'attack',
+            nl_init: true
+        };
 
-            for (const u of unitsList) {
-                data[u.unit] = u.quantity;
-            }
-
-            if (heroKey) {
-                data.heroes = heroKey;
-            }
-
-            return this.ajaxPostWithTimeout('town_info', 'send_units', data, 15000);
-        });
-    }
-
-    async _withTownId(townId, fn) {
-        const orig = uw.Game.townId;
-        const origStr = uw.Game.town_id;
-        uw.Game.townId = parseInt(townId, 10);
-        uw.Game.town_id = parseInt(townId, 10);
-
-        try {
-            const result = await fn();
-            return result;
-        } finally {
-            uw.Game.townId = orig;
-            uw.Game.town_id = origStr;
+        for (const u of unitsList) {
+            data[u.unit] = u.quantity;
         }
+
+        if (heroKey) {
+            data.heroes = heroKey;
+        }
+
+        const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data, 15000);
+        if (res && !res.error) return res;
+        throw new Error(res?.error || 'Failed to send attack');
     }
 };

@@ -158,6 +158,7 @@ var MultTools = class extends MultUtil {
        Confirmado via captura real de rede: model_url "Town/{id}",
        action_name "setTownName", arguments: { town_name }. */
     renameCities = async () => {
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         try {
             const towns = Object.values(uw.ITowns.towns);
             if (towns.length === 0) { uw.$('#mult_status').text(this.t('mt_no_city_found')).css('color','#f87171'); return; }
@@ -184,6 +185,7 @@ var MultTools = class extends MultUtil {
             for (const ocean in byOcean) {
                 let seq = 1;
                 for (const town of byOcean[ocean]) {
+                    if (uw.__multbot_captcha_active || this.isSleeping()) return;
                     const name = 'OC' + ocean + '-' + String(seq).padStart(2, '0');
                     seq++;
 

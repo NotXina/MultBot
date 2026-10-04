@@ -13,13 +13,18 @@
 var DiscordAlert = class extends MultUtil {
     constructor(c, s) {
         super(c, s);
-        this._active = this.storage.load('discord_alert_active', false);
+        const shouldAutoStart = this.storage.load('discord_alert_active', false);
+        this._active = false;
         this._webhookUrl = this.storage.load('discord_alert_webhook', '');
         this._notifiedIds = new Set();
+        this._inFlightIds = new Set();
         this._intervalId = null;
         this._boundOnAdd = null; // referencia ao listener para poder remover
+        this._collection = null;
 
-        if (this._active) {
+        // _active precisa começar false; se ele fosse carregado como true,
+        // start() retornaria antes de registrar listener e guardian.
+        if (shouldAutoStart) {
             setTimeout(() => this.start(), 2500);
         }
     }
@@ -36,7 +41,7 @@ var DiscordAlert = class extends MultUtil {
             '<div style="padding:5px 10px;font-weight:bold;">' + this.t('da_desc') + '</div>' +
             '<div style="padding:4px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">' +
                 '<label style="font-size:11px;font-weight:bold;">' + this.t('da_webhook_label') + '</label>' +
-                '<input type="text" id="da_webhook_input" value="' + this._webhookUrl + '" placeholder="https://discord.com/api/webhooks/..." style="flex:1;min-width:220px;padding:3px 5px;" />' +
+                '<input type="password" id="da_webhook_input" value="' + this.escapeHtml(this._webhookUrl) + '" autocomplete="off" placeholder="https://discord.com/api/webhooks/..." style="flex:1;min-width:220px;padding:3px 5px;" />' +
                 this.getButtonHtml('da_save_btn', this.t('apply'), this.saveWebhook) +
                 this.getButtonHtml('da_test_btn', this.t('da_test_btn'), this.testWebhook) +
             '</div>' +
@@ -44,14 +49,55 @@ var DiscordAlert = class extends MultUtil {
         '</div>';
     };
 
+    _isValidWebhookUrl(url) {
+        try {
+            const parsed = new URL(url);
+            const discordHost = parsed.hostname === 'discord.com'
+                || parsed.hostname.endsWith('.discord.com')
+                || parsed.hostname === 'discordapp.com'
+                || parsed.hostname.endsWith('.discordapp.com');
+            return parsed.protocol === 'https:'
+                && discordHost
+                && /^\/api\/webhooks\/\d+\/[^/]+/.test(parsed.pathname);
+        } catch (e) {
+            return false;
+        }
+    }
+
     saveWebhook = () => {
         const url = (uw.$('#da_webhook_input').val() || '').trim();
+        if (url && !this._isValidWebhookUrl(url)) {
+            uw.$('#da_status').text(this.t('da_invalid_webhook')).css('color', '#f87171');
+            return;
+        }
+
         this._webhookUrl = url;
         this.storage.save('discord_alert_webhook', url);
         const msg = url ? this.t('da_webhook_saved') : this.t('da_webhook_cleared');
         uw.$('#da_status').text(msg).css('color', '#1a6b2a');
         this.console.log('[DiscordAlert] ' + msg);
+
+        if (!url && this._active) this.stop();
     };
+
+    async _postWebhook(payload) {
+        if (!this._isValidWebhookUrl(this._webhookUrl)) {
+            throw new Error(this.t('da_invalid_webhook'));
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        try {
+            return await fetch(this._webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
 
     testWebhook = async () => {
         if (!this._webhookUrl) {
@@ -68,11 +114,7 @@ var DiscordAlert = class extends MultUtil {
         };
 
         try {
-            const res = await fetch(this._webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ embeds: [embed] }),
-            });
+            const res = await this._postWebhook({ embeds: [embed] });
             if (res.ok) {
                 uw.$('#da_status').text(this.t('da_test_ok')).css('color', '#1a6b2a');
                 this.console.log('[DiscordAlert] ' + this.t('da_test_ok'));
@@ -94,6 +136,11 @@ var DiscordAlert = class extends MultUtil {
 
     start() {
         if (this._active) return;
+        if (!this._isValidWebhookUrl(this._webhookUrl)) {
+            this.storage.save('discord_alert_active', false);
+            uw.$('#da_status').text(this._webhookUrl ? this.t('da_invalid_webhook') : this.t('da_no_webhook')).css('color', '#f87171');
+            return;
+        }
         this._active = true;
         this.storage.save('discord_alert_active', true);
         this._updateTitle();
@@ -118,6 +165,7 @@ var DiscordAlert = class extends MultUtil {
         this.storage.save('discord_alert_active', false);
         this._detachInstantListener();
         if (this._intervalId) { clearInterval(this._intervalId); this._intervalId = null; }
+        this._inFlightIds.clear();
         this._updateTitle();
         this.console.log('[DiscordAlert] ' + this.t('ar_stopped_log'));
     }
@@ -128,7 +176,7 @@ var DiscordAlert = class extends MultUtil {
     // chegando do servidor). Usamos isso para deteccao instantanea.
     _attachInstantListener() {
         try {
-            const collection = uw.MM.getModels().MovementsUnits;
+            const collection = uw.MM.getOnlyCollectionByName('MovementsUnits');
             if (!collection || typeof collection.on !== 'function') {
                 this.console.log('[DiscordAlert] MovementsUnits nao e colecao Backbone - apenas guardian ativo.');
                 return;
@@ -144,13 +192,11 @@ var DiscordAlert = class extends MultUtil {
                     if (!isAttack || !targetExists) return;
 
                     const id = String(mv.id);
-                    if (this._notifiedIds.has(id)) return;
+                    if (this._notifiedIds.has(id) || this._inFlightIds.has(id)) return;
 
                     this.console.log('[DiscordAlert] ⚡ Ataque detectado INSTANTANEAMENTE (id=' + id + ')');
                     // Envia o alerta de forma assincrona - nao bloqueia o evento Backbone
-                    this._sendAlert(mv).then((sent) => {
-                        if (sent) this._notifiedIds.add(id);
-                    }).catch((e) => {
+                    this._notifyOnce(mv).catch((e) => {
                         this.console.log('[DiscordAlert] Erro no listener instantaneo: ' + (e?.message ?? e));
                     });
                 } catch (e) {
@@ -159,6 +205,7 @@ var DiscordAlert = class extends MultUtil {
             };
 
             collection.on('add', this._boundOnAdd);
+            this._collection = collection;
             this.console.log('[DiscordAlert] ⚡ Listener instantaneo registrado em MovementsUnits.');
         } catch (e) {
             this.console.log('[DiscordAlert] Nao foi possivel registrar listener instantaneo: ' + (e?.message ?? e));
@@ -167,15 +214,14 @@ var DiscordAlert = class extends MultUtil {
 
     _detachInstantListener() {
         try {
-            if (!this._boundOnAdd) return;
-            const collection = uw.MM.getModels().MovementsUnits;
-            if (collection && typeof collection.off === 'function') {
-                collection.off('add', this._boundOnAdd);
+            if (this._collection && this._boundOnAdd && typeof this._collection.off === 'function') {
+                this._collection.off('add', this._boundOnAdd);
                 this.console.log('[DiscordAlert] Listener instantaneo removido.');
             }
         } catch (e) {
             // silencioso - nao critico ao parar
         }
+        this._collection = null;
         this._boundOnAdd = null;
     }
 
@@ -222,14 +268,24 @@ var DiscordAlert = class extends MultUtil {
             }
 
             for (const atk of attacks) {
-                const id = String(atk.id);
-                if (this._notifiedIds.has(id)) continue;
-                // Marca DEPOIS de confirmar entrega do webhook
-                const sent = await this._sendAlert(atk);
-                if (sent) this._notifiedIds.add(id);
+                await this._notifyOnce(atk);
             }
         } catch (e) {
             this.console.log('[DiscordAlert] ' + this.t('da_tick_error', { msg: e?.message ?? e }));
+        }
+    }
+
+    async _notifyOnce(atk) {
+        const id = String(atk.id);
+        if (this._notifiedIds.has(id) || this._inFlightIds.has(id)) return false;
+
+        this._inFlightIds.add(id);
+        try {
+            const sent = await this._sendAlert(atk);
+            if (sent) this._notifiedIds.add(id);
+            return sent;
+        } finally {
+            this._inFlightIds.delete(id);
         }
     }
 
@@ -309,11 +365,7 @@ var DiscordAlert = class extends MultUtil {
                 timestamp: new Date().toISOString(),
             };
 
-            const res = await fetch(this._webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ embeds: [embed] }),
-            });
+            const res = await this._postWebhook({ embeds: [embed] });
 
             if (res.ok) {
                 this.console.log('[DiscordAlert] ' + this.t('da_alert_sent_log', { town: townName }));

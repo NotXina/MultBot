@@ -201,7 +201,7 @@ var StatusPanel = class extends MultUtil {
             // on the panel yet.
             const attackActive   = !!bot.autoAttack?._active;
             const dodgeActive    = !!bot.autoDodge?._active;
-            const aresActive     = !!bot.autoAresSacrifice?._active;
+            const aresActive     = !!bot.autoSpells?._aresActive;
             const researchActive = !!bot.autoResearch?._active;
 
             rows.push(this._row(this.t('row_farm'),           farmActive,  farmActive  ? this.t('active')               : this.t('stopped'),             'autoFarm',           'toggle'));
@@ -217,7 +217,7 @@ var StatusPanel = class extends MultUtil {
             // Rows added this round
             rows.push(this._row(this.t('row_attack'),        attackActive,   attackActive   ? this.t('active') : this.t('stopped'), 'autoAttack',        'toggle'));
             rows.push(this._row(this.t('row_dodge'),  dodgeActive,    dodgeActive    ? this.t('active') : this.t('stopped'), 'autoDodge',         'toggle'));
-            rows.push(this._row(this.t('row_ares'),  aresActive,     aresActive     ? this.t('active') : this.t('stopped'), 'autoAresSacrifice', 'toggle'));
+            rows.push(this._row(this.t('row_ares'),  aresActive,     aresActive     ? this.t('active') : this.t('stopped'), 'autoSpells', '_toggleAres'));
             rows.push(this._row(this.t('row_research'),       researchActive, researchActive ? this.t('active') : this.t('stopped'), 'autoResearch',      'toggle'));
             rows.push(this._row(this.t('row_hide'),          hideActive,    hideActive    ? this.t('active') : this.t('stopped'),                'autoHide',          'toggle'));
             rows.push(this._row(this.t('row_quest'),         questActive,   questActive   ? this.t('active') : this.t('stopped'),                'autoQuest',         'toggle'));
@@ -227,17 +227,22 @@ var StatusPanel = class extends MultUtil {
             uw.$('#status_rows').html(rows.join(''));
             this._renderSleeperStatus();
         } catch(e) {
-            uw.$('#status_rows').html(`<div style="padding:5px;color:red;">${this.t('error')}: ${e.message}</div>`);
+            uw.$('#status_rows').text(`${this.t('error')}: ${e?.message ?? e}`).css({ padding: '5px', color: 'red' });
         }
     }
 
     _row(label, active, value, module, method) {
+        const safeLabel = this.escapeHtml(label);
+        const safeValue = this.escapeHtml(value);
         const onclick = module && method
             ? `window.multBot.${module}.${method}()`
             : null;
 
         const btn = onclick
-            ? `<div class="button_new ${active ? '' : 'disabled'}" onclick="${onclick}" style="cursor:pointer;margin:0;">
+            // Não usa a classe "disabled" no estado parado: em alguns
+            // clientes ela aplica pointer-events:none e impedia ligar o
+            // módulo justamente pelo painel de Status.
+            ? `<div class="button_new" onclick="${onclick}" style="cursor:pointer;margin:0;opacity:${active ? '1' : '0.78'};">
                 <div class="left"></div><div class="right"></div>
                 <div class="caption js-caption">${active ? this.t('active') : this.t('stopped')}<div class="effect js-effect"></div></div>
                </div>`
@@ -247,9 +252,9 @@ var StatusPanel = class extends MultUtil {
         <div style="display:flex;justify-content:space-between;align-items:center;
             padding:4px 8px;border-bottom:1px solid rgba(0,0,0,0.08);
             ${active ? 'background:rgba(0,80,0,0.05);' : ''}">
-            <span style="font-weight:bold;font-size:12px;">${label}</span>
+            <span style="font-weight:bold;font-size:12px;">${safeLabel}</span>
             <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:11px;color:#5a3a0a;">${value}</span>
+                <span style="font-size:11px;color:#5a3a0a;">${safeValue}</span>
                 ${btn}
             </div>
         </div>`;

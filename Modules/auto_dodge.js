@@ -104,20 +104,14 @@ var AutoDodge = class extends MultUtil {
             this._intervalId = null;
         }
 
-        for (const timeoutId of this._scheduledEvac.values()) {
-            clearTimeout(timeoutId);
+        for (const scheduled of this._scheduledEvac.values()) {
+            clearTimeout(scheduled.timeoutId);
         }
         this._scheduledEvac.clear();
 
-        // IMPORTANTE: so cancelamos os TIMERS locais aqui. Os recalls
-        // persistidos no storage NAO sao apagados - eles continuam
-        // validos e serao reconciliados/disparados na proxima vez que
-        // o modulo for carregado (constructor), mesmo que o usuario
-        // reative o toggle depois.
-        for (const entry of this._pendingRecalls.values()) {
-            clearTimeout(entry.timeoutId);
-        }
-        this._pendingRecalls.clear();
+        // Recalls já assumidos continuam armados mesmo após desligar o
+        // toggle. Cancelá-los aqui deixaria tropas evacuadas presas em
+        // apoio até um reload; o toggle só impede novas evacuações.
         this._evacuated.clear();
 
         this._teardownIslandScraper();
@@ -260,20 +254,28 @@ var AutoDodge = class extends MultUtil {
     /* Tick assincrono - roda dentro do createGuardedInterval, entao
        nunca sobrepoe outro ciclo em andamento. */
     async _tick() {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active) return;
 
         try {
             const attacks = this._getIncomingAttacks();
             const now = Math.floor(Date.now() / 1000);
             const byTown = new Map();
 
+            /* Para uma sequência de ataques, a saída precisa acontecer
+               antes do PRIMEIRO impacto e o retorno só depois do ÚLTIMO.
+               O código anterior guardava apenas o maior horário e podia
+               evacuar tarde demais para o primeiro ataque da sequência. */
             for (const atk of attacks) {
                 const townId = String(atk.target_town_id);
                 const arrival = atk.arrival_at ? atk.arrival_at : (atk.time_of_arrival ? atk.time_of_arrival : 0);
                 if (!arrival) continue;
 
-                if (!byTown.has(townId) || arrival > byTown.get(townId)) {
-                    byTown.set(townId, arrival);
+                const wave = byTown.get(townId);
+                if (!wave) {
+                    byTown.set(townId, { firstArrival: arrival, lastArrival: arrival });
+                } else {
+                    wave.firstArrival = Math.min(wave.firstArrival, arrival);
+                    wave.lastArrival = Math.max(wave.lastArrival, arrival);
                 }
             }
 
@@ -281,7 +283,7 @@ var AutoDodge = class extends MultUtil {
 
             for (const townId of this._scheduledEvac.keys()) {
                 if (!attackedTowns.has(townId)) {
-                    clearTimeout(this._scheduledEvac.get(townId));
+                    clearTimeout(this._scheduledEvac.get(townId).timeoutId);
                     this._scheduledEvac.delete(townId);
                 }
             }
@@ -292,41 +294,54 @@ var AutoDodge = class extends MultUtil {
                 }
             }
 
-            for (const entry of byTown) {
-                const townId = entry[0];
-                const arrival = entry[1];
-
-                if (this._evacuated.has(townId)) continue;
-
-                const remaining = arrival - now;
-                const townLabel = this.getTownName(townId);
-
-                if (remaining <= this.EVACUATE_LEAD_SECONDS) {
-                    if (this._scheduledEvac.has(townId)) {
-                        clearTimeout(this._scheduledEvac.get(townId));
-                        this._scheduledEvac.delete(townId);
-                    }
-                    this._evacuated.add(townId);
-
-                    const safeTownId = this._pickRandomTownOnSameIsland(townId);
-                    this.console.log('[AutoDodge] ' + this.t('ad_safety_evac_log', { town: townLabel, sec: remaining }));
-                    this._evacuateTown(townId, arrival, safeTownId);
+            for (const [townId, wave] of byTown) {
+                if (this._evacuated.has(townId)) {
+                    this._extendPendingRecalls(townId, wave.lastArrival);
                     continue;
                 }
 
-                if (this._scheduledEvac.has(townId)) continue;
+                const remaining = wave.firstArrival - now;
+                const townLabel = this.getTownName(townId);
+
+                if (remaining <= this.EVACUATE_LEAD_SECONDS) {
+                    const previous = this._scheduledEvac.get(townId);
+                    if (previous) {
+                        clearTimeout(previous.timeoutId);
+                        this._scheduledEvac.delete(townId);
+                    }
+                    const safeTownId = this._pickRandomTownOnSameIsland(townId);
+                    this.console.log('[AutoDodge] ' + this.t('ad_safety_evac_log', { town: townLabel, sec: remaining }));
+                    this._runEvacuation(townId, wave.lastArrival, safeTownId);
+                    continue;
+                }
+
+                const fireAt = (wave.firstArrival - this.EVACUATE_LEAD_SECONDS) * 1000;
+                const previous = this._scheduledEvac.get(townId);
+
+                if (previous && previous.fireAt <= fireAt) {
+                    // Mantém o disparo mais cedo, mas estende o retorno se
+                    // um novo ataque posterior entrou na mesma onda.
+                    previous.lastArrival = Math.max(previous.lastArrival, wave.lastArrival);
+                    continue;
+                }
+                if (previous) clearTimeout(previous.timeoutId);
 
                 const safeTownId = this._pickRandomTownOnSameIsland(townId);
-                const fireInMs = (remaining - this.EVACUATE_LEAD_SECONDS) * 1000;
+                const scheduled = {
+                    timeoutId: null,
+                    fireAt,
+                    lastArrival: wave.lastArrival,
+                    safeTownId,
+                };
+                const fireInMs = Math.max(0, fireAt - Date.now());
 
-                const timeoutId = setTimeout(() => {
+                scheduled.timeoutId = setTimeout(() => {
                     this._scheduledEvac.delete(townId);
                     if (this._evacuated.has(townId)) return;
-                    this._evacuated.add(townId);
-                    this._evacuateTown(townId, arrival, safeTownId);
+                    this._runEvacuation(townId, scheduled.lastArrival, scheduled.safeTownId);
                 }, fireInMs);
 
-                this._scheduledEvac.set(townId, timeoutId);
+                this._scheduledEvac.set(townId, scheduled);
 
                 const secLeft = Math.round(fireInMs / 1000);
                 if (safeTownId) {
@@ -427,10 +442,18 @@ var AutoDodge = class extends MultUtil {
         return { landUnits: landUnits, navalUnits: navalUnits };
     }
 
+    async _runEvacuation(townId, attackArrival, safeTownId) {
+        if (uw.__multbot_captcha_active) return false;
+        this._evacuated.add(String(townId));
+        const success = await this._evacuateTown(townId, attackArrival, safeTownId);
+        if (!success) this._evacuated.delete(String(townId));
+        return success;
+    }
+
     async _evacuateTown(townId, attackArrival, safeTownId) {
         try {
             const town = uw.ITowns.towns[townId];
-            if (!town) return;
+            if (!town) return false;
 
             const townName = town.getName ? town.getName() : ('#' + townId);
 
@@ -441,7 +464,7 @@ var AutoDodge = class extends MultUtil {
             if (!safeTownId) {
                 this.console.log('[AutoDodge] ' + this.t('ad_evac_no_island_log', { town: townName }));
                 uw.$('#dodge_log').text(this.t('ad_evac_no_island_status', { town: townName })).css('color', '#eab308');
-                return;
+                return false;
             }
 
             const safeTownName = this.getTownName(safeTownId);
@@ -453,24 +476,27 @@ var AutoDodge = class extends MultUtil {
 
             if (!hasLand && !hasNaval) {
                 this.console.log('[AutoDodge] ' + this.t('ad_no_troops_log', { town: townName }));
-                return;
+                return true;
             }
 
             this.console.log('[AutoDodge] ' + this.t('ad_evacuating_log', { town: townName, safe: safeTownName }));
 
             const excludeIds = new Set();
+            let sentAny = false;
 
             if (hasLand) {
-                await this._evacuateGroup(townId, safeTownId, landUnits, 'terrestre', townName, attackArrival, excludeIds);
+                sentAny = await this._evacuateGroup(townId, safeTownId, landUnits, 'terrestre', townName, attackArrival, excludeIds) || sentAny;
             } else {
                 this.console.log('[AutoDodge] ' + this.t('ad_no_land_troops_log', { town: townName }));
             }
 
             if (hasNaval) {
-                await this._evacuateGroup(townId, safeTownId, navalUnits, 'naval', townName, attackArrival, excludeIds);
+                sentAny = await this._evacuateGroup(townId, safeTownId, navalUnits, 'naval', townName, attackArrival, excludeIds) || sentAny;
             } else {
                 this.console.log('[AutoDodge] ' + this.t('ad_no_naval_troops_log', { town: townName }));
             }
+
+            if (!sentAny) return false;
 
             const finalMsg = this.t('ad_evacuated_log', { town: townName, safe: safeTownName });
             this.console.log('[AutoDodge] ' + finalMsg);
@@ -479,14 +505,23 @@ var AutoDodge = class extends MultUtil {
             if (uw.HumanMessage) {
                 uw.HumanMessage.success('MultBot: ' + townName + ' -> ' + safeTownName);
             }
+            return true;
         } catch (e) {
             const msg = e && e.message ? e.message : e;
             this.console.log('[AutoDodge] ' + this.t('ad_evacuate_error', { id: townId, msg }));
+            return false;
         }
     }
 
     async _evacuateGroup(fromTownId, toTownId, units, label, townName, attackArrival, excludeIds) {
         try {
+            // Nunca confunde um apoio antigo com o que será criado agora.
+            // Sem esse snapshot, o primeiro comando já existente para o
+            // mesmo destino podia ser cancelado por engano no recall.
+            for (const id of this._getSupportCommandIds(fromTownId, toTownId)) {
+                excludeIds.add(String(id));
+            }
+
             const result = await this._sendUnits(fromTownId, toTownId, units);
             this.console.log('[AutoDodge] ' + this.t('ad_group_response_log', { label, res: JSON.stringify(result) }));
 
@@ -501,35 +536,37 @@ var AutoDodge = class extends MultUtil {
                 this.console.log('[AutoDodge] ' + this.t('ad_command_not_found_log', { town: townName, label }));
                 uw.$('#dodge_log').text(this.t('ad_command_not_found_status', { town: townName, label })).css('color', '#eab308');
             }
+            return true;
         } catch (e) {
             const msg = e && e.message ? e.message : e;
             this.console.log('[AutoDodge] ' + this.t('ad_send_group_fail_log', { label, town: townName, msg }));
+            return false;
+        }
+    }
+
+    _getSupportCommandIds(fromTownId, toTownId) {
+        try {
+            const models = uw.MM.getModels().MovementsUnits;
+            if (!models) return [];
+
+            const ids = [];
+            for (const key in models) {
+                const mv = models[key].attributes;
+                if (!mv || mv.type !== 'support') continue;
+                if (String(mv.home_town_id) !== String(fromTownId)) continue;
+                if (String(mv.target_town_id) !== String(toTownId)) continue;
+                if (mv.command_id) ids.push(String(mv.command_id));
+            }
+            return ids;
+        } catch (e) {
+            return [];
         }
     }
 
     _findSupportCommandId(fromTownId, toTownId, excludeIds) {
-        const excluded = excludeIds ? excludeIds : new Set();
-        try {
-            const models = uw.MM.getModels().MovementsUnits;
-            if (!models) return null;
-
-            for (const key in models) {
-                const mv = models[key].attributes;
-                if (!mv) continue;
-                if (mv.type !== 'support') continue;
-                if (String(mv.home_town_id) !== String(fromTownId)) continue;
-                if (String(mv.target_town_id) !== String(toTownId)) continue;
-
-                const cmdId = mv.command_id;
-                if (!cmdId) continue;
-                if (excluded.has(String(cmdId))) continue;
-
-                return cmdId;
-            }
-            return null;
-        } catch (e) {
-            return null;
-        }
+        const excluded = excludeIds || new Set();
+        return this._getSupportCommandIds(fromTownId, toTownId)
+            .find(id => !excluded.has(String(id))) || null;
     }
 
     /* Agenda o recall E PERSISTE a informacao no storage. Se a pagina
@@ -538,24 +575,78 @@ var AutoDodge = class extends MultUtil {
        e cuidar dela - seja disparando na hora (se ja passou do prazo)
        ou reagendando o tempo restante. */
     _scheduleRecall(townId, townName, attackArrival, commandId, label) {
-        const now = Math.floor(Date.now() / 1000);
-        const rawSec = (attackArrival - now) + this.RECALL_BUFFER_SECONDS;
-        const fireInSec = rawSec > this.RECALL_BUFFER_SECONDS ? rawSec : this.RECALL_BUFFER_SECONDS;
-        const fireInMs = fireInSec * 1000;
-        const recallKey = townId + ':' + label;
-        const dueAt = Date.now() + fireInMs;
+        // commandId na chave evita sobrescrever um recall anterior caso
+        // outra evacuação do mesmo tipo seja enviada antes do retorno.
+        const recallKey = townId + ':' + label + ':' + commandId;
+        const dueAt = Math.max(
+            Date.now() + this.RECALL_BUFFER_SECONDS * 1000,
+            attackArrival * 1000 + this.RECALL_BUFFER_SECONDS * 1000
+        );
+        const fireInSec = Math.max(0, Math.round((dueAt - Date.now()) / 1000));
+        const entry = { townId, townName, commandId, label, dueAt };
 
         this.console.log('[AutoDodge] ' + this.t('ad_recall_scheduled_log', { town: townName, label, sec: fireInSec, id: commandId }));
 
-        this._savePendingRecall(recallKey, { townId: townId, townName: townName, commandId: commandId, label: label, dueAt: dueAt });
+        this._savePendingRecall(recallKey, entry);
+        this._armPendingRecall(recallKey, entry);
+    }
 
-        const timeoutId = setTimeout(() => {
-            this._pendingRecalls.delete(recallKey);
+    _armPendingRecall(recallKey, entry) {
+        const previous = this._pendingRecalls.get(recallKey);
+        if (previous) clearTimeout(previous.timeoutId);
+
+        const delay = Math.max(0, entry.dueAt - Date.now());
+        const timeoutId = setTimeout(() => this._executePendingRecall(recallKey, entry), delay);
+
+        this._pendingRecalls.set(recallKey, { ...entry, timeoutId });
+    }
+
+    async _executePendingRecall(recallKey, entry) {
+        this._pendingRecalls.delete(recallKey);
+
+        // Não perde o recall durante CAPTCHA: preserva no storage e tenta
+        // novamente alguns segundos depois, em vez de removê-lo antes da rede.
+        if (uw.__multbot_captcha_active) {
+            const deferred = { ...entry, dueAt: Date.now() + 5000 };
+            this._savePendingRecall(recallKey, deferred);
+            this._armPendingRecall(recallKey, deferred);
+            return;
+        }
+
+        const completed = await this._recallSupport(
+            entry.townId,
+            entry.townName,
+            entry.commandId,
+            entry.label
+        );
+        if (completed) {
             this._removePendingRecall(recallKey);
-            this._recallSupport(townId, townName, commandId, label);
-        }, fireInMs);
+            return;
+        }
 
-        this._pendingRecalls.set(recallKey, { timeoutId: timeoutId, commandId: commandId });
+        // Falha de rede/timeout é transitória; mantém a entrada persistida.
+        const retry = { ...entry, dueAt: Date.now() + 15000 };
+        this._savePendingRecall(recallKey, retry);
+        this._armPendingRecall(recallKey, retry);
+    }
+
+    /* Se um novo ataque posterior aparece depois que as tropas já
+       saíram, adia os retornos daquela cidade. Sem isso, as tropas
+       poderiam voltar entre dois ataques da mesma onda. */
+    _extendPendingRecalls(townId, lastArrival) {
+        const desiredDueAt = lastArrival * 1000 + this.RECALL_BUFFER_SECONDS * 1000;
+        const store = this._loadPendingRecallsStore();
+        let changed = false;
+
+        for (const [recallKey, entry] of Object.entries(store)) {
+            if (!entry || String(entry.townId) !== String(townId)) continue;
+            if (entry.dueAt >= desiredDueAt) continue;
+            entry.dueAt = desiredDueAt;
+            changed = true;
+            this._armPendingRecall(recallKey, entry);
+        }
+
+        if (changed) this.storage.save('dodge_pending_recalls', store);
     }
 
     _loadPendingRecallsStore() {
@@ -600,16 +691,10 @@ var AutoDodge = class extends MultUtil {
 
                 if (remaining <= 0) {
                     this.console.log('[AutoDodge] ' + this.t('ad_reconcile_fire_now_log', { town: entry.townName, label: entry.label }));
-                    this._removePendingRecall(recallKey);
-                    this._recallSupport(entry.townId, entry.townName, entry.commandId, entry.label);
+                    this._armPendingRecall(recallKey, { ...entry, dueAt: Date.now() });
                 } else {
                     this.console.log('[AutoDodge] ' + this.t('ad_reconcile_reschedule_log', { town: entry.townName, label: entry.label, sec: Math.round(remaining / 1000) }));
-                    const timeoutId = setTimeout(() => {
-                        this._pendingRecalls.delete(recallKey);
-                        this._removePendingRecall(recallKey);
-                        this._recallSupport(entry.townId, entry.townName, entry.commandId, entry.label);
-                    }, remaining);
-                    this._pendingRecalls.set(recallKey, { timeoutId: timeoutId, commandId: entry.commandId });
+                    this._armPendingRecall(recallKey, entry);
                 }
             }
         } catch (e) {
@@ -618,7 +703,7 @@ var AutoDodge = class extends MultUtil {
         }
     }
 
-    _recallSupport(townId, townName, commandId, label) {
+    async _recallSupport(townId, townName, commandId, label) {
         // Confirmado via captura real (sniper.js): endpoint correto e
         // command_info/cancel_command com payload {id, town_id, nl_init}
         // NAO e frontend_bridge/execute com model_url "Commands" (nunca
@@ -631,48 +716,42 @@ var AutoDodge = class extends MultUtil {
 
         this.console.log('[AutoDodge] ' + this.t('ad_recall_calling_log', { town: townName, label, id: commandId }));
 
-        this.ajaxPostWithTimeout('command_info', 'cancel_command', data, 15000)
-            .then((res) => {
-                this.console.log('[AutoDodge] ' + this.t('ad_recall_response_log', { label, res: JSON.stringify(res) }));
-                if (res && !res.error) {
-                    const msg = this.t('ad_recall_success_log', { town: townName, label });
-                    this.console.log('[AutoDodge] ' + msg);
-                    uw.$('#dodge_log').text(msg).css('color', '#1a6b2a');
-                    if (uw.HumanMessage) {
-                        uw.HumanMessage.success('MultBot: ' + townName + ' (' + label + ') - retornando!');
-                    }
-                } else {
-                    this.console.log('[AutoDodge] ' + this.t('ad_recall_fail_log', { town: townName, label, res: JSON.stringify(res) }));
-                    uw.$('#dodge_log').text(this.t('ad_recall_fail_status', { town: townName, label })).css('color', '#f87171');
-                }
-            })
-            .catch((err) => {
-                this.console.log('[AutoDodge] ' + this.t('ad_recall_network_error', { town: townName, label, msg: (err && err.message ? err.message : err) }));
-            });
-    }
-
-    _sendUnits(fromTownId, toTownId, units) {
-        return this._withTownId(fromTownId, () => {
-            const data = Object.assign(
-                { id: parseInt(toTownId, 10), type: 'support' },
-                units
-            );
-            return this.ajaxPostWithTimeout('town_info', 'send_units', data, 15000);
-        });
-    }
-
-    async _withTownId(townId, fn) {
-        const orig = uw.Game.townId;
-        const origStr = uw.Game.town_id;
-        uw.Game.townId = parseInt(townId, 10);
-        uw.Game.town_id = parseInt(townId, 10);
-
         try {
-            const result = await fn();
-            return result;
-        } finally {
-            uw.Game.townId = orig;
-            uw.Game.town_id = origStr;
+            const res = await this.ajaxPostWithTimeout('command_info', 'cancel_command', data, 15000);
+            this.console.log('[AutoDodge] ' + this.t('ad_recall_response_log', { label, res: JSON.stringify(res) }));
+            if (res && !res.error) {
+                const msg = this.t('ad_recall_success_log', { town: townName, label });
+                this.console.log('[AutoDodge] ' + msg);
+                uw.$('#dodge_log').text(msg).css('color', '#1a6b2a');
+                if (uw.HumanMessage) {
+                    uw.HumanMessage.success('MultBot: ' + townName + ' (' + label + ') - retornando!');
+                }
+            } else {
+                // Uma resposta do servidor (por exemplo, comando já
+                // concluído) é terminal; repetir indefinidamente não ajuda.
+                this.console.log('[AutoDodge] ' + this.t('ad_recall_fail_log', { town: townName, label, res: JSON.stringify(res) }));
+                uw.$('#dodge_log').text(this.t('ad_recall_fail_status', { town: townName, label })).css('color', '#f87171');
+            }
+            return true;
+        } catch (err) {
+            this.console.log('[AutoDodge] ' + this.t('ad_recall_network_error', { town: townName, label, msg: (err && err.message ? err.message : err) }));
+            return false;
         }
+    }
+
+    async _sendUnits(fromTownId, toTownId, units) {
+        if (uw.__multbot_captcha_active) throw new Error('CAPTCHA active');
+        const data = Object.assign(
+            {
+                id: parseInt(toTownId, 10),
+                town_id: parseInt(fromTownId, 10),
+                type: 'support',
+                nl_init: true,
+            },
+            units
+        );
+        const res = await this.ajaxPostWithTimeout('town_info', 'send_units', data, 15000);
+        if (res && !res.error) return res;
+        throw new Error(res?.error || 'Failed to send support');
     }
 };

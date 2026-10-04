@@ -120,6 +120,7 @@ var AutoRuralTrade = class extends MultUtil {
 	};
 
 	mainTradeLoop = async () => {
+		if (uw.__multbot_captcha_active || this.isSleeping()) return;
 		try {
 			/* If last polis, then trigger to stop */
 			if (this.done_trade >= this.total_trade) {

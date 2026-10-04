@@ -365,7 +365,7 @@ var AutoTrain = class extends MultUtil {
         uw.$('#troops_lvl_buttons').html(`
         <div id="troops_settings_${town_id}">
             <div style="width: 600px; margin-bottom: 3px; display: inline-flex">
-            <a class="gp_town_link" href="${town.getLinkFragment()}">${town.getName()}</a> 
+            <a class="gp_town_link" href="${this.escapeHtml(town.getLinkFragment())}">${this.escapeHtml(town.getName())}</a>
             <p style="font-weight: bold; margin: 0px 5px"> [${town.getPoints()} pts] </p>
             <p style="font-weight: bold; margin: 0px 5px"> </p>
             <div class="population_icon_bot">
@@ -702,7 +702,7 @@ var AutoTrain = class extends MultUtil {
     // em paralelo entre si (nao sequencial) - so o TICK inteiro que
     // agora so libera o proximo depois que todas responderem.
     main = async () => {
-        if (window.__multbot_captcha_active) return;
+        if (uw.__multbot_captcha_active) return;
         try {
             const town_list = this.getActiveList();
             if (!town_list.length) return;

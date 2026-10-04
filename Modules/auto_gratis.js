@@ -112,6 +112,7 @@ var AutoGratis = class extends MultUtil {
        town currently focused via getCurrentTown — same scope as the
        pre-PR-#75 behaviour, opt-in for users who prefer that cadence. */
     main = () => {
+        if (uw.__multbot_captcha_active || this.isSleeping()) return;
         try {
             const now = Math.floor(Date.now() / 1000);
 
